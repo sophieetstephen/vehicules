@@ -22,9 +22,9 @@
       <ul class="navbar-nav me-auto">
         {% if user and user.role in ['chef','adjoint'] %}
           <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_reservations') }}">Réservations</a></li>
->/a {% if user and user.role in ("chef","adjoint") %}<li><a href="{{ url_for('admin_vehicles') }}">Véhicules CSP</a></li>{% endif %}
-          <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('calendar_week') }}">Calendrier (semaine)</a></li>
-{% if user and user.role in ("chef","adjoint") %}<li><a href="{{ url_for('admin_vehicles') }}">Véhicules CSP</a></li>{% endif %}
+          {% if user and user.role in ("chef","adjoint") %}
+          <li><a href="{{ url_for('admin_vehicles') }}">Véhicules CSP</a></li>
+          {% endif %}
         {% endif %}
         {% if user %}
           <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('calendar_month') }}">Vue mensuelle</a></li>

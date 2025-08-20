@@ -217,19 +217,6 @@ def calendar_month():
                                    Reservation.end_at > start).all()
     return render_template("calendar_month.html", vehicles=vehicles, reservations=res, start=start, end=end, user=user, timedelta=timedelta)
 
-@app.route("/calendar/week")
-@login_required
-def calendar_week():
-    user = current_user()
-    today = datetime.today()
-    start = today - timedelta(days=today.weekday())
-    end = start + timedelta(days=7)
-    vehicles = Vehicle.query.order_by(Vehicle.code).all()
-    res = Reservation.query.filter(Reservation.status=="approved",
-                                   Reservation.start_at < end,
-                                   Reservation.end_at > start).all()
-    return render_template("calendar_week.html", vehicles=vehicles, reservations=res, start=start, end=end, user=user, timedelta=timedelta)
-
 @app.route("/export/ics")
 @login_required
 def export_ics():
@@ -244,22 +231,6 @@ def export_ics_vehicle(vehicle_code):
     res = Reservation.query.filter_by(status="approved", vehicle_id=v.id).all()
     body = make_ics(res)
     return send_file(BytesIO(body), mimetype="text/calendar", as_attachment=True, download_name=f"{v.code}.ics")
-
-@app.route("/export/pdf/week")
-@login_required
-def export_pdf_week():
-    if not WEASY_OK:
-        flash("WeasyPrint non installé.","warning"); return redirect(url_for("calendar_week"))
-    today = datetime.today()
-    start = today - timedelta(days=today.weekday())
-    end = start + timedelta(days=7)
-    vehicles = Vehicle.query.order_by(Vehicle.code).all()
-    res = Reservation.query.filter(Reservation.status=="approved",
-                                   Reservation.start_at < end,
-                                   Reservation.end_at > start).all()
-    html = render_template("pdf_week.html", vehicles=vehicles, reservations=res, start=start, end=end)
-    pdf = HTML(string=html).write_pdf()
-    return send_file(BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="planning_semaine.pdf")
 
 @app.route("/export/pdf/month")
 @login_required
