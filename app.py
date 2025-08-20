@@ -4,6 +4,8 @@
 import os, sys
 from urllib.parse import quote as _urlquote
 from flask import Flask, request, redirect, render_template, flash, session
+from forms import FirstLoginForm
+from models import db, User
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
 _here = os.path.dirname(__file__) or "."
@@ -21,6 +23,7 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+db.init_app(app)
 
 # --- Santé
 @app.route("/__ping__", methods=["GET"])
@@ -56,7 +59,18 @@ def login_plain():
 
 @app.route("/first_login", methods=["GET", "POST"])
 def first_login():
-    return "Première connexion — à implémenter", 200
+    form = FirstLoginForm()
+    if form.validate_on_submit():
+        name = f"{form.last_name.data} {form.first_name.data}"
+        user = User(name=name, email=form.email.data)
+        user.set_password(form.password.data)
+        if form.email.data in app.config.get("ADMIN_EMAILS", []):
+            user.role = "admin"
+        db.session.add(user)
+        db.session.commit()
+        session["uid"] = user.id
+        return redirect("/")
+    return render_template("first_login.html", form=form), 200
 
 # --- Entrée locale de dev (inutile en prod/gunicorn)
 if __name__ == "__main__":
