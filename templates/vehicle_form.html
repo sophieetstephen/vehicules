@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ "Nouveau véhicule" if not vehicle else ("Modifier véhicule #"+str(vehicle.id)) }}</h2>
+<form method="post">
+  {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  <div class="mb-3">
+    <label class="form-label">Code</label>
+    <input class="form-control" type="text" name="code" value="{{ vehicle.code if vehicle else "" }}" required>
+  </div>
+  <div class="mb-3">
+    <label class="form-label">Libellé</label>
+    <input class="form-control" type="text" name="label" value="{{ vehicle.label if vehicle else "" }}" required>
+  </div>
+  <button class="btn btn-primary" type="submit">Enregistrer</button>
+  <a class="btn btn-secondary" href="{{ url_for("admin_vehicles") }}">Annuler</a>
+</form>
+{% endblock %}

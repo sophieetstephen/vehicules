@@ -1,0 +1,27 @@
+
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+body{font-family:sans-serif;font-size:12px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:4px;vertical-align:top}
+.bg{background:#d1e7dd;margin-bottom:4px;padding:3px;border-radius:3px}
+</style></head><body>
+<h1>Planning véhicules — semaine du {{ start.strftime("%d/%m/%Y") }}</h1>
+<table>
+<thead><tr><th>Véhicule</th>{% for i in range(7) %}<th>{{ (start + timedelta(days=i)).strftime("%a %d/%m") }}</th>{% endfor %}</tr></thead>
+<tbody>
+{% for v in vehicles %}
+<tr>
+  <td><strong>{{ v.code }}</strong><br>{{ v.label }}</td>
+  {% for i in range(7) %}
+  {% set day = start + timedelta(days=i) %}
+  <td>
+    {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
+      <div class="bg"><strong>{{ r.user.name }}</strong><br>{{ r.start_at.strftime("%H:%M") }}–{{ r.end_at.strftime("%H:%M") }}<br>{{ r.purpose or "" }}</div>
+    {% endfor %}
+  </td>
+  {% endfor %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</body></html>

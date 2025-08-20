@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+
+# Flask/Build
+instance/
+*.sqlite3
+*.db
+*.db-journal
+
+# Logs & caches
+*.log
+*.pid
+*.gz
+.cache/
+.mypy_cache/
+.pytest_cache/
+
+# Front
+node_modules/
+dist/
+build/
+
+# Secrets & conf locales
+.env
+.env.*
+data/
+uploads/
+*.sqlite
+*.bak*
+*.tgz
+.env.local
+flask.log
+flask.pid
+backup/
+schema_*.sql
+vehicules.db.old_*

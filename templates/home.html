@@ -1,0 +1,17 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Parc véhicules</h1>
+<div class="row mt-3">
+  {% for v in vehicles %}
+  <div class="col-md-4">
+    <div class="card mb-3">
+      <div class="card-body">
+        <h5 class="card-title">{{ v.code }}</h5>
+        <p class="card-text">{{ v.label }} — {{ v.seats }} places</p>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

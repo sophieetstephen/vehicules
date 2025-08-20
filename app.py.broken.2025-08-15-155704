@@ -1,0 +1,461 @@
+from notify import send_mail_msmtp
+from flask_wtf.csrf import CSRFProtect
+import os
+from flask import Flask, request, redirect, url_for, render_template, flash, session, Flask, render_template, redirect, url_for, request, flash, session, send_file, abort
+from datetime import datetime, timedelta
+from io import BytesIO
+from models import db, User, Vehicle, Reservation
+from forms import LoginForm, NewRequestForm
+from config import Config
+import csv
+
+# Optional deps
+try:
+    from flask_mail import Mail, Message
+    MAIL_OK = True
+except Exception:
+    Mail = None; Message = None; MAIL_OK = False
+
+try:
+    from weasyprint import HTML
+    WEASY_OK = True
+except Exception:
+    HTML = None; WEASY_OK = False
+
+app = Flask(__name__)
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SECURE"] = True
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SECURE"] = True
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SECURE"] = True
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+# DB: depuis ENV sinon absolu
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('SQLALCHEMY_DATABASE_URI', 'sqlite:////opt/vehicules/vehicules.db')
+app.config.from_object(Config)
+app.config['WTF_CSRF_CHECK_DEFAULT']=False
+csrf = CSRFProtect(app)
+db.init_app(app)
+mail = Mail(app) if MAIL_OK and app.config.get("MAIL_SERVER") else None
+
+def current_user():
+    uid = session.get("uid"); 
+    return User.query.get(uid) if uid else None
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def w(*args, **kwargs):
+        if not current_user():
+            flash("Veuillez vous connecter.","warning")
+            return redirect(url_for("login", next=request.path))
+        return f(*args, **kwargs)
+    return w
+
+def role_allows_vehicle(user, vehicle_code):
+    rules = app.config.get("VEHICLE_ROLE_RULES", {})
+    if vehicle_code in rules:
+        return user.role in rules[vehicle_code]
+    return True
+
+@app.template_filter('dt')
+def fmt_dt(v): return v.strftime("%d/%m/%Y %H:%M") if v else ""
+
+def notify(subject, recipients, body):
+    if not mail or not recipients: return
+    try:
+        m = Message(subject=subject, recipients=recipients, body=body)
+        mail.send(m)
+    except Exception as e:
+        print("MAIL ERROR:", e)
+
+@csrf.exempt
+@app.route("/login", methods=["GET","POST"])
+def login():
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        u = User.query.filter_by(email=email).first()
+        if u and u.check_password(password):
+            session["uid"] = u.id
+            next_url = request.args.get("next") or url_for("home")
+            return redirect(next_url)
+        flash("Identifiants invalides", "danger")
+    return render_template("login_basic.html", user=current_user())
+
+@app.route("/logout")
+def logout():
+    session.pop("uid", None)
+    flash("Déconnecté","info")
+    return redirect(url_for("login"))
+
+@app.route("/")
+@login_required
+def home():
+    user = current_user()
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    return render_template("home.html", user=user, vehicles=vehicles)
+
+@app.route("/request/new", methods=["GET","POST"])
+@login_required
+def new_request():
+    user = current_user()
+    # Personnel only access + Admins can also create quick requests for others using same form
+    form = NewRequestForm()
+    if form.validate_on_submit():
+        display_name = f"{form.first_name.data.strip()} {form.last_name.data.strip()}"
+        r = Reservation(
+            vehicle_id=None,  # not assigned yet
+            user_id=user.id,
+            start_at=form.start_at.data,
+            end_at=form.end_at.data,
+            purpose=form.purpose.data,
+            carpool=form.carpool.data,
+            carpool_with=form.carpool_with.data.strip() if form.carpool.data else "",
+            notes=form.notes.data,
+            status="pending"
+        )
+        db.session.add(r)
+        db.session.commit()
+        # notify admins
+        admins = app.config.get("ADMIN_EMAILS", [])
+        notify(subject="[Vehicules] Nouvelle demande",
+               recipients=admins,
+               body=f"Demande de {display_name}\nDébut: {r.start_at}\nFin: {r.end_at}\nMotif: {r.purpose or ''}\nCovoiturage: {'oui, '+r.carpool_with if r.carpool else 'non'}\nNotes: {r.notes or ''}")
+        flash("Votre demande a été transmise. Vous recevrez un e‑mail après décision.","success")
+        return redirect(url_for("new_request"))
+    return render_template("new_request.html", form=form, user=user)
+
+@app.route("/admin/reservations")
+@login_required
+def admin_reservations():
+    u = current_user()
+    if u.role not in ("chef","adjoint"): abort(403)
+    res = Reservation.query.order_by(Reservation.start_at.desc()).limit(200).all()
+    return render_template("admin_reservations.html", reservations=res, user=u)
+
+def vehicles_availability(start, end):
+    out = []
+    for v in Vehicle.query.order_by(Vehicle.code).all():
+        conflict = Reservation.query.filter(
+            Reservation.vehicle_id==v.id,
+            Reservation.status!="rejected",
+            Reservation.end_at > start,
+            Reservation.start_at < end
+        ).first()
+        out.append((v, conflict is None))
+    return out
+
+@app.route("/admin/manage/<int:rid>", methods=["GET","POST"])
+@login_required
+def manage_request(rid):
+    u = current_user()
+    if u.role not in ("chef","adjoint"): abort(403)
+    r = Reservation.query.get_or_404(rid)
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "approve":
+            veh_id = int(request.form.get("vehicle_id"))
+            v = Vehicle.query.get_or_404(veh_id)
+            # Enforce role rules for VL1/VL2 (only admins can assign, which is OK here)
+            # Detect conflict
+            conflict = Reservation.query.filter(
+                Reservation.vehicle_id==v.id,
+                Reservation.status!="rejected",
+                Reservation.end_at > r.start_at,
+                Reservation.start_at < r.end_at,
+                Reservation.id != r.id
+            ).first()
+            if conflict:
+                flash("Conflit détecté sur ce véhicule pour la période.","danger")
+            else:
+                r.vehicle_id = v.id
+                r.status = "approved"
+                db.session.commit()
+                # email to requester + carpoolers
+                recipients = []
+                if r.user and r.user.email: recipients.append(r.user.email)
+                if r.carpool and r.carpool_with:
+                    # allow comma or space separated list of emails or names (we'll only email addresses with '@')
+                    for token in r.carpool_with.replace(";",",").split(","):
+                        t = token.strip()
+                        if "@" in t: recipients.append(t)
+                notify(subject=f"[Vehicules] Réservation confirmée {v.code}",
+                       recipients=recipients,
+                       body=f"Réservation approuvée pour {v.code}\nDébut: {r.start_at}\nFin: {r.end_at}\nMotif: {r.purpose or ''}")
+                flash("Demande approuvée et véhicule attribué.","success")
+                return redirect(url_for("admin_reservations"))
+        elif action == "reject":
+            r.status = "rejected"
+            db.session.commit()
+            if r.user and r.user.email:
+                notify(subject="[Vehicules] Demande refusée",
+                       recipients=[r.user.email],
+                       body=f"Votre demande du {r.start_at} au {r.end_at} a été refusée.")
+            flash("Demande refusée.","warning")
+            return redirect(url_for("admin_reservations"))
+    avail = vehicles_availability(r.start_at, r.end_at)
+    return render_template("manage_request.html", r=r, availability=avail, user=u)
+
+@app.route("/calendar/month")
+@login_required
+def calendar_month():
+    user = current_user()
+    # Everyone can see this read-only view
+    y = int(request.args.get("y", datetime.today().year))
+    m = int(request.args.get("m", datetime.today().month))
+    # Compute month start/end
+    start = datetime(y, m, 1)
+    if m == 12:
+        end = datetime(y+1,1,1)
+    else:
+        end = datetime(y, m+1, 1)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(Reservation.status=="approved",
+                                   Reservation.start_at < end,
+                                   Reservation.end_at > start).all()
+    return render_template("calendar_month.html", vehicles=vehicles, reservations=res, start=start, end=end, user=user, timedelta=timedelta)
+
+@app.route("/calendar/week")
+@login_required
+def calendar_week():
+    user = current_user()
+    today = datetime.today()
+    start = today - timedelta(days=today.weekday())
+    end = start + timedelta(days=7)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(Reservation.status=="approved",
+                                   Reservation.start_at < end,
+                                   Reservation.end_at > start).all()
+    return render_template("calendar_week.html", vehicles=vehicles, reservations=res, start=start, end=end, user=user, timedelta=timedelta)
+
+@app.route("/export/ics")
+@login_required
+def export_ics():
+    res = Reservation.query.filter_by(status="approved").all()
+    body = make_ics(res)
+    return send_file(BytesIO(body), mimetype="text/calendar", as_attachment=True, download_name="planning.ics")
+
+@app.route("/export/ics/<vehicle_code>")
+@login_required
+def export_ics_vehicle(vehicle_code):
+    v = Vehicle.query.filter_by(code=vehicle_code.upper()).first_or_404()
+    res = Reservation.query.filter_by(status="approved", vehicle_id=v.id).all()
+    body = make_ics(res)
+    return send_file(BytesIO(body), mimetype="text/calendar", as_attachment=True, download_name=f"{v.code}.ics")
+
+@app.route("/export/pdf/week")
+@login_required
+def export_pdf_week():
+    if not WEASY_OK:
+        flash("WeasyPrint non installé.","warning"); return redirect(url_for("calendar_week"))
+    today = datetime.today()
+    start = today - timedelta(days=today.weekday())
+    end = start + timedelta(days=7)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(Reservation.status=="approved",
+                                   Reservation.start_at < end,
+                                   Reservation.end_at > start).all()
+    html = render_template("pdf_week.html", vehicles=vehicles, reservations=res, start=start, end=end)
+    pdf = HTML(string=html).write_pdf()
+    return send_file(BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name="planning_semaine.pdf")
+
+@app.route("/export/pdf/month")
+@login_required
+def export_pdf_month():
+    if not WEASY_OK:
+        flash("WeasyPrint non installé.","warning"); return redirect(url_for("calendar_month"))
+    y = int(request.args.get("y", datetime.today().year))
+    m = int(request.args.get("m", datetime.today().month))
+    start = datetime(y, m, 1)
+    end = datetime(y+1,1,1) if m==12 else datetime(y,m+1,1)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(Reservation.status=="approved",
+                                   Reservation.start_at < end,
+                                   Reservation.end_at > start).all()
+    html = render_template("pdf_month.html", vehicles=vehicles, reservations=res, start=start, end=end)
+    pdf = HTML(string=html).write_pdf()
+    return send_file(BytesIO(pdf), mimetype="application/pdf", as_attachment=True, download_name=f"planning_{y}-{m:02d}.pdf")
+
+def make_ics(res_list):
+    lines = ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//VehiculesCSP//FR"]
+    for r in res_list:
+        veh = r.vehicle.code if r.vehicle else "A AFFECTER"
+        lines += [
+          "BEGIN:VEVENT",
+          f"UID:veh-{r.id}@csp",
+          f"SUMMARY:{veh} - {r.user.name if r.user else ''}",
+          f"DTSTART:{r.start_at.strftime('%Y%m%dT%H%M%S')}",
+          f"DTEND:{r.end_at.strftime('%Y%m%dT%H%M%S')}",
+          f"DESCRIPTION:{(r.purpose or '').replace(',', ' ')}",
+          "END:VEVENT"
+        ]
+    lines.append("END:VCALENDAR")
+    return "\n".join(lines).encode("utf-8")
+
+if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)
+
+# --- Connexion alternative, minimaliste ---
+@csrf.exempt
+@app.route("/login_plain", methods=["GET","POST"])
+def login_plain():
+    if request.method == "POST":
+        email = (request.form.get("email") or "").strip().lower()
+        password = request.form.get("password") or ""
+        u = User.query.filter_by(email=email).first()
+        if u and u.check_password(password):
+            session["uid"] = u.id
+            return redirect(request.args.get("next") or url_for("home"))
+        flash("Identifiants invalides", "danger")
+    return render_template("login_basic.html", user=current_user())
+
+# --- Redirection forcée: /login -> /login_plain ---
+@csrf.exempt
+@app.route("/login", methods=["GET", "POST"])
+def login_redirect_to_plain():
+    # redirige toute tentative de login vers la version "plain"
+    target = url_for("login_plain")
+    if request.args.get("next"):
+        from urllib.parse import urlencode
+        target += "?" + urlencode({"next": request.args.get("next")})
+    return redirect(target)
+
+# --- Force toute requête /login -> /login_plain, avant le routing ---
+
+
+@app.route("/__ping__", methods=["GET"])
+def __ping__():
+    return "OK", 200
+@app.before_request
+
+def _force_login_plain():
+
+    allowed = {"login_plain", "static", "__diag__", "__ping__", "__mail_test__"}
+
+    if request.endpoint in allowed:
+
+        return
+
+    if request.path == "/login":
+
+        from urllib.parse import urlencode
+
+        q = {}
+
+        nxt = request.args.get("next")
+
+        if nxt:
+
+            q["next"] = nxt
+
+        target = url_for("login_plain")
+
+        if q:
+
+            target += "?" + urlencode(q)
+
+        return redirect(target)
+
+    if not session.get("uid"):
+
+        next_url = request.full_path if request.query_string else request.path
+
+        return redirect(url_for("login_plain", next=next_url))
+
+# --- Test d'envoi email via msmtp ---
+@app.route("/__mail_test__", methods=["GET"])
+def __mail_test__():
+    to = request.args.get("to")
+    if not to:
+        return "Paramètre ?to=destinataire requis", 400
+    ok, msg = send_mail_msmtp(
+        subject="Test msmtp depuis vehicules",
+        body="Ceci est un test envoyé via msmtp (profil gmail).",
+        to_addrs=to
+    )
+    if ok:
+        return f"OK: email envoyé à {to}", 200
+    return f"ERR: {msg}", 500
+
+# === Envoi d'e-mails HTML via msmtp (profil "gmail") =========================
+import subprocess
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+def send_html_mail(to, subject, html_body, text_body=None, sender="gestionvehiculestomer@gmail.com"):
+    """
+    Envoie un e-mail multipart (texte + HTML) via msmtp (profil 'gmail').
+    Retourne (True, "ok") en cas de succès, sinon (False, 'message d’erreur').
+    """
+    # Fallback texte si non fourni (retire les balises HTML)
+    if not text_body:
+        import re
+        text_body = re.sub("<[^<]+?>", "", html_body)
+
+    msg = MIMEMultipart("alternative")
+    msg["From"] = sender
+    msg["To"] = to
+    msg["Subject"] = subject
+
+    part_text = MIMEText(text_body, "plain", "utf-8")
+    part_html = MIMEText(html_body, "html", "utf-8")
+    msg.attach(part_text)
+    msg.attach(part_html)
+
+    try:
+        subprocess.run(
+            ["/usr/bin/msmtp", "-a", "gmail", to],
+            input=msg.as_string().encode("utf-8"),
+            check=True,
+            timeout=20
+        )
+        return True, "ok"
+    except subprocess.CalledProcessError as e:
+        return False, f"msmtp failed: {e}"
+    except Exception as e:
+        return False, f"error: {e}"
+
+# Endpoint de test: /__mail_test_html__?to=destinataire@example.com
+@app.route("/__mail_test_html__", methods=["GET"])
+def __mail_test_html__():
+    to = request.args.get("to")
+    if not to:
+        return "ERR: param ?to= manquant", 400
+
+    html = """
+    <html>
+      <body style="font-family: Arial, sans-serif; font-size:14px; color:#222; line-height:1.5;">
+        <div style="max-width:600px;margin:auto;border:1px solid #eee;border-radius:8px;overflow:hidden">
+          <div style="background:#0d6efd;color:#fff;padding:14px 18px;">
+            <h1 style="margin:0;font-size:18px;">Véhicules CSP — Test e‑mail HTML</h1>
+          </div>
+          <div style="padding:18px;">
+            <p>Bonjour,</p>
+            <p>Ceci est un <b>message de test</b> au format HTML envoyé depuis l’application.</p>
+            <ul>
+              <li>Encodage : UTF-8</li>
+              <li>Transport : msmtp (profil <code>gmail</code>)</li>
+              <li>Date : <span style="white-space:nowrap;">{{ now.strftime("%d/%m/%Y %H:%M") }}</span></li>
+            </ul>
+            <p style="margin-top:16px;">Si vous voyez ce bloc avec une mise en forme correcte, c’est gagné ✅</p>
+          </div>
+          <div style="background:#f8f9fa;padding:12px 18px;color:#666;font-size:12px;">
+            <em>Message automatique — ne pas répondre</em>
+          </div>
+        </div>
+      </body>
+    </html>
+    """.strip()
+
+    # On fournit 'now' au template si on veut rendre via Jinja, mais ici c'est un HTML statique.
+    ok, info = send_html_mail(
+        to=to,
+        subject="🔧 Test e‑mail HTML — Véhicules CSP",
+        html_body=html,
+        text_body="Bonjour,\n\nCeci est un message de test HTML (avec fallback texte).\n\n— Véhicules CSP"
+    )
+    return ("OK" if ok else "ERR") + ("" if ok else (": " + info)), (200 if ok else 500), {"Content-Type":"text/plain; charset=utf-8"}

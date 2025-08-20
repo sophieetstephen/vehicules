@@ -1,0 +1,36 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Vue mensuelle (lecture seule)</h1>
+<p>Mois: {{ start.strftime('%B %Y') }}</p>
+{% set days = (end - start).days %}
+<table class="table table-bordered table-sm align-middle">
+  <thead>
+    <tr>
+      <th style="position: sticky; left:0; background:#fff;">Véhicule</th>
+      {% for i in range(days) %}
+        <th class="text-center">{{ (start + timedelta(days=(i|int))).strftime("%d") }}</th>
+      {% endfor %}
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vehicles %}
+    <tr>
+      <td style="position: sticky; left:0; background:#fff;"><strong>{{ v.code }}</strong></td>
+      {% for i in range(days) %}
+    {% set day = start + timedelta(days=(i|int)) %}
+        <td class="text-center" style="min-width:40px;">
+          {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
+            <span class="badge bg-success">R</span>
+          {% endfor %}
+        </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="text-muted">Légende : <span class="badge bg-success">R</span> = Réservé (approuvé)</p>
+{% if user and user.role in ['chef','adjoint'] %}
+  <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month') }}">Exporter PDF du mois</a>
+{% endif %}
+{% endblock %}

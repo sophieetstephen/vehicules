@@ -1,0 +1,21 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Nouvelle demande</h1>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="row">
+    <div class="col-md-6 mb-3">{{ form.first_name.label }} {{ form.first_name(class="form-control") }}</div>
+    <div class="col-md-6 mb-3">{{ form.last_name.label }} {{ form.last_name(class="form-control") }}</div>
+  </div>
+  <div class="row">
+    <div class="col-md-6 mb-3">{{ form.start_at.label }} {{ form.start_at(class="form-control") }}</div>
+    <div class="col-md-6 mb-3">{{ form.end_at.label }} {{ form.end_at(class="form-control") }}</div>
+  </div>
+  <div class="mb-3">{{ form.purpose.label }} {{ form.purpose(class="form-control") }}</div>
+  <div class="form-check mb-3">{{ form.carpool(class="form-check-input") }} {{ form.carpool.label(class="form-check-label") }}</div>
+  <div class="mb-3">{{ form.carpool_with.label }} {{ form.carpool_with(class="form-control") }}</div>
+  <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control", rows=3) }}</div>
+  {{ form.submit(class="btn btn-success") }}
+</form>
+{% endblock %}

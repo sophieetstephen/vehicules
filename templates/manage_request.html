@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Gérer la demande #{{ r.id }}</h1>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <p><strong>Période :</strong> {{ r.start_at|dt }} → {{ r.end_at|dt }}</p>
+    <p><strong>Motif :</strong> {{ r.purpose or '—' }}</p>
+    <p><strong>Covoiturage :</strong> {% if r.carpool %}Oui ({{ r.carpool_with or '—' }}){% else %}Non{% endif %}</p>
+    <p><strong>Précisions :</strong> {{ r.notes or '—' }}</p>
+  </div>
+</div>
+
+<h2 class="h6">Disponibilité des véhicules</h2>
+<div class="small text-muted">debug: vehicles={{ vehicles|length if vehicles is defined else "undef" }}</div>
+
+<form method="post">
+  <div class="mb-3">
+    <label for="vehicle_id" class="form-label">Véhicule</label>
+
+    {# 1) Si on a une availability (liste de tuples (v, free)), on l’affiche en priorité #}
+    {% if availability and availability|length > 0 %}
+      <select id="vehicle_id" name="vehicle_id" class="form-select" required>
+        {% for v, free in availability %}
+          <option value="{{ v.id }}" {% if not free %}disabled{% endif %}>
+            {{ v.code }}{% if v.label %} — {{ v.label }}{% endif %}{% if not free %} (occupé){% endif %}
+          </option>
+        {% endfor %}
+      </select>
+
+    {# 2) Sinon, fallback sur tous les véhicules (liste 'vehicles') #}
+    {% elif vehicles and vehicles|length > 0 %}
+      <select id="vehicle_id" name="vehicle_id" class="form-select" required>
+        {% for v in vehicles %}
+          <option value="{{ v.id }}">{{ v.code }}{% if v.label %} — {{ v.label }}{% endif %}</option>
+        {% endfor %}
+      </select>
+      <div class="form-text">Aucun créneau strictement libre détecté — sélection manuelle.</div>
+
+    {# 3) Sinon, rien en base #}
+    {% else %}
+      <div class="alert alert-warning mb-0">Aucun véhicule en base.</div>
+    {% endif %}
+  </div>
+
+  <table class="table table-bordered align-middle">
+    <thead>
+      <tr><th>Véhicule</th><th>Disponible</th><th>Sélection</th></tr>
+    </thead>
+    <tbody>
+    {% if availability and availability|length > 0 %}
+      {% for v, free in availability %}
+      <tr>
+        <td><strong>{{ v.code }}</strong>{% if v.label %} — {{ v.label }}{% endif %}</td>
+        <td>{% if free %}✅ Libre{% else %}❌ Occupé{% endif %}</td>
+        <td>
+          <input type="radio" name="vehicle_id" value="{{ v.id }}" {% if not free %}disabled{% endif %}>
+        </td>
+      </tr>
+      {% endfor %}
+    {% elif vehicles and vehicles|length > 0 %}
+      {% for v in vehicles %}
+      <tr>
+        <td><strong>{{ v.code }}</strong>{% if v.label %} — {{ v.label }}{% endif %}</td>
+        <td>—</td>
+        <td><input type="radio" name="vehicle_id" value="{{ v.id }}"></td>
+      </tr>
+      {% endfor %}
+    {% else %}
+      <tr><td colspan="3" class="text-center">Aucun véhicule.</td></tr>
+    {% endif %}
+    </tbody>
+  </table>
+
+  <button name="action" value="approve" class="btn btn-success">Approuver avec ce véhicule</button>
+  <button name="action" value="reject"  class="btn btn-outline-danger">Refuser</button>
+</form>
+{% endblock %}

@@ -1,0 +1,27 @@
+
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Réservations (admin)</h1>
+<table class="table table-striped">
+  <thead><tr><th>ID</th><th>Véhicule</th><th>Début</th><th>Fin</th><th>Demandeur</th><th>Statut</th><th></th></tr></thead>
+  <tbody>
+  {% for r in reservations %}
+    <tr>
+      <td>{{ r.id }}</td>
+      <td>{{ r.vehicle.code if r.vehicle else "A AFFECTER" }}</td>
+      <td>{{ r.start_at|dt }}</td>
+      <td>{{ r.end_at|dt }}</td>
+      <td>{{ r.user.name }}</td>
+      <td>
+        {% if r.status=='approved' %}<span class="badge bg-success">approuvée</span>
+        {% elif r.status=='rejected' %}<span class="badge bg-secondary">refusée</span>
+        {% else %}<span class="badge bg-warning text-dark">en attente</span>{% endif %}
+      </td>
+      <td class="text-end"><a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">Gérer</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="7">Aucune réservation.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
