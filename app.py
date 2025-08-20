@@ -3,7 +3,7 @@
 
 import os, sys
 from urllib.parse import quote as _urlquote
-from flask import Flask, request, redirect, render_template, flash, session
+from flask import Flask, request, redirect, render_template, flash, session, url_for
 from forms import FirstLoginForm
 from models import db, User
 
@@ -53,7 +53,10 @@ def login_plain():
     if request.method == "POST":
         email = (request.form.get("email") or "").strip()
         password = request.form.get("password") or ""
-        # À brancher sur votre vraie logique d'authentification :
+        u = User.query.filter_by(email=email).first()
+        if u and u.check_password(password):
+            session["uid"] = u.id
+            return redirect(request.args.get("next") or url_for("home"))
         flash("Identifiants invalides", "danger")
     return render_template("login_plain.html"), 200
 
