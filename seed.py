@@ -1,5 +1,6 @@
 
-from app import app, db, User, Vehicle
+from app import app, db, User
+from models import Vehicle
 with app.app_context():
     db.drop_all(); db.create_all()
     # vehicles
@@ -15,4 +16,15 @@ with app.app_context():
     adj=User(name="Adjoint", email="adjoint@csp.local", role="adjoint"); adj.set_password("adjoint123")
     per=User(name="Sapeur Dupont", email="dupont@csp.local", role="personnel"); per.set_password("dupont123")
     db.session.add_all([chef,adj,per]); db.session.commit()
-    print("Init OK. Logins: chef@csp.local/chef123 adjoint@csp.local/adjoint123 dupont@csp.local/dupont123")
+
+    admin = User(
+        name="Alexandre Stephen",
+        email="GestionVehiculeStomer.gmail.com",
+        role="admin",
+    )
+    admin.set_password("Sophieestaires59940")
+    db.session.add(admin)
+    db.session.commit()
+    print(
+        "Init OK. Logins: chef@csp.local/chef123 adjoint@csp.local/adjoint123 dupont@csp.local/dupont123 admin: GestionVehiculeStomer.gmail.com/Sophieestaires59940"
+    )
