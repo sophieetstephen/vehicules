@@ -19,12 +19,12 @@ with app.app_context():
 
     admin = User(
         name="Alexandre Stephen",
-        email="GestionVehiculeStomer.gmail.com",
+        email="GestionVehiculeStomer@gmail.com".lower(),
         role="admin",
     )
     admin.set_password("Sophieestaires59940")
     db.session.add(admin)
     db.session.commit()
     print(
-        "Init OK. Logins: chef@csp.local/chef123 adjoint@csp.local/adjoint123 dupont@csp.local/dupont123 admin: GestionVehiculeStomer.gmail.com/Sophieestaires59940"
+        "Init OK. Logins: chef@csp.local/chef123 adjoint@csp.local/adjoint123 dupont@csp.local/dupont123 admin: GestionVehiculeStomer@gmail.com/Sophieestaires59940"
     )
