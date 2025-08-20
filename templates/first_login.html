@@ -18,19 +18,43 @@
     {% endif %}
   {% endwith %}
   <form method="post">
+    {{ form.hidden_tag() }}
     <div class="mb-3">
-      <label class="form-label">Adresse e-mail</label>
-      <input class="form-control" type="email" name="email" required>
+      {{ form.first_name.label(class_="form-label") }}
+      {{ form.first_name(class_="form-control") }}
+      {% for error in form.first_name.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
     </div>
     <div class="mb-3">
-      <label class="form-label">Mot de passe</label>
-      <input class="form-control" type="password" name="password" minlength="8" required>
+      {{ form.last_name.label(class_="form-label") }}
+      {{ form.last_name(class_="form-control") }}
+      {% for error in form.last_name.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
     </div>
     <div class="mb-3">
-      <label class="form-label">Confirmer le mot de passe</label>
-      <input class="form-control" type="password" name="password2" minlength="8" required>
+      {{ form.email.label(class_="form-label") }}
+      {{ form.email(class_="form-control") }}
+      {% for error in form.email.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
     </div>
-    <button class="btn btn-primary">Créer mon compte</button>
+    <div class="mb-3">
+      {{ form.password.label(class_="form-label") }}
+      {{ form.password(class_="form-control") }}
+      {% for error in form.password.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
+    </div>
+    <div class="mb-3">
+      {{ form.password2.label(class_="form-label") }}
+      {{ form.password2(class_="form-control") }}
+      {% for error in form.password2.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
+    </div>
+    {{ form.submit(class_="btn btn-primary") }}
     <a class="btn btn-link" href="/login_plain">J’ai déjà un compte</a>
   </form>
 </body>
