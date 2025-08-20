@@ -51,7 +51,7 @@ def login():
 @app.route("/login_plain", methods=["GET", "POST"])
 def login_plain():
     if request.method == "POST":
-        email = (request.form.get("email") or "").strip()
+        email = (request.form.get("email") or "").strip().lower()
         password = request.form.get("password") or ""
         u = User.query.filter_by(email=email).first()
         if u and u.check_password(password):
@@ -65,7 +65,7 @@ def first_login():
     form = FirstLoginForm()
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
-        user = User(name=name, email=form.email.data)
+        user = User(name=name, email=form.email.data.lower())
         user.set_password(form.password.data)
         if form.email.data in app.config.get("ADMIN_EMAILS", []):
             user.role = "admin"
