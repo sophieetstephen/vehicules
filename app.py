@@ -85,10 +85,7 @@ def forbidden(_):
 @app.route("/home")
 @app.route("/")
 def home():
-    vehicles = Vehicle.query.order_by(Vehicle.code).all()
-    return render_template(
-        "home.html", vehicles=vehicles, user=current_user()
-    )
+    return redirect(url_for("calendar_month"))
 
 
 # --- Routes de connexion
