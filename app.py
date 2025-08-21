@@ -5,7 +5,7 @@ import os, sys
 from urllib.parse import quote as _urlquote
 from flask import Flask, request, redirect, render_template, flash, session, url_for
 from forms import FirstLoginForm
-from models import db, User
+from models import db, User, Vehicle
 from sqlalchemy.exc import IntegrityError
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
@@ -60,6 +60,13 @@ def login_plain():
             return redirect(request.args.get("next") or url_for("home"))
         flash("Identifiants invalides", "danger")
     return render_template("login_plain.html"), 200
+
+
+@app.route("/")
+def home():
+    user = User.query.get(session.get("uid")) if session.get("uid") else None
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    return render_template("home.html", user=user, vehicles=vehicles), 200
 
 @app.route("/first_login", methods=["GET", "POST"])
 def first_login():
