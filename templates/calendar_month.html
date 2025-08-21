@@ -30,7 +30,7 @@
   </tbody>
 </table>
 <p class="text-muted">Légende : <span class="badge bg-success">R</span> = Réservé (approuvé)</p>
-{% if user and user.role in ['chef','adjoint'] %}
+{% if user and user.role in ['admin', 'superadmin'] %}
   <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month') }}">Exporter PDF du mois</a>
 {% endif %}
 {% endblock %}
