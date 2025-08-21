@@ -19,6 +19,7 @@
         {% if user %}
           {% if user.role in ['admin', 'superadmin'] %}
             <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_vehicles') }}">Gestion du parc</a></li>
+            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_vehicle_new') }}">Ajouter un véhicule</a></li>
             <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_reservations') }}">Reservation</a></li>
             {% if user.role == 'superadmin' %}
               <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_users') }}">Gestion du Statut Utilisateur</a></li>

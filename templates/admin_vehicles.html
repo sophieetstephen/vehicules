@@ -2,12 +2,23 @@
 {% block content %}
 <div class="container">
   <h2>Véhicules CSP</h2>
+  <div class="mb-3">
+    <a class="btn btn-primary" href="{{ url_for('admin_vehicle_new') }}">Nouveau véhicule</a>
+  </div>
   {% if vehicles %}
   <table class="table table-striped">
-    <thead><tr><th>Code</th><th>Libellé</th><th>Catégorie</th></tr></thead>
+    <thead><tr><th>Code</th><th>Libellé</th><th>Catégorie</th><th></th></tr></thead>
     <tbody>
       {% for v in vehicles %}
-      <tr><td>{{ v.code }}</td><td>{{ v.label }}</td><td>{{ v.category or "" }}</td></tr>
+      <tr>
+        <td>{{ v.code }}</td>
+        <td>{{ v.label }}</td>
+        <td>{{ v.category or "" }}</td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-secondary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">Modifier</a>
+          <a class="btn btn-sm btn-danger" href="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}">Supprimer</a>
+        </td>
+      </tr>
       {% endfor %}
     </tbody>
   </table>

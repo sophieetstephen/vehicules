@@ -211,6 +211,61 @@ def admin_promote(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/admin/vehicles")
+@role_required("admin", "superadmin")
+def admin_vehicles():
+    user = current_user()
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    return render_template(
+        "admin_vehicles.html",
+        vehicles=vehicles,
+        user=user,
+        current_user=user,
+    )
+
+
+@app.route("/admin/vehicles/new", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_new():
+    if request.method == "POST":
+        v = Vehicle(
+            code=request.form["code"].strip(),
+            label=request.form["label"].strip(),
+        )
+        db.session.add(v)
+        db.session.commit()
+        flash("Véhicule créé", "success")
+        return redirect(url_for("admin_vehicles"))
+    return render_template(
+        "vehicle_form.html", vehicle=None, user=current_user()
+    )
+
+
+@app.route("/admin/vehicles/<int:vehicle_id>/edit", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_edit(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    if request.method == "POST":
+        vehicle.code = request.form["code"].strip()
+        vehicle.label = request.form["label"].strip()
+        db.session.commit()
+        flash("Véhicule mis à jour", "success")
+        return redirect(url_for("admin_vehicles"))
+    return render_template(
+        "vehicle_form.html", vehicle=vehicle, user=current_user()
+    )
+
+
+@app.route("/admin/vehicles/<int:vehicle_id>/delete")
+@role_required("admin", "superadmin")
+def admin_vehicle_delete(vehicle_id):
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    db.session.delete(vehicle)
+    db.session.commit()
+    flash("Véhicule supprimé", "info")
+    return redirect(url_for("admin_vehicles"))
+
+
 @app.route("/calendar/month")
 def calendar_month():
     user = current_user()
