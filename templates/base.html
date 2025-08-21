@@ -17,14 +17,7 @@
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
         {% if user %}
-          {% if user.role in ['admin', 'superadmin'] %}
-            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_vehicles') }}">Gestion du parc</a></li>
-            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_vehicle_new') }}">Ajouter un véhicule</a></li>
-            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_reservations') }}">Reservation</a></li>
-            {% if user.role == 'superadmin' %}
-              <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('admin_users') }}">Gestion du Statut Utilisateur</a></li>
-            {% endif %}
-          {% endif %}
+          <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('home') }}">Accueil</a></li>
           <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('calendar_month') }}">Vue mensuelle</a></li>
           <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('new_request') }}">Nouvelle demande</a></li>
         {% endif %}

@@ -1,17 +1,11 @@
-
 {% extends "base.html" %}
 {% block content %}
-<h1 class="h4">Parc véhicules</h1>
-<div class="row mt-3">
-  {% for v in vehicles %}
-  <div class="col-md-4">
-    <div class="card mb-3">
-      <div class="card-body">
-        <h5 class="card-title">{{ v.code }}</h5>
-        <p class="card-text">{{ v.label }} — {{ v.seats }} places</p>
-      </div>
-    </div>
-  </div>
-  {% endfor %}
+<h1 class="h4">Accueil administration</h1>
+<div class="list-group">
+  <a class="list-group-item list-group-item-action" href="{{ url_for('admin_users') }}">Gestion des utilisateurs</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('admin_vehicles') }}">Gestion du parc</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('admin_reservations') }}">Gestion des réservations</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('calendar_month') }}">Vue mensuelle</a>
+  <a class="list-group-item list-group-item-action" href="{{ url_for('new_request') }}">Nouvelle demande</a>
 </div>
 {% endblock %}
