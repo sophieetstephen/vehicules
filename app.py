@@ -103,11 +103,13 @@ def register():
     form = RegisterForm()
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
-        user = User(
-            name=name,
-            email=form.email.data.lower(),
-            role=User.ROLE_USER,
-        )
+        email = form.email.data.lower()
+        role = User.ROLE_USER
+        if email in app.config.get("SUPERADMIN_EMAILS", []):
+            role = User.ROLE_SUPERADMIN
+        elif email in app.config.get("ADMIN_EMAILS", []):
+            role = User.ROLE_ADMIN
+        user = User(name=name, email=email, role=role)
         user.set_password(form.password.data)
         db.session.add(user)
         try:
@@ -126,10 +128,14 @@ def first_login():
     form = FirstLoginForm()
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
-        user = User(name=name, email=form.email.data.lower())
+        email = form.email.data.lower()
+        role = User.ROLE_USER
+        if email in app.config.get("SUPERADMIN_EMAILS", []):
+            role = User.ROLE_SUPERADMIN
+        elif email in app.config.get("ADMIN_EMAILS", []):
+            role = User.ROLE_ADMIN
+        user = User(name=name, email=email, role=role)
         user.set_password(form.password.data)
-        if form.email.data in app.config.get("ADMIN_EMAILS", []):
-            user.role = User.ROLE_ADMIN
         db.session.add(user)
         try:
             db.session.commit()

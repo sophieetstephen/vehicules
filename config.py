@@ -10,5 +10,16 @@ class Config:
     MAIL_USE_TLS = os.environ.get("MAIL_USE_TLS","1") == "1"
     MAIL_USERNAME = os.environ.get("MAIL_USERNAME","")
     MAIL_PASSWORD = os.environ.get("MAIL_PASSWORD","")
-    MAIL_DEFAULT_SENDER = os.environ.get("MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME","no-reply@csp.local"))
-    ADMIN_EMAILS = [e.strip() for e in os.environ.get("ADMIN_EMAILS","").split(",") if e.strip()]
+    MAIL_DEFAULT_SENDER = os.environ.get(
+        "MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME", "no-reply@csp.local")
+    )
+    SUPERADMIN_EMAILS = [
+        e.strip().lower()
+        for e in os.environ.get("SUPERADMIN_EMAILS", "").split(",")
+        if e.strip()
+    ]
+    ADMIN_EMAILS = [
+        e.strip().lower()
+        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
+        if e.strip()
+    ]
