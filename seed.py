@@ -34,6 +34,6 @@ with app.app_context():
     db.session.commit()
 
     print(
-        "Init OK. Logins: gestionvehiculestomer@gmail.com/superadmin123 alexandre.stephen@free.fr/alexandre123"
+        "Init OK. Users: gestionvehiculestomer@gmail.com, alexandre.stephen@free.fr"
     )
 
