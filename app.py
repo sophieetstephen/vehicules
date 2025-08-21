@@ -16,7 +16,7 @@ from flask import (
     abort,
 )
 from forms import LoginForm, FirstLoginForm, RegisterForm
-from models import db, User
+from models import db, User, Vehicle
 from sqlalchemy.exc import IntegrityError
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
@@ -79,6 +79,15 @@ def _force_login():
 @app.errorhandler(403)
 def forbidden(_):
     return render_template("403.html", user=current_user()), 403
+
+
+@app.route("/home")
+@app.route("/")
+def home():
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    return render_template(
+        "home.html", vehicles=vehicles, user=current_user()
+    )
 
 
 # --- Routes de connexion
@@ -144,7 +153,7 @@ def first_login():
             flash("Adresse e‑mail déjà utilisée", "danger")
             return render_template("first_login.html", form=form), 200
         session["uid"] = user.id
-        return redirect("/")
+        return redirect(url_for("home"))
     return render_template("first_login.html", form=form), 200
 
 
