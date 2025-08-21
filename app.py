@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import os, sys
+import os
+import sys
 from urllib.parse import quote as _urlquote
-from flask import Flask, request, redirect, render_template, flash, session, url_for, abort
+from functools import wraps
+from flask import (
+    Flask,
+    request,
+    redirect,
+    render_template,
+    flash,
+    session,
+    url_for,
+    abort,
+)
 from forms import LoginForm, FirstLoginForm, RegisterForm
 from models import db, User
 from sqlalchemy.exc import IntegrityError
@@ -26,10 +37,29 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 
+
+def current_user():
+    uid = session.get("uid")
+    return User.query.get(uid) if uid else None
+
+
+def role_required(*roles):
+    def wrapper(fn):
+        @wraps(fn)
+        def decorated(*args, **kwargs):
+            u = current_user()
+            if not u or u.role not in roles:
+                abort(403)
+            return fn(*args, **kwargs)
+        return decorated
+    return wrapper
+
+
 # --- Santé
 @app.route("/__ping__", methods=["GET"])
 def __ping__():
     return "OK", 200
+
 
 # --- Garde: force /login pour les non-connectés (sans boucle)
 @app.before_request
@@ -40,18 +70,30 @@ def _force_login():
         return None
     if not session.get("uid"):
         nxt = request.full_path if request.query_string else p
-        return redirect("/login" + (f"?next={_urlquote(nxt)}" if nxt else ""))
+        return redirect(
+            "/login" + (f"?next={_urlquote(nxt)}" if nxt else "")
+        )
     return None
+
+
+@app.errorhandler(403)
+def forbidden(_):
+    return render_template("403.html", user=current_user()), 403
+
 
 # --- Routes de connexion
 @app.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        u = User.query.filter_by(email=form.email.data.lower()).first()
+        u = User.query.filter_by(
+            email=form.email.data.lower()
+        ).first()
         if u and u.check_password(form.password.data):
             session["uid"] = u.id
-            return redirect(request.args.get("next") or url_for("home"))
+            return redirect(
+                request.args.get("next") or url_for("home")
+            )
         flash("Identifiants invalides", "danger")
     return render_template("login_plain.html", form=form), 200
 
@@ -61,7 +103,11 @@ def register():
     form = RegisterForm()
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
-        user = User(name=name, email=form.email.data.lower(), role=User.ROLE_USER)
+        user = User(
+            name=name,
+            email=form.email.data.lower(),
+            role=User.ROLE_USER,
+        )
         user.set_password(form.password.data)
         db.session.add(user)
         try:
@@ -73,6 +119,7 @@ def register():
         session["uid"] = user.id
         return redirect(url_for("home"))
     return render_template("register.html", form=form), 200
+
 
 @app.route("/first_login", methods=["GET", "POST"])
 def first_login():
@@ -96,10 +143,9 @@ def first_login():
 
 
 @app.route("/admin/users")
+@role_required("admin", "superadmin")
 def admin_users():
-    u = User.query.get(session.get("uid"))
-    if not u or u.role != User.ROLE_SUPERADMIN:
-        abort(403)
+    u = current_user()
     users = User.query.order_by(User.name).all()
     return render_template(
         "admin_users.html",
@@ -112,15 +158,14 @@ def admin_users():
 
 
 @app.route("/admin/promote/<int:user_id>")
+@role_required("admin", "superadmin")
 def admin_promote(user_id):
-    u = User.query.get(session.get("uid"))
-    if not u or u.role != User.ROLE_SUPERADMIN:
-        abort(403)
     target = User.query.get_or_404(user_id)
     target.role = User.ROLE_ADMIN
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
     return redirect(url_for("admin_users"))
+
 
 # --- Entrée locale de dev (inutile en prod/gunicorn)
 if __name__ == "__main__":
