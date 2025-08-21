@@ -4,7 +4,7 @@
 import os, sys
 from urllib.parse import quote as _urlquote
 from flask import Flask, request, redirect, render_template, flash, session, url_for
-from forms import FirstLoginForm
+from forms import FirstLoginForm, RegisterForm
 from models import db, User
 from sqlalchemy.exc import IntegrityError
 
@@ -60,6 +60,25 @@ def login_plain():
             return redirect(request.args.get("next") or url_for("home"))
         flash("Identifiants invalides", "danger")
     return render_template("login_plain.html"), 200
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    form = RegisterForm()
+    if form.validate_on_submit():
+        name = f"{form.last_name.data} {form.first_name.data}"
+        user = User(name=name, email=form.email.data.lower(), role="user")
+        user.set_password(form.password.data)
+        db.session.add(user)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Adresse e‑mail déjà utilisée", "danger")
+            return render_template("register.html", form=form), 200
+        session["uid"] = user.id
+        return redirect(url_for("home"))
+    return render_template("register.html", form=form), 200
 
 @app.route("/first_login", methods=["GET", "POST"])
 def first_login():
