@@ -14,11 +14,20 @@ from flask import (
     session,
     url_for,
     abort,
+    send_file,
 )
 from datetime import datetime, timedelta
+from io import BytesIO
 from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm
 from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
+
+try:
+    from weasyprint import HTML
+    WEASY_OK = True
+except Exception:
+    HTML = None
+    WEASY_OK = False
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
 _here = os.path.dirname(__file__) or "."
@@ -339,6 +348,38 @@ def manage_request(rid):
         availability=avail,
         user=user,
         current_user=user,
+    )
+
+
+@app.route("/export/pdf/month")
+@role_required("admin", "superadmin")
+def export_pdf_month():
+    if not WEASY_OK:
+        flash("WeasyPrint non installé.", "warning")
+        return redirect(url_for("calendar_month"))
+    y = int(request.args.get("y", datetime.today().year))
+    m = int(request.args.get("m", datetime.today().month))
+    start = datetime(y, m, 1)
+    end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(
+        Reservation.status == "approved",
+        Reservation.start_at < end,
+        Reservation.end_at > start,
+    ).all()
+    html = render_template(
+        "pdf_month.html",
+        vehicles=vehicles,
+        reservations=res,
+        start=start,
+        end=end,
+    )
+    pdf = HTML(string=html).write_pdf()
+    return send_file(
+        BytesIO(pdf),
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"planning_{y}-{m:02d}.pdf",
     )
 
 
