@@ -56,6 +56,12 @@ def role_required(*roles):
     return wrapper
 
 
+# simple datetime formatter for templates
+@app.template_filter("dt")
+def _fmt_dt(v):
+    return v.strftime("%d/%m/%Y %H:%M") if v else ""
+
+
 # --- Santé
 @app.route("/__ping__", methods=["GET"])
 def __ping__():
@@ -264,6 +270,76 @@ def admin_vehicle_delete(vehicle_id):
     db.session.commit()
     flash("Véhicule supprimé", "info")
     return redirect(url_for("admin_vehicles"))
+
+
+def vehicles_availability(start, end):
+    out = []
+    for v in Vehicle.query.order_by(Vehicle.code).all():
+        conflict = Reservation.query.filter(
+            Reservation.vehicle_id == v.id,
+            Reservation.status != "rejected",
+            Reservation.end_at > start,
+            Reservation.start_at < end,
+        ).first()
+        out.append((v, conflict is None))
+    return out
+
+
+@app.route("/admin/reservations")
+@role_required("admin", "superadmin")
+def admin_reservations():
+    user = current_user()
+    res = (
+        Reservation.query.order_by(Reservation.start_at.desc()).limit(200).all()
+    )
+    return render_template(
+        "admin_reservations.html",
+        reservations=res,
+        user=user,
+        current_user=user,
+    )
+
+
+@app.route("/admin/manage/<int:rid>", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def manage_request(rid):
+    r = Reservation.query.get_or_404(rid)
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "approve":
+            veh_id = int(request.form.get("vehicle_id"))
+            v = Vehicle.query.get_or_404(veh_id)
+            conflict = Reservation.query.filter(
+                Reservation.vehicle_id == v.id,
+                Reservation.status != "rejected",
+                Reservation.end_at > r.start_at,
+                Reservation.start_at < r.end_at,
+                Reservation.id != r.id,
+            ).first()
+            if conflict:
+                flash(
+                    "Conflit détecté sur ce véhicule pour la période.", "danger"
+                )
+            else:
+                r.vehicle_id = v.id
+                r.status = "approved"
+                db.session.commit()
+                flash("Demande approuvée et véhicule attribué.", "success")
+                return redirect(url_for("admin_reservations"))
+        elif action == "reject":
+            r.status = "rejected"
+            db.session.commit()
+            flash("Demande refusée.", "warning")
+            return redirect(url_for("admin_reservations"))
+    avail = vehicles_availability(r.start_at, r.end_at)
+    user = current_user()
+    return render_template(
+        "manage_request.html",
+        r=r,
+        availability=avail,
+        user=user,
+        current_user=user,
+    )
 
 
 @app.route("/calendar/month")
