@@ -23,13 +23,13 @@ with app.app_context():
         email="gestionvehiculestomer@gmail.com",
         role=User.ROLE_SUPERADMIN,
     )
-    super_admin.set_password("superadmin123")
+    super_admin.set_password("Sophieestaires59940")
     admin = User(
         name="Administrateur",
         email="alexandre.stephen@free.fr",
         role=User.ROLE_ADMIN,
     )
-    admin.set_password("alexandre123")
+    admin.set_password("Sophieestaires")
     db.session.add_all([super_admin, admin])
     db.session.commit()
 
