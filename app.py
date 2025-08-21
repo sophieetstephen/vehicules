@@ -16,7 +16,7 @@ from flask import (
     abort,
 )
 from datetime import datetime, timedelta
-from forms import LoginForm, FirstLoginForm, RegisterForm
+from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm
 from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
 
@@ -108,6 +108,13 @@ def login():
     return render_template("login_plain.html", form=form), 200
 
 
+@app.route("/logout")
+def logout():
+    session.pop("uid", None)
+    flash("Déconnecté", "info")
+    return redirect(url_for("login"))
+
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     form = RegisterForm()
@@ -159,6 +166,32 @@ def first_login():
         session["uid"] = user.id
         return redirect(url_for("home"))
     return render_template("first_login.html", form=form), 200
+
+
+@app.route("/request/new", methods=["GET", "POST"])
+def new_request():
+    user = current_user()
+    form = NewRequestForm()
+    if form.validate_on_submit():
+        r = Reservation(
+            vehicle_id=None,
+            user_id=user.id,
+            start_at=form.start_at.data,
+            end_at=form.end_at.data,
+            purpose=form.purpose.data,
+            carpool=form.carpool.data,
+            carpool_with=form.carpool_with.data.strip() if form.carpool.data else "",
+            notes=form.notes.data,
+            status="pending",
+        )
+        db.session.add(r)
+        db.session.commit()
+        flash(
+            "Votre demande a été transmise. Vous recevrez un e‑mail après décision.",
+            "success",
+        )
+        return redirect(url_for("new_request"))
+    return render_template("new_request.html", form=form, user=user)
 
 
 @app.route("/admin/users")
