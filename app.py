@@ -170,28 +170,23 @@ def first_login():
 
 @app.route("/request/new", methods=["GET", "POST"])
 def new_request():
-    user = current_user()
     form = NewRequestForm()
     if form.validate_on_submit():
         r = Reservation(
-            vehicle_id=None,
-            user_id=user.id,
+            user_id=current_user().id,
             start_at=form.start_at.data,
             end_at=form.end_at.data,
             purpose=form.purpose.data,
             carpool=form.carpool.data,
-            carpool_with=form.carpool_with.data.strip() if form.carpool.data else "",
+            carpool_with=form.carpool_with.data,
             notes=form.notes.data,
             status="pending",
         )
         db.session.add(r)
         db.session.commit()
-        flash(
-            "Votre demande a été transmise. Vous recevrez un e‑mail après décision.",
-            "success",
-        )
-        return redirect(url_for("new_request"))
-    return render_template("new_request.html", form=form, user=user)
+        flash("Votre demande a été transmise.", "success")
+        return redirect(url_for("home"))
+    return render_template("new_request.html", form=form, user=current_user())
 
 
 @app.route("/admin/users")
