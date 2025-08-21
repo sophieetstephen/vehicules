@@ -55,7 +55,7 @@
       {% endfor %}
     </div>
     {{ form.submit(class_="btn btn-primary") }}
-    <a class="btn btn-link" href="/login_plain">J’ai déjà un compte</a>
+    <a class="btn btn-link" href="{{ url_for('login') }}">J’ai déjà un compte</a>
   </form>
 </body>
 </html>
