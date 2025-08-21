@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1 class="h4">Connexion</h1>
-<form method="post" action="/login_plain">
+<form method="post" action="{{ url_for('login') }}">
   <div class="mb-3">
     <label for="email" class="form-label">Email</label>
     <input id="email" name="email" type="email" class="form-control" required>

@@ -37,12 +37,13 @@
       {% if messages %}<ul class="flash">{% for c,m in messages %}<li>{{m}}</li>{% endfor %}</ul>{% endif %}
     {% endwith %}
 
-    <form method="post" action="{{ url_for('login_plain', **request.args) }}">
+    <form method="post" action="{{ url_for('login', **request.args) }}">
+      {{ form.csrf_token }}
       <label>Email
-        <input name="email" type="email" required>
+        {{ form.email(type="email", required=True) }}
       </label>
       <label>Mot de passe
-        <input name="password" type="password" required>
+        {{ form.password(type="password", required=True) }}
       </label>
       <button class="btn" type="submit">Se connecter</button>
     </form>

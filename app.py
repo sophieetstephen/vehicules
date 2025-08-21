@@ -4,7 +4,7 @@
 import os, sys
 from urllib.parse import quote as _urlquote
 from flask import Flask, request, redirect, render_template, flash, session, url_for
-from forms import FirstLoginForm, RegisterForm
+from forms import LoginForm, FirstLoginForm, RegisterForm
 from models import db, User
 from sqlalchemy.exc import IntegrityError
 
@@ -31,35 +31,29 @@ db.init_app(app)
 def __ping__():
     return "OK", 200
 
-# --- Garde: force /login_plain pour les non-connectés (sans boucle)
+# --- Garde: force /login pour les non-connectés (sans boucle)
 @app.before_request
-def _force_login_plain():
+def _force_login():
     p = request.path or "/"
-    public = {"/login", "/login_plain", "/first_login", "/__ping__"}
+    public = {"/login", "/first_login", "/__ping__"}
     if p in public or p.startswith("/static/"):
         return None
     if not session.get("uid"):
         nxt = request.full_path if request.query_string else p
-        return redirect("/login_plain" + (f"?next={_urlquote(nxt)}" if nxt else ""))
+        return redirect("/login" + (f"?next={_urlquote(nxt)}" if nxt else ""))
     return None
 
 # --- Routes de connexion
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    # alias → page simple
-    return redirect("/login_plain")
-
-@app.route("/login_plain", methods=["GET", "POST"])
-def login_plain():
-    if request.method == "POST":
-        email = (request.form.get("email") or "").strip().lower()
-        password = request.form.get("password") or ""
-        u = User.query.filter_by(email=email).first()
-        if u and u.check_password(password):
+    form = LoginForm()
+    if form.validate_on_submit():
+        u = User.query.filter_by(email=form.email.data.lower()).first()
+        if u and u.check_password(form.password.data):
             session["uid"] = u.id
             return redirect(request.args.get("next") or url_for("home"))
         flash("Identifiants invalides", "danger")
-    return render_template("login_plain.html"), 200
+    return render_template("login_plain.html", form=form), 200
 
 
 @app.route("/register", methods=["GET", "POST"])
