@@ -15,8 +15,9 @@ from flask import (
     url_for,
     abort,
 )
+from datetime import datetime, timedelta
 from forms import LoginForm, FirstLoginForm, RegisterForm
-from models import db, User, Vehicle
+from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
@@ -183,6 +184,30 @@ def admin_promote(user_id):
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
     return redirect(url_for("admin_users"))
+
+
+@app.route("/calendar/month")
+def calendar_month():
+    user = current_user()
+    y = int(request.args.get("y", datetime.today().year))
+    m = int(request.args.get("m", datetime.today().month))
+    start = datetime(y, m, 1)
+    end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    res = Reservation.query.filter(
+        Reservation.status == "approved",
+        Reservation.start_at < end,
+        Reservation.end_at > start,
+    ).all()
+    return render_template(
+        "calendar_month.html",
+        vehicles=vehicles,
+        reservations=res,
+        start=start,
+        end=end,
+        user=user,
+        timedelta=timedelta,
+    )
 
 
 # --- Entrée locale de dev (inutile en prod/gunicorn)
