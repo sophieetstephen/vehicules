@@ -111,6 +111,9 @@ def login():
 def register():
     form = RegisterForm()
     if form.validate_on_submit():
+        if form.password.data != form.password2.data:
+            flash("Les mots de passe doivent correspondre", "danger")
+            return render_template("register.html", form=form), 200
         name = f"{form.last_name.data} {form.first_name.data}"
         email = form.email.data.lower()
         role = User.ROLE_USER

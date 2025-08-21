@@ -30,6 +30,16 @@ class RegisterForm(FlaskForm):
     password = PasswordField(
         "Mot de passe", validators=[DataRequired(), Length(min=8)]
     )
+    password2 = PasswordField(
+        "Confirmer le mot de passe",
+        validators=[
+            DataRequired(),
+            EqualTo(
+                "password",
+                message="Les mots de passe doivent correspondre.",
+            ),
+        ],
+    )
     team_code = StringField("Code d'équipe", validators=[DataRequired(), Length(max=60)])
     submit = SubmitField("Créer mon compte")
 
