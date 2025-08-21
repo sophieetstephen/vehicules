@@ -2,7 +2,7 @@
 <div class="card mx-auto" style="max-width:520px"><div class="card-body">
 <h5 class="card-title mb-3">Créer un compte</h5>
 <form method="post">
-  {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+  {{ form.hidden_tag() }}
   <div class="row">
     <div class="col-md-6 mb-3"><label class="form-label">Prénom</label><input name="first_name" class="form-control" required></div>
     <div class="col-md-6 mb-3"><label class="form-label">Nom</label><input name="last_name" class="form-control" required></div>
