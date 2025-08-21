@@ -6,6 +6,7 @@ from urllib.parse import quote as _urlquote
 from flask import Flask, request, redirect, render_template, flash, session, url_for
 from forms import FirstLoginForm
 from models import db, User
+from sqlalchemy.exc import IntegrityError
 
 # --- Bootstrap sys.path sûr (utile si lancé hors /opt/vehicules)
 _here = os.path.dirname(__file__) or "."
@@ -70,7 +71,12 @@ def first_login():
         if form.email.data in app.config.get("ADMIN_EMAILS", []):
             user.role = "admin"
         db.session.add(user)
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Adresse e‑mail déjà utilisée", "danger")
+            return render_template("first_login.html", form=form), 200
         session["uid"] = user.id
         return redirect("/")
     return render_template("first_login.html", form=form), 200
