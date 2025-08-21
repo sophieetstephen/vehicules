@@ -9,13 +9,13 @@
       <td>{{u.first_name or ""}}</td>
       <td>{{u.last_name or ""}}</td>
       <td>{{u.email}}</td>
-      <td><span class="badge bg-{{ 'primary' if u.role=='admin' else 'secondary' }}">{{u.role or 'user'}}</span></td>
+      <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
       <td><span class="badge bg-{{ 'success' if (u.status or '')=='active' else 'warning' }}">{{u.status or 'n/a'}}</span></td>
       <td class="d-flex gap-2">
         {% if (u.status or '') != 'active' %}
           <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
         {% endif %}
-        {% if current_user and current_user.email==SUPER_ADMIN_EMAIL and u.role!='admin' %}
+        {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_ADMIN %}
           <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
         {% endif %}
       </td>
