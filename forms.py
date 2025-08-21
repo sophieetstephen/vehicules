@@ -22,6 +22,17 @@ class FirstLoginForm(FlaskForm):
     )
     submit = SubmitField("Créer mon compte")
 
+
+class RegisterForm(FlaskForm):
+    first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
+    last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
+    email = StringField("Email", validators=[DataRequired(), Email(), Length(max=120)])
+    password = PasswordField(
+        "Mot de passe", validators=[DataRequired(), Length(min=8)]
+    )
+    team_code = StringField("Code d'équipe", validators=[DataRequired(), Length(max=60)])
+    submit = SubmitField("Créer mon compte")
+
 class NewRequestForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
     last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
