@@ -110,6 +110,7 @@ def login():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     form = RegisterForm()
+    # Le code d'équipe n'est plus requis à l'inscription.
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
         email = form.email.data.lower()

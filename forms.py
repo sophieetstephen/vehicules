@@ -30,7 +30,6 @@ class RegisterForm(FlaskForm):
     password = PasswordField(
         "Mot de passe", validators=[DataRequired(), Length(min=8)]
     )
-    team_code = StringField("Code d'équipe", validators=[DataRequired(), Length(max=60)])
     submit = SubmitField("Créer mon compte")
 
 class NewRequestForm(FlaskForm):
