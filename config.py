@@ -14,12 +14,4 @@ class Config:
         "MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME", "no-reply@csp.local")
     )
     SUPERADMIN_EMAILS = ["gestionvehiculestomer@gmail.com"]
-    e.strip().lower()
-        for e in os.environ.get("SUPERADMIN_EMAILS", "").split(",")
-        if e.strip()
-    ]
-    ADMIN_EMAILS = [
-        e.strip().lower()
-        for e in os.environ.get("ADMIN_EMAILS", "").split(",")
-        if e.strip()
-    ]
+    ADMIN_EMAILS = ["alexandre.stephen@free.fr"]
