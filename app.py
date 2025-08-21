@@ -100,7 +100,10 @@ def forbidden(_):
 @app.route("/home")
 @app.route("/")
 def home():
-    return redirect(url_for("calendar_month"))
+    u = current_user()
+    if not u or u.role not in (User.ROLE_ADMIN, User.ROLE_SUPERADMIN):
+        return redirect(url_for("calendar_month"))
+    return render_template("home.html", user=u, current_user=u)
 
 
 # --- Routes de connexion
