@@ -3,7 +3,7 @@
 
 import os, sys
 from urllib.parse import quote as _urlquote
-from flask import Flask, request, redirect, render_template, flash, session, url_for
+from flask import Flask, request, redirect, render_template, flash, session, url_for, abort
 from forms import LoginForm, FirstLoginForm, RegisterForm
 from models import db, User
 from sqlalchemy.exc import IntegrityError
@@ -61,7 +61,7 @@ def register():
     form = RegisterForm()
     if form.validate_on_submit():
         name = f"{form.last_name.data} {form.first_name.data}"
-        user = User(name=name, email=form.email.data.lower(), role="user")
+        user = User(name=name, email=form.email.data.lower(), role=User.ROLE_USER)
         user.set_password(form.password.data)
         db.session.add(user)
         try:
@@ -82,7 +82,7 @@ def first_login():
         user = User(name=name, email=form.email.data.lower())
         user.set_password(form.password.data)
         if form.email.data in app.config.get("ADMIN_EMAILS", []):
-            user.role = "admin"
+            user.role = User.ROLE_ADMIN
         db.session.add(user)
         try:
             db.session.commit()
@@ -93,6 +93,34 @@ def first_login():
         session["uid"] = user.id
         return redirect("/")
     return render_template("first_login.html", form=form), 200
+
+
+@app.route("/admin/users")
+def admin_users():
+    u = User.query.get(session.get("uid"))
+    if not u or u.role != User.ROLE_SUPERADMIN:
+        abort(403)
+    users = User.query.order_by(User.name).all()
+    return render_template(
+        "admin_users.html",
+        users=users,
+        current_user=u,
+        user=u,
+        ROLE_ADMIN=User.ROLE_ADMIN,
+        ROLE_SUPERADMIN=User.ROLE_SUPERADMIN,
+    )
+
+
+@app.route("/admin/promote/<int:user_id>")
+def admin_promote(user_id):
+    u = User.query.get(session.get("uid"))
+    if not u or u.role != User.ROLE_SUPERADMIN:
+        abort(403)
+    target = User.query.get_or_404(user_id)
+    target.role = User.ROLE_ADMIN
+    db.session.commit()
+    flash("Utilisateur promu administrateur", "success")
+    return redirect(url_for("admin_users"))
 
 # --- Entrée locale de dev (inutile en prod/gunicorn)
 if __name__ == "__main__":
