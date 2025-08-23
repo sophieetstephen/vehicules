@@ -21,6 +21,8 @@ from io import BytesIO
 from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm, UserForm
 from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
+import secrets
+from notify import send_mail_msmtp
 
 try:
     from weasyprint import HTML
@@ -293,6 +295,25 @@ def admin_deactivate(user_id):
     target.status = "inactive"
     db.session.commit()
     flash("Utilisateur désactivé", "warning")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
+@role_required("superadmin")
+def admin_reset_password(user_id):
+    target = User.query.get_or_404(user_id)
+    new_password = request.form.get("password") or secrets.token_urlsafe(8)
+    target.set_password(new_password)
+    db.session.commit()
+    try:
+        send_mail_msmtp(
+            "Réinitialisation de mot de passe",
+            f"Bonjour, votre nouveau mot de passe est: {new_password}",
+            target.email,
+        )
+    except Exception:
+        pass
+    flash(f"Nouveau mot de passe: {new_password}", "info")
     return redirect(url_for("admin_users"))
 
 
