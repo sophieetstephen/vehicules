@@ -220,12 +220,22 @@ def admin_users():
 
 
 @app.route("/admin/promote/<int:user_id>")
-@role_required("admin", "superadmin")
+@role_required("superadmin")
 def admin_promote(user_id):
     target = User.query.get_or_404(user_id)
     target.role = User.ROLE_ADMIN
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/demote/<int:user_id>")
+@role_required("superadmin")
+def admin_demote(user_id):
+    target = User.query.get_or_404(user_id)
+    target.role = User.ROLE_USER
+    db.session.commit()
+    flash("Utilisateur rétrogradé", "info")
     return redirect(url_for("admin_users"))
 
 

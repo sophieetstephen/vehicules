@@ -17,8 +17,12 @@
         {% else %}
           <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
         {% endif %}
-        {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_ADMIN %}
-          <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
+        {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
+          {% if u.role==ROLE_ADMIN %}
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_demote', user_id=u.id) }}">Rétrograder</a>
+          {% else %}
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
+          {% endif %}
         {% endif %}
       </td>
     </tr>
