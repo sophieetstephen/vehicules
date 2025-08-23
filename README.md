@@ -22,3 +22,12 @@ python tools/create_admin.py <email> <role>
 ```
 
 `<role>` peut être `user`, `admin` ou `superadmin`.
+
+## Initialisation de la base de données
+
+Pour repartir sur une base saine :
+
+1. Supprimez l'ancien fichier `vehicules.db` si nécessaire.
+2. Exécutez `flask db upgrade` ou `python seed.py` pour créer la base et appliquer les migrations.
+
+Sans migration appliquée, l'application échouera lors de la connexion avec des erreurs de colonnes manquantes.
