@@ -259,6 +259,21 @@ def admin_deactivate(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/admin/delete/<int:user_id>")
+@role_required("superadmin")
+def admin_user_delete(user_id):
+    target = User.query.get_or_404(user_id)
+    if target.role == User.ROLE_SUPERADMIN:
+        flash("Impossible de supprimer un superadministrateur", "danger")
+        return redirect(url_for("admin_users"))
+    # Suppression en cascade des réservations associées
+    Reservation.query.filter_by(user_id=target.id).delete()
+    db.session.delete(target)
+    db.session.commit()
+    flash("Utilisateur supprimé", "info")
+    return redirect(url_for("admin_users"))
+
+
 @app.route("/admin/vehicles")
 @role_required("admin", "superadmin")
 def admin_vehicles():
