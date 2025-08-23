@@ -229,6 +229,26 @@ def admin_promote(user_id):
     return redirect(url_for("admin_users"))
 
 
+@app.route("/admin/activate/<int:user_id>")
+@role_required("admin", "superadmin")
+def admin_activate(user_id):
+    target = User.query.get_or_404(user_id)
+    target.status = "active"
+    db.session.commit()
+    flash("Utilisateur activé", "success")
+    return redirect(url_for("admin_users"))
+
+
+@app.route("/admin/deactivate/<int:user_id>")
+@role_required("admin", "superadmin")
+def admin_deactivate(user_id):
+    target = User.query.get_or_404(user_id)
+    target.status = "inactive"
+    db.session.commit()
+    flash("Utilisateur désactivé", "warning")
+    return redirect(url_for("admin_users"))
+
+
 @app.route("/admin/vehicles")
 @role_required("admin", "superadmin")
 def admin_vehicles():

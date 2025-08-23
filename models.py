@@ -14,6 +14,7 @@ class User(db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     role = db.Column(db.String(50), default=ROLE_USER)
     password_hash = db.Column(db.String(255), nullable=False)
+    status = db.Column(db.String(20), default="pending")
 
     def set_password(self, pwd):
         self.password_hash = generate_password_hash(pwd)
