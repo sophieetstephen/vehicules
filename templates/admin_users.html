@@ -12,6 +12,7 @@
       <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
       <td><span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span></td>
       <td class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
         {% if (u.status or '') == 'active' %}
           <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_deactivate', user_id=u.id) }}">Désactiver</a>
         {% else %}
