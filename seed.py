@@ -1,10 +1,10 @@
 from app import app, db, User
 from models import Vehicle
+from flask_migrate import upgrade
 
 
 with app.app_context():
-    db.drop_all()
-    db.create_all()
+    upgrade()
 
     # vehicles
     data = [
