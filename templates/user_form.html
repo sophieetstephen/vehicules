@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Modifier utilisateur #{{ target.id }}</h2>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.first_name.label(class="form-label") }}
+    {{ form.first_name(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.last_name.label(class="form-label") }}
+    {{ form.last_name(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.email.label(class="form-label") }}
+    {{ form.email(class="form-control") }}
+  </div>
+  <div class="mb-3">
+    {{ form.role.label(class="form-label") }}
+    {{ form.role(class="form-select") }}
+  </div>
+  <button class="btn btn-primary" type="submit">Enregistrer</button>
+  <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">Annuler</a>
+</form>
+{% endblock %}

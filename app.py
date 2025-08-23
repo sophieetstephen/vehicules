@@ -18,7 +18,7 @@ from flask import (
 )
 from datetime import datetime, timedelta
 from io import BytesIO
-from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm
+from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm, UserForm
 from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
 
@@ -144,7 +144,13 @@ def register():
             role = User.ROLE_SUPERADMIN
         elif email in app.config.get("ADMIN_EMAILS", []):
             role = User.ROLE_ADMIN
-        user = User(name=name, email=email, role=role)
+        user = User(
+            name=name,
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            email=email,
+            role=role,
+        )
         user.set_password(form.password.data)
         db.session.add(user)
         try:
@@ -169,7 +175,13 @@ def first_login():
             role = User.ROLE_SUPERADMIN
         elif email in app.config.get("ADMIN_EMAILS", []):
             role = User.ROLE_ADMIN
-        user = User(name=name, email=email, role=role)
+        user = User(
+            name=name,
+            first_name=form.first_name.data,
+            last_name=form.last_name.data,
+            email=email,
+            role=role,
+        )
         user.set_password(form.password.data)
         db.session.add(user)
         try:
@@ -216,6 +228,31 @@ def admin_users():
         user=u,
         ROLE_ADMIN=User.ROLE_ADMIN,
         ROLE_SUPERADMIN=User.ROLE_SUPERADMIN,
+    )
+
+
+@app.route("/admin/user/<int:user_id>/edit", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_user_edit(user_id):
+    target = User.query.get_or_404(user_id)
+    u = current_user()
+    form = UserForm(obj=target)
+    if form.validate_on_submit():
+        target.first_name = form.first_name.data
+        target.last_name = form.last_name.data
+        target.name = f"{form.last_name.data} {form.first_name.data}"
+        target.email = form.email.data.lower()
+        if current_user().role == User.ROLE_SUPERADMIN:
+            target.role = form.role.data
+        db.session.commit()
+        flash("Utilisateur mis à jour", "success")
+        return redirect(url_for("admin_users"))
+    return render_template(
+        "user_form.html",
+        form=form,
+        target=target,
+        user=u,
+        current_user=u,
     )
 
 
