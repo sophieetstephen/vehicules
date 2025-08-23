@@ -23,6 +23,7 @@ from models import db, User, Vehicle, Reservation
 from sqlalchemy.exc import IntegrityError
 import secrets
 from notify import send_mail_msmtp
+from flask_migrate import Migrate
 
 try:
     from weasyprint import HTML
@@ -48,6 +49,7 @@ except Exception:
 app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
+Migrate(app, db)
 
 
 def current_user():
