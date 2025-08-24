@@ -9,15 +9,53 @@ from app import app
 from models import User
 
 
-def _render(role: str) -> str:
+def _render_nav(role: str) -> str:
     with app.test_request_context('/'):
         user = User(name='Test', email='test@example.com', role=role, password_hash='x')
         return render_template('base.html', user=user)
 
 
 @pytest.mark.parametrize('role', [User.ROLE_SUPERADMIN, User.ROLE_ADMIN, User.ROLE_USER])
-def test_navbar_contains_only_home(role):
-    html = _render(role)
+def test_links_hidden_for_superadmin(role):
+    html = _render_nav(role)
     assert 'Accueil' in html
     assert 'Vue mensuelle' not in html
     assert 'Nouvelle demande' not in html
+
+
+def _render_home(role: str) -> str:
+    templates = {
+        User.ROLE_SUPERADMIN: 'superadmin_home.html',
+        User.ROLE_ADMIN: 'admin_home.html',
+        User.ROLE_USER: 'user_home.html',
+    }
+    with app.test_request_context('/'):
+        user = User(name='Test', email='test@example.com', role=role, password_hash='x')
+        return render_template(templates[role], user=user, current_user=user)
+
+
+@pytest.mark.parametrize(
+    'role,links',
+    [
+        (User.ROLE_USER, ['Vue mensuelle', 'Nouvelle demande', 'Contact']),
+        (
+            User.ROLE_ADMIN,
+            ['Gestion du parc', 'Gestion des réservations', 'Vue mensuelle', 'Nouvelle demande'],
+        ),
+        (
+            User.ROLE_SUPERADMIN,
+            [
+                'Gestion des utilisateurs',
+                'Gestion du parc',
+                'Gestion des réservations',
+                'Vue mensuelle',
+                'Nouvelle demande',
+            ],
+        ),
+    ],
+)
+def test_home_tabs_by_role(role, links):
+    html = _render_home(role)
+    for link in links:
+        assert link in html
+    assert html.count('list-group-item-action') == len(links)
