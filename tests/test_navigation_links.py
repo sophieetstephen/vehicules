@@ -15,16 +15,9 @@ def _render(role: str) -> str:
         return render_template('base.html', user=user)
 
 
-def test_links_hidden_for_superadmin():
-    html = _render(User.ROLE_SUPERADMIN)
+@pytest.mark.parametrize('role', [User.ROLE_SUPERADMIN, User.ROLE_ADMIN, User.ROLE_USER])
+def test_navbar_contains_only_home(role):
+    html = _render(role)
+    assert 'Accueil' in html
     assert 'Vue mensuelle' not in html
     assert 'Nouvelle demande' not in html
-    assert 'Accueil' in html
-
-
-@pytest.mark.parametrize('role', [User.ROLE_ADMIN, User.ROLE_USER])
-def test_links_visible_for_other_roles(role):
-    html = _render(role)
-    assert 'Vue mensuelle' in html
-    assert 'Nouvelle demande' in html
-    assert 'Accueil' in html

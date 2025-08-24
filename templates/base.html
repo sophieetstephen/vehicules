@@ -18,10 +18,6 @@
       <ul class="navbar-nav me-auto">
         {% if user %}
           <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('home') }}">Accueil</a></li>
-          {% if user.role != 'superadmin' %}
-            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('calendar_month') }}">Vue mensuelle</a></li>
-            <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('new_request') }}">Nouvelle demande</a></li>
-          {% endif %}
         {% endif %}
       </ul>
       <ul class="navbar-nav ms-auto align-items-center">
