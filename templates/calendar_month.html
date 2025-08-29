@@ -1,8 +1,19 @@
 
 {% extends "base.html" %}
 {% block content %}
+{# Calcul mois précédent et suivant #}
+{% set prev = start - timedelta(days=1) %}
+{% set prev_y = prev.year %}
+{% set prev_m = prev.month %}
+{% set next_y = end.year %}
+{% set next_m = end.month %}
+
 <h1 class="h4">Vue mensuelle (lecture seule)</h1>
-<p>Mois: {{ start.strftime('%B %Y') }}</p>
+<p>
+  <a href="{{ url_for('calendar_month', y=prev_y, m=prev_m) }}">&larr;</a>
+  Mois: {{ start.strftime('%B %Y') }}
+  <a href="{{ url_for('calendar_month', y=next_y, m=next_m) }}">&rarr;</a>
+</p>
 {% set days = (end - start).days %}
 <table class="table table-bordered table-sm align-middle">
   <thead>
