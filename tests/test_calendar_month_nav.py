@@ -15,7 +15,14 @@ def test_calendar_links_visible(role):
     start = datetime(2024, 3, 1)
     end = datetime(2024, 4, 1)
     with app.test_request_context('/calendar/month'):
-        user = User(name='Test', email='test@example.com', role=role, password_hash='x')
+        user = User(
+            name='Test User',
+            first_name='Test',
+            last_name='User',
+            email='test@example.com',
+            role=role,
+            password_hash='x',
+        )
         html = render_template(
             'calendar_month.html',
             vehicles=[],
@@ -35,7 +42,14 @@ def test_calendar_month_params_interpreted():
     from models import db
     with app.app_context():
         db.create_all()
-        user = User(name='User', email='user@example.com', role=User.ROLE_USER, password_hash='x')
+        user = User(
+            name='User Test',
+            first_name='User',
+            last_name='Test',
+            email='user@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+        )
         db.session.add(user)
         db.session.commit()
         client = app.test_client()

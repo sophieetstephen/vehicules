@@ -11,7 +11,14 @@ from models import User
 
 def _render_nav(role: str) -> str:
     with app.test_request_context('/'):
-        user = User(name='Test', email='test@example.com', role=role, password_hash='x')
+        user = User(
+            name='Test User',
+            first_name='Test',
+            last_name='User',
+            email='test@example.com',
+            role=role,
+            password_hash='x',
+        )
         return render_template('base.html', user=user)
 
 
@@ -30,7 +37,14 @@ def _render_home(role: str) -> str:
         User.ROLE_USER: 'user_home.html',
     }
     with app.test_request_context('/'):
-        user = User(name='Test', email='test@example.com', role=role, password_hash='x')
+        user = User(
+            name='Test User',
+            first_name='Test',
+            last_name='User',
+            email='test@example.com',
+            role=role,
+            password_hash='x',
+        )
         return render_template(templates[role], user=user, current_user=user)
 
 
