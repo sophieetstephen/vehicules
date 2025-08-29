@@ -31,13 +31,18 @@
       {% for i in range(days) %}
     {% set day = start + timedelta(days=(i|int)) %}
         <td class="text-center" style="min-width:40px;">
+          {% set cell_has_res = false %}
           {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-            <button type="button" class="badge bg-success reservation"
-                    data-bs-toggle="modal" data-bs-target="#reservationModal"
-                    data-user="{{ r.user.name }}" data-purpose="{{ r.purpose }}">
-              {{ r.user.name }}
-            </button>
+            {% set cell_has_res = true %}
+            {% if user and user.role in ['admin', 'superadmin'] %}
+              <a href="{{ url_for('manage_request', rid=r.id) }}" class="badge bg-success">{{ r.user.name }}</a>
+            {% else %}
+              <span class="badge bg-success">{{ r.user.name }}</span>
+            {% endif %}
           {% endfor %}
+          {% if not cell_has_res and user and user.role in ['admin', 'superadmin'] %}
+            <a href="{{ url_for('new_request') }}" class="d-block w-100 h-100 text-decoration-none">&nbsp;</a>
+          {% endif %}
         </td>
       {% endfor %}
     </tr>
@@ -48,36 +53,4 @@
 {% if user and user.role in ['admin', 'superadmin'] %}
   <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month') }}">Exporter PDF du mois</a>
 {% endif %}
-
-<div class="modal fade" id="reservationModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Réservation</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body">
-        <p><strong>Nom&nbsp;:</strong> <span class="modal-user"></span></p>
-        <p><strong>Motif&nbsp;:</strong> <span class="modal-purpose"></span></p>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script>
-  document.addEventListener('DOMContentLoaded', function () {
-    const modal = document.getElementById('reservationModal');
-    const userEl = modal.querySelector('.modal-user');
-    const purposeEl = modal.querySelector('.modal-purpose');
-    document.querySelectorAll('.reservation').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        userEl.textContent = this.dataset.user || '';
-        purposeEl.textContent = this.dataset.purpose || '';
-      });
-    });
-  });
-</script>
 {% endblock %}
