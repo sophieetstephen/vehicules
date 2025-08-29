@@ -362,6 +362,7 @@ def admin_vehicle_new():
         v = Vehicle(
             code=request.form["code"].strip(),
             label=request.form["label"].strip(),
+            category=request.form.get("category", "").strip() or None,
         )
         db.session.add(v)
         db.session.commit()
@@ -379,6 +380,7 @@ def admin_vehicle_edit(vehicle_id):
     if request.method == "POST":
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
+        vehicle.category = request.form.get("category", "").strip() or None
         db.session.commit()
         flash("Véhicule mis à jour", "success")
         return redirect(url_for("admin_vehicles"))

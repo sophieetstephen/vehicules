@@ -29,6 +29,7 @@ class Vehicle(db.Model):
     code = db.Column(db.String(20), unique=True, nullable=False)
     label = db.Column(db.String(120), nullable=False)
     seats = db.Column(db.Integer, default=5)
+    category = db.Column(db.String(50), nullable=True)
 
 class Reservation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
