@@ -9,7 +9,14 @@ def client():
     app.config['TESTING'] = True
     with app.app_context():
         db.create_all()
-        admin = User(name='Admin', email='admin@example.com', role=User.ROLE_ADMIN, password_hash='x')
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+        )
         db.session.add(admin)
         db.session.commit()
         client = app.test_client()
