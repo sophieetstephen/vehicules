@@ -16,7 +16,7 @@ from flask import (
     abort,
     send_file,
 )
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from io import BytesIO
 from forms import (
     LoginForm,
@@ -219,10 +219,19 @@ def first_login():
 def new_request():
     form = NewRequestForm()
     if form.validate_on_submit():
+        if form.slot.data == "morning":
+            start_at = datetime.combine(form.date.data, time(8, 0))
+            end_at = datetime.combine(form.date.data, time(12, 0))
+        elif form.slot.data == "afternoon":
+            start_at = datetime.combine(form.date.data, time(13, 0))
+            end_at = datetime.combine(form.date.data, time(17, 0))
+        else:
+            start_at = datetime.combine(form.date.data, time(8, 0))
+            end_at = datetime.combine(form.date.data, time(17, 0))
         r = Reservation(
             user_id=current_user().id,
-            start_at=form.start_at.data,
-            end_at=form.end_at.data,
+            start_at=start_at,
+            end_at=end_at,
             purpose=form.purpose.data,
             carpool=form.carpool.data,
             carpool_with=form.carpool_with.data,
