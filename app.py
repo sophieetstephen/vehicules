@@ -25,6 +25,7 @@ from forms import (
     NewRequestForm,
     UserForm,
     NotificationSettingsForm,
+    ContactForm,
 )
 from models import db, User, Vehicle, Reservation, NotificationSettings
 from sqlalchemy.exc import IntegrityError
@@ -253,6 +254,44 @@ def new_request():
         flash("Votre demande a été transmise.", "success")
         return redirect(url_for("home"))
     return render_template("new_request.html", form=form, user=current_user())
+
+
+@app.route("/contact", methods=["GET", "POST"])
+@role_required(User.ROLE_USER, User.ROLE_ADMIN, User.ROLE_SUPERADMIN)
+def contact():
+    form = ContactForm()
+    if form.validate_on_submit():
+        settings = NotificationSettings.query.first()
+        recipients = []
+        if settings and settings.notify_user_ids:
+            recipients = [
+                u.email
+                for u in User.query.filter(
+                    User.id.in_(settings.notify_user_ids),
+                    User.status == "active",
+                )
+            ]
+        if recipients:
+            recipients = list(set(recipients))
+            try:
+                send_mail_msmtp(
+                    "Message de contact",
+                    form.message.data,
+                    recipients,
+                )
+            except Exception:
+                app.logger.exception("Erreur lors de l'envoi du mail")
+        try:
+            send_mail_msmtp(
+                "Confirmation de message",
+                "Votre message a bien été envoyé à l'Administrateur, vous recevrez prochainement une réponse.",
+                current_user().email,
+            )
+        except Exception:
+            app.logger.exception("Erreur lors de l'envoi du mail")
+        flash("Votre message a été envoyé.", "success")
+        return redirect(url_for("home"))
+    return render_template("contact.html", form=form, user=current_user())
 
 
 @app.route("/admin/users")

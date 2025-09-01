@@ -31,3 +31,7 @@ Pour repartir sur une base saine :
 2. Exécutez `flask db upgrade` ou `python seed.py` pour créer la base et appliquer les migrations.
 
 Sans migration appliquée, l'application échouera lors de la connexion avec des erreurs de colonnes manquantes.
+
+## Contact
+
+Les utilisateurs connectés disposent d'un onglet **Contact** permettant d'envoyer un message aux administrateurs. Les destinataires sont définis via les paramètres de notification et chaque expéditeur reçoit un e‑mail de confirmation.
