@@ -219,15 +219,22 @@ def first_login():
 def new_request():
     form = NewRequestForm()
     if form.validate_on_submit():
-        if form.slot.data == "morning":
-            start_at = datetime.combine(form.date.data, time(8, 0))
-            end_at = datetime.combine(form.date.data, time(12, 0))
-        elif form.slot.data == "afternoon":
-            start_at = datetime.combine(form.date.data, time(13, 0))
-            end_at = datetime.combine(form.date.data, time(17, 0))
-        else:
-            start_at = datetime.combine(form.date.data, time(8, 0))
-            end_at = datetime.combine(form.date.data, time(17, 0))
+        start_times = {
+            "morning": time(8, 0),
+            "afternoon": time(13, 0),
+            "day": time(8, 0),
+        }
+        end_times = {
+            "morning": time(12, 0),
+            "afternoon": time(17, 0),
+            "day": time(17, 0),
+        }
+        start_at = datetime.combine(
+            form.start_date.data, start_times[form.start_slot.data]
+        )
+        end_at = datetime.combine(
+            form.end_date.data, end_times[form.end_slot.data]
+        )
         r = Reservation(
             user_id=current_user().id,
             start_at=start_at,
