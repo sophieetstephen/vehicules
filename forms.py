@@ -77,3 +77,9 @@ class UserForm(FlaskForm):
         ],
     )
     submit = SubmitField("Enregistrer")
+
+
+class NotificationSettingsForm(FlaskForm):
+    notify_superadmin = BooleanField("Alerter les superadmins")
+    notify_admin = BooleanField("Alerter les admins")
+    submit = SubmitField("Enregistrer")
