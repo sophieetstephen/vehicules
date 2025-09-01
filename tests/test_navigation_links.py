@@ -62,6 +62,7 @@ def _render_home(role: str) -> str:
                 'Gestion des utilisateurs',
                 'Gestion du parc',
                 'Gestion des réservations',
+                'Gestion des congés',
                 'Vue mensuelle',
                 'Nouvelle demande',
             ],
