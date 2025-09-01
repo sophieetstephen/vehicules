@@ -41,6 +41,8 @@ def test_calendar_month_params_interpreted():
     app.config['TESTING'] = True
     from models import db
     with app.app_context():
+        db.session.remove()
+        db.drop_all()
         db.create_all()
         user = User(
             name='User Test',

@@ -8,9 +8,15 @@ from wtforms import (
     DateTimeLocalField,
     TextAreaField,
     SelectField,
+    SelectMultipleField,
 )
 from wtforms.validators import DataRequired, Email, Length, EqualTo
+from wtforms.widgets import CheckboxInput, ListWidget
 from models import User
+
+class MultiCheckboxField(SelectMultipleField):
+    widget = ListWidget(prefix_label=False)
+    option_widget = CheckboxInput()
 
 class LoginForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
@@ -80,6 +86,5 @@ class UserForm(FlaskForm):
 
 
 class NotificationSettingsForm(FlaskForm):
-    notify_superadmin = BooleanField("Alerter les superadmins")
-    notify_admin = BooleanField("Alerter les admins")
+    recipients = MultiCheckboxField("Notifier", choices=[])
     submit = SubmitField("Enregistrer")
