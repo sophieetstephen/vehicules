@@ -3,14 +3,12 @@
 <h1 class="h4">Notifications de demandes</h1>
 <form method="post">
   {{ form.hidden_tag() }}
+  {% for subfield in form.recipients %}
   <div class="form-check">
-    {{ form.notify_superadmin(class="form-check-input") }}
-    {{ form.notify_superadmin.label(class="form-check-label") }}
+    {{ subfield(class="form-check-input") }}
+    {{ subfield.label(class="form-check-label") }}
   </div>
-  <div class="form-check">
-    {{ form.notify_admin(class="form-check-input") }}
-    {{ form.notify_admin.label(class="form-check-label") }}
-  </div>
+  {% endfor %}
   {{ form.submit(class="btn btn-primary mt-3") }}
 </form>
 {% endblock %}

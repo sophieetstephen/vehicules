@@ -232,21 +232,14 @@ def new_request():
         db.session.commit()
         settings = NotificationSettings.query.first()
         recipients = []
-        if settings:
-            if settings.notify_superadmin:
-                recipients.extend(
-                    u.email
-                    for u in User.query.filter_by(
-                        role=User.ROLE_SUPERADMIN, status="active"
-                    )
+        if settings and settings.notify_user_ids:
+            recipients = [
+                u.email
+                for u in User.query.filter(
+                    User.id.in_(settings.notify_user_ids),
+                    User.status == "active",
                 )
-            if settings.notify_admin:
-                recipients.extend(
-                    u.email
-                    for u in User.query.filter_by(
-                        role=User.ROLE_ADMIN, status="active"
-                    )
-                )
+            ]
         if recipients:
             recipients = list(set(recipients))
             try:
@@ -470,10 +463,19 @@ def admin_leaves():
         settings = NotificationSettings()
         db.session.add(settings)
         db.session.commit()
-    form = NotificationSettingsForm(obj=settings)
+    form = NotificationSettingsForm()
+    admins = User.query.filter(
+        User.role.in_([User.ROLE_SUPERADMIN, User.ROLE_ADMIN])
+    ).order_by(User.first_name).all()
+    form.recipients.choices = [
+        (str(u.id), f"{u.first_name} {u.last_name}") for u in admins
+    ]
+    if request.method == "GET":
+        form.recipients.data = [
+            str(uid) for uid in (settings.notify_user_ids or [])
+        ]
     if form.validate_on_submit():
-        settings.notify_superadmin = form.notify_superadmin.data
-        settings.notify_admin = form.notify_admin.data
+        settings.notify_user_ids = [int(uid) for uid in form.recipients.data]
         db.session.commit()
         flash("Préférences enregistrées", "success")
         return redirect(url_for("admin_leaves"))

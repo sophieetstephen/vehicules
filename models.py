@@ -52,3 +52,4 @@ class NotificationSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     notify_superadmin = db.Column(db.Boolean, default=False)
     notify_admin = db.Column(db.Boolean, default=False)
+    notify_user_ids = db.Column(db.JSON, default=list)
