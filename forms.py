@@ -88,3 +88,8 @@ class UserForm(FlaskForm):
 class NotificationSettingsForm(FlaskForm):
     recipients = MultiCheckboxField("Notifier", choices=[])
     submit = SubmitField("Enregistrer")
+
+
+class ContactForm(FlaskForm):
+    message = TextAreaField("Message", validators=[DataRequired(), Length(max=1000)])
+    submit = SubmitField("Envoyer")
