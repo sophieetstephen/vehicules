@@ -427,6 +427,13 @@ def admin_reservations():
     )
 
 
+@app.route("/admin/leaves")
+@role_required("superadmin")
+def admin_leaves():
+    user = current_user()
+    return render_template("admin_leaves.html", user=user, current_user=user)
+
+
 @app.route("/admin/manage/<int:rid>", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def manage_request(rid):
