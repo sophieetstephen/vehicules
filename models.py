@@ -46,3 +46,9 @@ class Reservation(db.Model):
 
     vehicle = db.relationship("Vehicle", backref="reservations")
     user = db.relationship("User", backref="reservations")
+
+
+class NotificationSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    notify_superadmin = db.Column(db.Boolean, default=False)
+    notify_admin = db.Column(db.Boolean, default=False)

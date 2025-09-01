@@ -18,8 +18,15 @@ from flask import (
 )
 from datetime import datetime, timedelta
 from io import BytesIO
-from forms import LoginForm, FirstLoginForm, RegisterForm, NewRequestForm, UserForm
-from models import db, User, Vehicle, Reservation
+from forms import (
+    LoginForm,
+    FirstLoginForm,
+    RegisterForm,
+    NewRequestForm,
+    UserForm,
+    NotificationSettingsForm,
+)
+from models import db, User, Vehicle, Reservation, NotificationSettings
 from sqlalchemy.exc import IntegrityError
 import secrets
 from notify import send_mail_msmtp
@@ -223,6 +230,33 @@ def new_request():
         )
         db.session.add(r)
         db.session.commit()
+        settings = NotificationSettings.query.first()
+        recipients = []
+        if settings:
+            if settings.notify_superadmin:
+                recipients.extend(
+                    u.email
+                    for u in User.query.filter_by(
+                        role=User.ROLE_SUPERADMIN, status="active"
+                    )
+                )
+            if settings.notify_admin:
+                recipients.extend(
+                    u.email
+                    for u in User.query.filter_by(
+                        role=User.ROLE_ADMIN, status="active"
+                    )
+                )
+        if recipients:
+            recipients = list(set(recipients))
+            try:
+                send_mail_msmtp(
+                    "Nouvelle demande de réservation",
+                    f"Une nouvelle demande a été soumise par {current_user().name}.",
+                    recipients,
+                )
+            except Exception:
+                app.logger.exception("Erreur lors de l'envoi du mail")
         flash("Votre demande a été transmise.", "success")
         return redirect(url_for("home"))
     return render_template("new_request.html", form=form, user=current_user())
@@ -427,11 +461,28 @@ def admin_reservations():
     )
 
 
-@app.route("/admin/leaves")
+@app.route("/admin/leaves", methods=["GET", "POST"])
 @role_required("superadmin")
 def admin_leaves():
     user = current_user()
-    return render_template("admin_leaves.html", user=user, current_user=user)
+    settings = NotificationSettings.query.first()
+    if not settings:
+        settings = NotificationSettings()
+        db.session.add(settings)
+        db.session.commit()
+    form = NotificationSettingsForm(obj=settings)
+    if form.validate_on_submit():
+        settings.notify_superadmin = form.notify_superadmin.data
+        settings.notify_admin = form.notify_admin.data
+        db.session.commit()
+        flash("Préférences enregistrées", "success")
+        return redirect(url_for("admin_leaves"))
+    return render_template(
+        "admin_leaves.html",
+        form=form,
+        user=user,
+        current_user=user,
+    )
 
 
 @app.route("/admin/manage/<int:rid>", methods=["GET", "POST"])
