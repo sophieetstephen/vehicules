@@ -93,8 +93,10 @@ def test_new_request_notifies_selected_users(monkeypatch):
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
-            'date': '2024-01-01',
-            'slot': 'day',
+            'start_date': '2024-01-01',
+            'start_slot': 'day',
+            'end_date': '2024-01-01',
+            'end_slot': 'day',
             'purpose': '',
             'carpool': '',
             'carpool_with': '',

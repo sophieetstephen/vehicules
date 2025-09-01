@@ -61,9 +61,19 @@ class RegisterForm(FlaskForm):
 class NewRequestForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
     last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
-    date = DateField("Date", format="%Y-%m-%d", validators=[DataRequired()])
-    slot = SelectField(
-        "Plage horaire",
+    start_date = DateField("Date début", format="%Y-%m-%d", validators=[DataRequired()])
+    start_slot = SelectField(
+        "Créneau début",
+        choices=[
+            ("morning", "Matin"),
+            ("afternoon", "Après-midi"),
+            ("day", "Journée"),
+        ],
+        validators=[DataRequired()],
+    )
+    end_date = DateField("Date fin", format="%Y-%m-%d", validators=[DataRequired()])
+    end_slot = SelectField(
+        "Créneau fin",
         choices=[
             ("morning", "Matin"),
             ("afternoon", "Après-midi"),
