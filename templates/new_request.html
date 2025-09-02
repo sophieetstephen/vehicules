@@ -32,8 +32,16 @@
 <script>
   const multiDay = document.getElementById('multiDay');
   const endFields = document.getElementById('end_fields');
+  const endDateInput = document.getElementById('end_date');
+  const endSlotSelect = document.getElementById('end_slot');
   function toggleEndFields() {
-    endFields.style.display = multiDay.checked ? 'flex' : 'none';
+    const enabled = multiDay.checked;
+    endFields.style.display = enabled ? 'flex' : 'none';
+    endDateInput.disabled = endSlotSelect.disabled = !enabled;
+    if (!enabled) {
+      endDateInput.value = '';
+      endSlotSelect.value = '';
+    }
   }
   multiDay.addEventListener('change', toggleEndFields);
   toggleEndFields();
