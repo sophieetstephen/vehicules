@@ -22,12 +22,14 @@ with app.app_context():
         name="Super Admin",
         email="gestionvehiculestomer@gmail.com",
         role=User.ROLE_SUPERADMIN,
+        status="active",
     )
     super_admin.set_password("Sophieestaires59940")
     admin = User(
         name="Administrateur",
         email="alexandre.stephen@free.fr",
         role=User.ROLE_ADMIN,
+        status="active",
     )
     admin.set_password("Sophieestaires")
     db.session.add_all([super_admin, admin])
