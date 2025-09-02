@@ -21,7 +21,7 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 {% set day = start + timedelta(days=i) %}
 <td>
 {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-<span class="badge">R</span>
+<span class="badge">{{ slot_label(r, day) }}</span>
 {% endfor %}
 </td>
 {% endfor %}
@@ -29,5 +29,5 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 {% endfor %}
 </tbody>
 </table>
-<p style="font-size:10px;color:#666;">Légende: R = Réservé (approuvé)</p>
+<p style="font-size:10px;color:#666;">Légende: Matin / Après-midi / Journée = Réservé (approuvé)</p>
 </body></html>
