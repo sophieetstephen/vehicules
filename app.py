@@ -94,7 +94,14 @@ def __ping__():
 @app.before_request
 def _force_login():
     p = request.path or "/"
-    public = {"/login", "/first_login", "/__ping__"}
+    public = {
+        "/login",
+        "/first_login",
+        "/logout",
+        "/__ping__",
+        "/home",
+        "/",
+    }
     if p in public or p.startswith("/static/"):
         return None
     if not session.get("uid"):
@@ -102,6 +109,10 @@ def _force_login():
         return redirect(
             "/login" + (f"?next={_urlquote(nxt)}" if nxt else "")
         )
+    u = current_user()
+    if not u or u.status != "active":
+        flash("Compte non activé", "danger")
+        return redirect(url_for("home"))
     return None
 
 
@@ -218,6 +229,10 @@ def first_login():
 
 @app.route("/request/new", methods=["GET", "POST"])
 def new_request():
+    u = current_user()
+    if not u or u.status != "active":
+        flash("Compte non activé", "danger")
+        return redirect(url_for("home"))
     form = NewRequestForm()
     if form.validate_on_submit():
         start_times = {

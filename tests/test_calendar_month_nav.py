@@ -51,6 +51,7 @@ def test_calendar_month_params_interpreted():
             email='user@example.com',
             role=User.ROLE_USER,
             password_hash='x',
+            status='active',
         )
         db.session.add(user)
         db.session.commit()
