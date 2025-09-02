@@ -87,6 +87,11 @@ class NewRequestForm(FlaskForm):
     notes = TextAreaField("Précisions", validators=[Length(max=1000)])
     submit = SubmitField("Envoyer la demande")
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.end_slot.data:
+            self.end_slot.data = self.start_slot.data
+
 
 class UserForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
