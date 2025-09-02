@@ -245,6 +245,7 @@ def new_request():
             "afternoon": time(17, 0),
             "day": time(17, 0),
         }
+        # Utiliser la date/slot de début si ceux de fin ne sont pas fournis
         end_date = form.end_date.data or form.start_date.data
         end_slot = form.end_slot.data or form.start_slot.data
         start_at = datetime.combine(
