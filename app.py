@@ -253,6 +253,9 @@ def new_request():
         end_at = datetime.combine(
             end_date, end_times[end_slot]
         )
+        if end_at <= start_at:
+            flash("La date de fin doit être postérieure à la date de début", "danger")
+            return render_template("new_request.html", form=form, user=current_user()), 200
         r = Reservation(
             user_id=current_user().id,
             start_at=start_at,
