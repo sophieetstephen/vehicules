@@ -13,9 +13,9 @@ def reservation_slot_label(reservation, day):
     end_time = reservation.end_at.time()
 
     if start_date == day_date and end_date == day_date:
-        if start_time == morning_start and end_time == morning_end:
+        if start_time >= morning_start and end_time <= morning_end:
             return "Matin"
-        if start_time == afternoon_start and end_time == afternoon_end:
+        if start_time >= afternoon_start and end_time <= afternoon_end:
             return "Après-midi"
         return "Journée"
     if start_date == day_date:

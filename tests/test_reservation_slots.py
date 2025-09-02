@@ -46,3 +46,14 @@ def test_same_day_reservations_have_distinct_slots():
     assert 'Bob (Après-midi)' in html
     assert 'Matin' in pdf_html
     assert 'Après-midi' in pdf_html
+
+
+def test_partial_afternoon_reservation_is_labelled_afternoon():
+    reservation = Reservation(
+        vehicle_id=1,
+        user_id=1,
+        start_at=datetime(2024, 1, 10, 13, 0),
+        end_at=datetime(2024, 1, 10, 16, 59),
+    )
+    day = datetime(2024, 1, 10)
+    assert reservation_slot_label(reservation, day) == "Après-midi"
