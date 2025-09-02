@@ -71,7 +71,12 @@ class NewRequestForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
-    end_date = DateField("Date fin (si plusieurs jours)", format="%Y-%m-%d", validators=[Optional()])
+    end_date = DateField(
+        "Date fin (si plusieurs jours)",
+        format="%Y-%m-%d",
+        validators=[Optional()],
+        render_kw={"required": False},
+    )
     end_slot = SelectField(
         "Créneau fin",
         choices=[
@@ -79,18 +84,13 @@ class NewRequestForm(FlaskForm):
             ("afternoon", "Après-midi"),
             ("day", "Journée"),
         ],
-        validators=[DataRequired()],
+        validators=[Optional()],
     )
     purpose = StringField("Motif", validators=[Length(max=200)])
     carpool = BooleanField("Covoiturage")
     carpool_with = StringField("Avec qui")
     notes = TextAreaField("Précisions", validators=[Length(max=1000)])
     submit = SubmitField("Envoyer la demande")
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not self.end_slot.data:
-            self.end_slot.data = self.start_slot.data
 
 
 class UserForm(FlaskForm):

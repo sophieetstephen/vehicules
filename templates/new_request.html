@@ -12,7 +12,14 @@
     <div class="col-md-6 mb-3">{{ form.start_date.label }} {{ form.start_date(class="form-control") }}</div>
     <div class="col-md-6 mb-3">{{ form.start_slot.label }} {{ form.start_slot(class="form-select") }}</div>
   </div>
-  <div class="row">
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" id="multiDay">
+    <label class="form-check-label" for="multiDay">
+      Réservation sur plusieurs jours
+    </label>
+  </div>
+  <div class="form-text mb-3">La date de fin est uniquement nécessaire pour les réservations de plusieurs jours.</div>
+  <div id="end_fields" class="row" style="display: none;">
     <div class="col-md-6 mb-3">{{ form.end_date.label }} {{ form.end_date(class="form-control") }}</div>
     <div class="col-md-6 mb-3">{{ form.end_slot.label }} {{ form.end_slot(class="form-select") }}</div>
   </div>
@@ -22,4 +29,13 @@
   <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control", rows=3) }}</div>
   {{ form.submit(class="btn btn-success") }}
 </form>
+<script>
+  const multiDay = document.getElementById('multiDay');
+  const endFields = document.getElementById('end_fields');
+  function toggleEndFields() {
+    endFields.style.display = multiDay.checked ? 'flex' : 'none';
+  }
+  multiDay.addEventListener('change', toggleEndFields);
+  toggleEndFields();
+</script>
 {% endblock %}
