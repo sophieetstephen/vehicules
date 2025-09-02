@@ -16,6 +16,7 @@ def client():
             email='admin@example.com',
             role=User.ROLE_ADMIN,
             password_hash='x',
+            status='active',
         )
         db.session.add(admin)
         db.session.commit()
