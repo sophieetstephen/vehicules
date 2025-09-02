@@ -10,7 +10,7 @@ from wtforms import (
     SelectField,
     SelectMultipleField,
 )
-from wtforms.validators import DataRequired, Email, Length, EqualTo
+from wtforms.validators import DataRequired, Email, Length, EqualTo, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 from models import User
 
@@ -71,7 +71,7 @@ class NewRequestForm(FlaskForm):
         ],
         validators=[DataRequired()],
     )
-    end_date = DateField("Date fin", format="%Y-%m-%d", validators=[DataRequired()])
+    end_date = DateField("Date fin (si plusieurs jours)", format="%Y-%m-%d", validators=[Optional()])
     end_slot = SelectField(
         "Créneau fin",
         choices=[
