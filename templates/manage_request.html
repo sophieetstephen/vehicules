@@ -4,7 +4,11 @@
 
 <div class="card mb-3">
   <div class="card-body">
-    <p><strong>Période :</strong> {{ r.start_at|dt }} → {{ r.end_at|dt }}</p>
+    {% if r.start_at.date() != r.end_at.date() %}
+    <p><strong>Période :</strong> {{ r.start_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.start_at) }} → {{ r.end_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.end_at) }}</p>
+    {% else %}
+    <p><strong>Période :</strong> {{ r.start_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.start_at) }}</p>
+    {% endif %}
     <p><strong>Motif :</strong> {{ r.purpose or '—' }}</p>
     <p><strong>Covoiturage :</strong> {% if r.carpool %}Oui ({{ r.carpool_with or '—' }}){% else %}Non{% endif %}</p>
     <p><strong>Précisions :</strong> {{ r.notes or '—' }}</p>
