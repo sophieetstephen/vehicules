@@ -524,6 +524,7 @@ def admin_reservations():
         reservations=res,
         user=user,
         current_user=user,
+        slot_label=reservation_slot_label,
     )
 
 
@@ -599,6 +600,7 @@ def manage_request(rid):
         availability=avail,
         user=user,
         current_user=user,
+        slot_label=reservation_slot_label,
     )
 
 
