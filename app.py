@@ -245,11 +245,13 @@ def new_request():
             "afternoon": time(17, 0),
             "day": time(17, 0),
         }
+        end_date = form.end_date.data or form.start_date.data
+        end_slot = form.end_slot.data or form.start_slot.data
         start_at = datetime.combine(
             form.start_date.data, start_times[form.start_slot.data]
         )
         end_at = datetime.combine(
-            form.end_date.data, end_times[form.end_slot.data]
+            end_date, end_times[end_slot]
         )
         r = Reservation(
             user_id=current_user().id,
