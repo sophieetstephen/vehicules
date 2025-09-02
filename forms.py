@@ -80,10 +80,12 @@ class NewRequestForm(FlaskForm):
     end_slot = SelectField(
         "Créneau fin",
         choices=[
+            ("", "—"),
             ("morning", "Matin"),
             ("afternoon", "Après-midi"),
             ("day", "Journée"),
         ],
+        default="",
         validators=[Optional()],
     )
     purpose = StringField("Motif", validators=[Length(max=200)])
