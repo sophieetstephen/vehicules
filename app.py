@@ -32,6 +32,7 @@ from sqlalchemy.exc import IntegrityError
 import secrets
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
+from utils import reservation_slot_label
 
 try:
     from weasyprint import HTML
@@ -606,6 +607,8 @@ def export_pdf_month():
         reservations=res,
         start=start,
         end=end,
+        slot_label=reservation_slot_label,
+        timedelta=timedelta,
     )
     pdf = HTML(string=html).write_pdf()
     return send_file(
@@ -637,6 +640,7 @@ def calendar_month():
         end=end,
         user=user,
         timedelta=timedelta,
+        slot_label=reservation_slot_label,
     )
 
 

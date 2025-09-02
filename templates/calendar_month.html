@@ -35,9 +35,9 @@
           {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
             {% set cell_has_res = true %}
             {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{{ url_for('manage_request', rid=r.id) }}" class="badge bg-success">{{ r.user.name }}</a>
+              <a href="{{ url_for('manage_request', rid=r.id) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</a>
             {% else %}
-              <span class="badge bg-success">{{ r.user.name }}</span>
+              <span class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</span>
             {% endif %}
           {% endfor %}
           {% if not cell_has_res and user and user.role in ['admin', 'superadmin'] %}
@@ -49,7 +49,7 @@
     {% endfor %}
   </tbody>
 </table>
-<p class="text-muted">Légende : <span class="badge bg-success">Nom du réservant</span> = Réservé (approuvé)</p>
+<p class="text-muted">Légende : <span class="badge bg-success">Nom du réservant (Matin/Après-midi/Journée)</span> = Réservé (approuvé)</p>
 {% if user and user.role in ['admin', 'superadmin'] %}
   <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month') }}">Exporter PDF du mois</a>
 {% endif %}
