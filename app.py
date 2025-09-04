@@ -623,20 +623,51 @@ def manage_request(rid):
                     ReservationSegment.start_at < day_end,
                 ).first()
                 if existing:
-                    flash("Cette journée est déjà segmentée.", "warning")
-                else:
-                    seg = ReservationSegment(
-                        reservation_id=r.id,
-                        vehicle_id=veh_id,
-                        start_at=day_start,
-                        end_at=day_end,
-                    )
-                    db.session.add(seg)
-                    r.vehicle_id = None
-                    r.status = "approved"
+                    existing.vehicle_id = veh_id
                     db.session.commit()
-                    flash("Segment ajouté.", "success")
+                    flash("Segment mis à jour.", "success")
                     return redirect(url_for("admin_reservations"))
+                seg = ReservationSegment(
+                    reservation_id=r.id,
+                    vehicle_id=veh_id,
+                    start_at=day_start,
+                    end_at=day_end,
+                )
+                db.session.add(seg)
+                old_vehicle = r.vehicle_id
+                if old_vehicle is not None:
+                    segments = (
+                        ReservationSegment.query.filter_by(reservation_id=r.id)
+                        .all()
+                    )
+                    segments.append(seg)
+                    segments.sort(key=lambda s: s.start_at)
+                    current = r.start_at
+                    for s in segments:
+                        if s.start_at > current:
+                            db.session.add(
+                                ReservationSegment(
+                                    reservation_id=r.id,
+                                    vehicle_id=old_vehicle,
+                                    start_at=current,
+                                    end_at=s.start_at,
+                                )
+                            )
+                        current = s.end_at + timedelta(microseconds=1)
+                    if current < r.end_at:
+                        db.session.add(
+                            ReservationSegment(
+                                reservation_id=r.id,
+                                vehicle_id=old_vehicle,
+                                start_at=current,
+                                end_at=r.end_at,
+                            )
+                        )
+                    r.vehicle_id = None
+                r.status = "approved"
+                db.session.commit()
+                flash("Segment ajouté.", "success")
+                return redirect(url_for("admin_reservations"))
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
             v = Vehicle.query.get_or_404(veh_id)
