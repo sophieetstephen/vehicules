@@ -147,10 +147,16 @@ def test_segment_day_creates_segment(app_ctx):
         'vehicle_id': str(v2.id),
     }
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
-    segs = ReservationSegment.query.filter_by(reservation_id=r.id).all()
-    assert len(segs) == 1
-    seg = segs[0]
-    assert seg.vehicle_id == v2.id
-    assert seg.start_at.date() == datetime(2024,1,2).date()
-    assert seg.end_at.date() == datetime(2024,1,2).date()
+    segs = ReservationSegment.query.filter_by(reservation_id=r.id).order_by(ReservationSegment.start_at).all()
+    assert len(segs) == 3
+    seg_before, seg_day, seg_after = segs
+    assert seg_before.vehicle_id == v1.id
+    assert seg_before.start_at == datetime(2024,1,1,8)
+    assert seg_before.end_at.date() == datetime(2024,1,2).date()
+    assert seg_day.vehicle_id == v2.id
+    assert seg_day.start_at.date() == datetime(2024,1,2).date()
+    assert seg_day.end_at.date() == datetime(2024,1,2).date()
+    assert seg_after.vehicle_id == v1.id
+    assert seg_after.start_at.date() == datetime(2024,1,2).date()
+    assert seg_after.end_at == datetime(2024,1,3,16)
     assert Reservation.query.get(r.id).vehicle_id is None
