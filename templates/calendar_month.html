@@ -41,18 +41,34 @@
             {% if not ns.has_seg %}
               {% set cell_has_res = true %}
               {% if user and user.role in ['admin', 'superadmin'] %}
-                <a href="{{ url_for('manage_request', rid=r.id, day=day.strftime('%Y-%m-%d')) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</a>
+                <a href="{{ url_for('manage_request', rid=r.id, day=day.strftime('%Y-%m-%d')) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})
+                {% if r.purpose %}
+                  <br>{{ r.purpose }}
+                {% endif %}
+                </a>
               {% else %}
-                <span class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</span>
+                <span class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})
+                {% if r.purpose %}
+                  <br>{{ r.purpose }}
+                {% endif %}
+                </span>
               {% endif %}
             {% endif %}
           {% endfor %}
           {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
             {% set cell_has_res = true %}
             {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})</a>
+              <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
+              {% if s.reservation.purpose %}
+                <br>{{ s.reservation.purpose }}
+              {% endif %}
+              </a>
             {% else %}
-              <span class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})</span>
+              <span class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
+              {% if s.reservation.purpose %}
+                <br>{{ s.reservation.purpose }}
+              {% endif %}
+              </span>
             {% endif %}
           {% endfor %}
           {% if not cell_has_res and user and user.role in ['admin', 'superadmin'] %}
