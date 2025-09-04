@@ -70,12 +70,31 @@ def test_calendar_month_links_with_day_param(app_ctx):
     assert 'name="vehicle_id"' not in html
 
 
-def test_segment_day_creates_segment(app_ctx):
+def test_calendar_month_segment_link(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    v2 = Vehicle(code='V2', label='Vehicule 2')
+    db.session.add_all([v1, v2])
+    u = create_user()
+    r = Reservation(user_id=u.id, start_at=datetime(2024,1,10,8), end_at=datetime(2024,1,10,12), status='approved')
+    db.session.add(r)
+    db.session.commit()
+    seg = ReservationSegment(reservation_id=r.id, vehicle_id=v1.id,
+                             start_at=datetime(2024,1,10,8), end_at=datetime(2024,1,10,12))
+    db.session.add(seg)
+    db.session.commit()
+    with app.test_request_context('/calendar/month'):
+        html = render_template('calendar_month.html', vehicles=[v1, v2], reservations=[], segments=[seg], start=datetime(2024,1,1), end=datetime(2024,2,1), user=admin, timedelta=timedelta, slot_label=reservation_slot_label)
+    assert f"/admin/manage/segment/{seg.id}" in html
+
+
+def test_segment_day_can_be_repeated_and_managed(app_ctx):
     admin = create_user(role=User.ROLE_ADMIN)
     user = create_user()
     v1 = Vehicle(code='V1', label='Vehicule 1')
     v2 = Vehicle(code='V2', label='Vehicule 2')
-    db.session.add_all([v1, v2])
+    v3 = Vehicle(code='V3', label='Vehicule 3')
+    db.session.add_all([v1, v2, v3])
     db.session.commit()
     r = Reservation(vehicle_id=v1.id, user_id=user.id,
                     start_at=datetime(2024,1,1,8), end_at=datetime(2024,1,3,16), status='approved')
@@ -84,21 +103,30 @@ def test_segment_day_creates_segment(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
-    data = {
-        'action': 'segment_day',
-        'vehicle_id': str(v2.id),
-    }
+    # segment day 2 to v2
+    data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
+    segs = ReservationSegment.query.filter_by(reservation_id=r.id).all()
+    assert len(segs) == 1
+    seg_day2 = segs[0]
+    assert seg_day2.vehicle_id == v2.id
+    # segment day 3 to v3
+    data = {'action': 'segment_day', 'vehicle_id': str(v3.id)}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-03', data=data)
     segs = ReservationSegment.query.filter_by(reservation_id=r.id).order_by(ReservationSegment.start_at).all()
-    assert len(segs) == 3
-    seg_before, seg_day, seg_after = segs
-    assert seg_before.vehicle_id == v1.id
-    assert seg_before.start_at == datetime(2024,1,1,8)
-    assert seg_before.end_at == datetime(2024,1,1,23,59,59,999999)
-    assert seg_day.vehicle_id == v2.id
-    assert seg_day.start_at.date() == datetime(2024,1,2).date()
-    assert seg_day.end_at.date() == datetime(2024,1,2).date()
-    assert seg_after.vehicle_id == v1.id
-    assert seg_after.start_at == datetime(2024,1,3)
-    assert seg_after.end_at == datetime(2024,1,3,16)
-    assert Reservation.query.get(r.id).vehicle_id is None
+    assert len(segs) == 2
+    seg_day2, seg_day3 = segs
+    assert seg_day2.start_at.date() == datetime(2024,1,2).date()
+    assert seg_day3.start_at.date() == datetime(2024,1,3).date()
+    # update first segment to v1
+    data = {'action': 'update', 'vehicle_id': str(v1.id)}
+    client.post(f'/admin/manage/segment/{seg_day2.id}', data=data)
+    assert ReservationSegment.query.get(seg_day2.id).vehicle_id == v1.id
+    # delete second segment
+    data = {'action': 'delete'}
+    client.post(f'/admin/manage/segment/{seg_day3.id}', data=data)
+    assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 1
+    # segment day 3 again
+    data = {'action': 'segment_day', 'vehicle_id': str(v3.id)}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-03', data=data)
+    assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 2

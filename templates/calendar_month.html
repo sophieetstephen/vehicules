@@ -42,7 +42,11 @@
           {% endfor %}
           {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
             {% set cell_has_res = true %}
-            <span class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})</span>
+            {% if user and user.role in ['admin', 'superadmin'] %}
+              <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})</a>
+            {% else %}
+              <span class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})</span>
+            {% endif %}
           {% endfor %}
           {% if not cell_has_res and user and user.role in ['admin', 'superadmin'] %}
             <a href="{{ url_for('new_request') }}" class="d-block w-100 h-100 text-decoration-none">&nbsp;</a>

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="h4">Gérer le segment #{{ seg.id }}</h1>
+
+<div class="card mb-3">
+  <div class="card-body">
+    <p><strong>Réservation :</strong> #{{ seg.reservation.id }} — {{ seg.reservation.user.name }}</p>
+    <p><strong>Période :</strong> {{ seg.start_at.strftime('%d/%m/%Y %H:%M') }} → {{ seg.end_at.strftime('%d/%m/%Y %H:%M') }}</p>
+  </div>
+</div>
+
+<h2 class="h6">Disponibilité des véhicules</h2>
+<form method="post">
+  <table class="table table-bordered align-middle">
+    <thead>
+      <tr><th>Véhicule</th><th>Disponible</th><th>Sélection</th></tr>
+    </thead>
+    <tbody>
+    {% for v, free in availability %}
+      <tr>
+        <td><strong>{{ v.code }}</strong>{% if v.label %} — {{ v.label }}{% endif %}</td>
+        <td>{% if free %}✅ Libre{% else %}❌ Occupé{% endif %}</td>
+        <td>
+          <input type="radio" name="vehicle_id" value="{{ v.id }}"
+                 {% if not free %}disabled{% endif %}
+                 {% if v.id == seg.vehicle_id %}checked{% endif %}>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3" class="text-center">Aucun véhicule.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <button name="action" value="update" class="btn btn-primary">Enregistrer</button>
+  <button name="action" value="delete" class="btn btn-outline-danger">Supprimer le segment</button>
+</form>
+{% endblock %}
