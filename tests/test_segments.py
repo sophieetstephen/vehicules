@@ -130,3 +130,57 @@ def test_segment_day_can_be_repeated_and_managed(app_ctx):
     data = {'action': 'segment_day', 'vehicle_id': str(v3.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-03', data=data)
     assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 2
+
+
+def test_calendar_links_for_multiple_day_segments(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    v2 = Vehicle(code='V2', label='Vehicule 2')
+    v3 = Vehicle(code='V3', label='Vehicule 3')
+    db.session.add_all([v1, v2, v3])
+    db.session.commit()
+    r = Reservation(
+        vehicle_id=v1.id,
+        user_id=user.id,
+        start_at=datetime(2024, 1, 1, 8),
+        end_at=datetime(2024, 1, 3, 16),
+        status='approved',
+    )
+    db.session.add(r)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['uid'] = admin.id
+    # segment day 2 to v2
+    data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
+    # segment day 3 to v3
+    data = {'action': 'segment_day', 'vehicle_id': str(v3.id)}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-03', data=data)
+    segments = (
+        ReservationSegment.query.filter_by(reservation_id=r.id)
+        .order_by(ReservationSegment.start_at)
+        .all()
+    )
+    assert len(segments) == 2
+    seg_day2, seg_day3 = segments
+    assert seg_day2.start_at.date() == datetime(2024, 1, 2).date()
+    assert seg_day2.vehicle_id == v2.id
+    assert seg_day3.start_at.date() == datetime(2024, 1, 3).date()
+    assert seg_day3.vehicle_id == v3.id
+    # calendar should show edit links for each segment
+    with app.test_request_context('/calendar/month'):
+        html = render_template(
+            'calendar_month.html',
+            vehicles=[v1, v2, v3],
+            reservations=[r],
+            segments=segments,
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 2, 1),
+            user=admin,
+            timedelta=timedelta,
+            slot_label=reservation_slot_label,
+        )
+    for seg in segments:
+        assert f"/admin/manage/segment/{seg.id}" in html
