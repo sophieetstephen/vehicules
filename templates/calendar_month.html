@@ -35,22 +35,7 @@
           {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
             {% set cell_has_res = true %}
             {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{{ url_for('manage_request', rid=r.id) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</a>
-              <form method="post" action="{{ url_for('manage_request', rid=r.id) }}" class="mt-1">
-                <input type="hidden" name="action" value="segment">
-                <input type="hidden" name="start_at" value="{{ r.start_at.isoformat() }}">
-                <input type="hidden" name="end_at" value="{{ r.end_at.isoformat() }}">
-                <div class="input-group input-group-sm">
-                  <select name="vehicle_id" class="form-select form-select-sm">
-                    {% for veh in vehicles %}
-                      {% if veh.id != v.id %}
-                        <option value="{{ veh.id }}">{{ veh.code }}</option>
-                      {% endif %}
-                    {% endfor %}
-                  </select>
-                  <button class="btn btn-outline-secondary" type="submit">Segment</button>
-                </div>
-              </form>
+              <a href="{{ url_for('manage_request', rid=r.id, day=day.strftime('%Y-%m-%d')) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</a>
             {% else %}
               <span class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})</span>
             {% endif %}

@@ -113,7 +113,7 @@ def test_vehicle_availability_with_segments(app_ctx):
     assert avail[v2.id] is True
 
 
-def test_calendar_month_has_segment_form(app_ctx):
+def test_calendar_month_links_with_day_param(app_ctx):
     admin = create_user(role=User.ROLE_ADMIN)
     v1 = Vehicle(code='V1', label='Vehicule 1')
     v2 = Vehicle(code='V2', label='Vehicule 2')
@@ -124,4 +124,33 @@ def test_calendar_month_has_segment_form(app_ctx):
     db.session.commit()
     with app.test_request_context('/calendar/month'):
         html = render_template('calendar_month.html', vehicles=[v1, v2], reservations=[r], segments=[], start=datetime(2024,1,1), end=datetime(2024,2,1), user=admin, timedelta=timedelta, slot_label=reservation_slot_label)
-    assert 'name="vehicle_id"' in html
+    assert f"/admin/manage/{r.id}?day=2024-01-10" in html
+    assert 'name="vehicle_id"' not in html
+
+
+def test_segment_day_creates_segment(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    v2 = Vehicle(code='V2', label='Vehicule 2')
+    db.session.add_all([v1, v2])
+    db.session.commit()
+    r = Reservation(vehicle_id=v1.id, user_id=user.id,
+                    start_at=datetime(2024,1,1,8), end_at=datetime(2024,1,3,16), status='approved')
+    db.session.add(r)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['uid'] = admin.id
+    data = {
+        'action': 'segment_day',
+        'vehicle_id': str(v2.id),
+    }
+    client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
+    segs = ReservationSegment.query.filter_by(reservation_id=r.id).all()
+    assert len(segs) == 1
+    seg = segs[0]
+    assert seg.vehicle_id == v2.id
+    assert seg.start_at.date() == datetime(2024,1,2).date()
+    assert seg.end_at.date() == datetime(2024,1,2).date()
+    assert Reservation.query.get(r.id).vehicle_id is None
