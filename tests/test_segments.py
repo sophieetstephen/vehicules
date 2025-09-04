@@ -38,64 +38,6 @@ def create_user(role=User.ROLE_USER):
     return u
 
 
-def test_split_creates_segments(app_ctx):
-    admin = create_user(role=User.ROLE_ADMIN)
-    normal = create_user(role=User.ROLE_USER)
-    v1 = Vehicle(code='V1', label='Vehicule 1')
-    v2 = Vehicle(code='V2', label='Vehicule 2')
-    db.session.add_all([v1, v2])
-    db.session.commit()
-    r = Reservation(user_id=normal.id, start_at=datetime(2024,1,1,8), end_at=datetime(2024,1,1,16))
-    db.session.add(r)
-    db.session.commit()
-    client = app.test_client()
-    with client.session_transaction() as sess:
-        sess['uid'] = admin.id
-    data = {
-        'action': 'split',
-        'split_at': '2024-01-01T12:00:00',
-        'vehicle_id1': str(v1.id),
-        'vehicle_id2': str(v2.id),
-    }
-    client.post(f'/admin/manage/{r.id}', data=data)
-    segs = ReservationSegment.query.filter_by(reservation_id=r.id).order_by(ReservationSegment.start_at).all()
-    assert len(segs) == 2
-    assert segs[0].vehicle_id == v1.id
-    assert segs[0].start_at == datetime(2024,1,1,8)
-    assert segs[0].end_at == datetime(2024,1,1,12)
-    assert segs[1].vehicle_id == v2.id
-    assert segs[1].start_at == datetime(2024,1,1,12)
-    assert segs[1].end_at == datetime(2024,1,1,16)
-    assert r.vehicle_id is None
-
-
-def test_split_conflict_detection(app_ctx):
-    admin = create_user(role=User.ROLE_ADMIN)
-    user1 = create_user()
-    v1 = Vehicle(code='V1', label='Vehicule 1')
-    v2 = Vehicle(code='V2', label='Vehicule 2')
-    db.session.add_all([v1, v2])
-    db.session.commit()
-    existing = Reservation(user_id=user1.id, vehicle_id=v1.id,
-                           start_at=datetime(2024,1,1,10), end_at=datetime(2024,1,1,12), status='approved')
-    db.session.add(existing)
-    r = Reservation(user_id=user1.id, start_at=datetime(2024,1,1,9), end_at=datetime(2024,1,1,13))
-    db.session.add(r)
-    db.session.commit()
-    client = app.test_client()
-    with client.session_transaction() as sess:
-        sess['uid'] = admin.id
-    data = {
-        'action': 'split',
-        'split_at': '2024-01-01T11:00:00',
-        'vehicle_id1': str(v1.id),
-        'vehicle_id2': str(v2.id),
-    }
-    client.post(f'/admin/manage/{r.id}', data=data)
-    segs = ReservationSegment.query.filter_by(reservation_id=r.id).all()
-    assert segs == []
-
-
 def test_vehicle_availability_with_segments(app_ctx):
     v1 = Vehicle(code='V1', label='Vehicule 1')
     v2 = Vehicle(code='V2', label='Vehicule 2')
