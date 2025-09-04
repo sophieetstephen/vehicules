@@ -32,6 +32,10 @@ Pour repartir sur une base saine :
 
 Sans migration appliquée, l'application échouera lors de la connexion avec des erreurs de colonnes manquantes.
 
+## Segmentation des réservations
+
+Lorsqu'une journée d'une réservation sur plusieurs jours est segmentée vers un autre véhicule, l'application crée désormais des segments pour les jours restants afin de conserver l'attribution initiale du véhicule.
+
 ## Contact
 
 Les utilisateurs connectés disposent d'un onglet **Contact** permettant d'envoyer un message aux administrateurs. Les destinataires sont définis via les paramètres de notification et chaque expéditeur reçoit un e‑mail de confirmation.
