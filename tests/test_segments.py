@@ -152,11 +152,11 @@ def test_segment_day_creates_segment(app_ctx):
     seg_before, seg_day, seg_after = segs
     assert seg_before.vehicle_id == v1.id
     assert seg_before.start_at == datetime(2024,1,1,8)
-    assert seg_before.end_at.date() == datetime(2024,1,2).date()
+    assert seg_before.end_at == datetime(2024,1,1,23,59,59,999999)
     assert seg_day.vehicle_id == v2.id
     assert seg_day.start_at.date() == datetime(2024,1,2).date()
     assert seg_day.end_at.date() == datetime(2024,1,2).date()
     assert seg_after.vehicle_id == v1.id
-    assert seg_after.start_at.date() == datetime(2024,1,2).date()
+    assert seg_after.start_at == datetime(2024,1,3)
     assert seg_after.end_at == datetime(2024,1,3,16)
     assert Reservation.query.get(r.id).vehicle_id is None
