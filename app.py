@@ -283,7 +283,7 @@ def new_request():
             recipients = list(set(recipients))
             try:
                 send_mail_msmtp(
-                    "Nouvelle demande de réservation",
+                    "Demande de réservation",
                     f"Une nouvelle demande a été soumise par {current_user().name}.",
                     recipients,
                 )
