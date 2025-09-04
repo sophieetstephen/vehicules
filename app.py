@@ -587,8 +587,48 @@ def admin_leaves():
 @role_required("admin", "superadmin")
 def manage_request(rid):
     r = Reservation.query.get_or_404(rid)
+    day_str = request.args.get("day")
+    day = None
+    if day_str:
+        day = datetime.strptime(day_str, "%Y-%m-%d")
+        label = reservation_slot_label(r, day)
+        if label == "Matin":
+            day_start = datetime.combine(day.date(), time(8, 0))
+            day_end = datetime.combine(day.date(), time(12, 0))
+        elif label == "Après-midi":
+            day_start = datetime.combine(day.date(), time(13, 0))
+            day_end = datetime.combine(day.date(), time(17, 0))
+        else:
+            day_start = datetime.combine(day.date(), time.min)
+            day_end = datetime.combine(day.date(), time.max)
+        if day_start < r.start_at:
+            day_start = r.start_at
+        if day_end > r.end_at:
+            day_end = r.end_at
+    else:
+        day_start = r.start_at
+        day_end = r.end_at
     if request.method == "POST":
         action = request.form.get("action")
+        if action == "segment_day" and day:
+            veh_id = int(request.form.get("vehicle_id"))
+            if has_conflict(
+                veh_id, day_start, day_end, exclude_reservation_id=r.id
+            ):
+                flash("Conflit détecté lors de la création du segment.", "danger")
+            else:
+                seg = ReservationSegment(
+                    reservation_id=r.id,
+                    vehicle_id=veh_id,
+                    start_at=day_start,
+                    end_at=day_end,
+                )
+                r.vehicle_id = None
+                r.status = "approved"
+                db.session.add(seg)
+                db.session.commit()
+                flash("Segment ajouté.", "success")
+                return redirect(url_for("admin_reservations"))
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
             v = Vehicle.query.get_or_404(veh_id)
@@ -653,7 +693,7 @@ def manage_request(rid):
             db.session.commit()
             flash("Demande refusée.", "warning")
             return redirect(url_for("admin_reservations"))
-    avail = vehicles_availability(r.start_at, r.end_at)
+    avail = vehicles_availability(day_start, day_end)
     user = current_user()
     return render_template(
         "manage_request.html",
@@ -662,6 +702,7 @@ def manage_request(rid):
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
+        day=day,
     )
 
 

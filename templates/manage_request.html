@@ -42,6 +42,24 @@
   <button name="action" value="reject"  class="btn btn-outline-danger">Refuser</button>
 </form>
 
+{% if day %}
+<hr/>
+<h2 class="h6">Segmenter la journée du {{ day.strftime('%d/%m/%Y') }}</h2>
+<form method="post" class="row g-2">
+  <div class="col-md-6">
+    <label class="form-label">Véhicule</label>
+    <select name="vehicle_id" class="form-select" required>
+      {% for v, free in availability %}
+        <option value="{{ v.id }}" {% if not free %}disabled{% endif %}>{{ v.code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <button name="action" value="segment_day" class="btn btn-primary mt-2">Attribuer ce véhicule</button>
+  </div>
+</form>
+{% endif %}
+
 <hr/>
 <h2 class="h6">Diviser la réservation</h2>
 <form method="post" class="row g-2">
