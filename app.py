@@ -636,33 +636,28 @@ def manage_request(rid):
                 db.session.add(seg)
                 old_vehicle = r.vehicle_id
                 if old_vehicle is not None:
-                    segments = (
-                        ReservationSegment.query.filter_by(reservation_id=r.id)
-                        .all()
-                    )
-                    segments.append(seg)
-                    segments.sort(key=lambda s: s.start_at)
-                    current = r.start_at
-                    for s in segments:
-                        if s.start_at > current:
+                    db.session.flush()
+                    segments = ReservationSegment.query.filter_by(reservation_id=r.id).all()
+                    covered_dates = {s.start_at.date() for s in segments}
+                    current_date = r.start_at.date()
+                    end_date = r.end_at.date()
+                    while current_date <= end_date:
+                        if current_date not in covered_dates:
+                            day_start_fill = datetime.combine(current_date, time.min)
+                            day_end_fill = datetime.combine(current_date, time.max)
+                            if current_date == r.start_at.date():
+                                day_start_fill = r.start_at
+                            if current_date == r.end_at.date():
+                                day_end_fill = r.end_at
                             db.session.add(
                                 ReservationSegment(
                                     reservation_id=r.id,
                                     vehicle_id=old_vehicle,
-                                    start_at=current,
-                                    end_at=s.start_at,
+                                    start_at=day_start_fill,
+                                    end_at=day_end_fill,
                                 )
                             )
-                        current = s.end_at + timedelta(microseconds=1)
-                    if current < r.end_at:
-                        db.session.add(
-                            ReservationSegment(
-                                reservation_id=r.id,
-                                vehicle_id=old_vehicle,
-                                start_at=current,
-                                end_at=r.end_at,
-                            )
-                        )
+                        current_date += timedelta(days=1)
                     r.vehicle_id = None
                 r.status = "approved"
                 db.session.commit()

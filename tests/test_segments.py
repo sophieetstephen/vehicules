@@ -123,6 +123,44 @@ def test_segment_day_preserves_other_days(app_ctx):
     assert seg_day3.start_at.date() == datetime(2024, 1, 3).date()
 
 
+def test_segment_day_keeps_all_other_days(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    v2 = Vehicle(code='V2', label='Vehicule 2')
+    db.session.add_all([v1, v2])
+    db.session.commit()
+    r = Reservation(
+        vehicle_id=v1.id,
+        user_id=user.id,
+        start_at=datetime(2024, 1, 1, 8),
+        end_at=datetime(2024, 1, 4, 16),
+        status='approved',
+    )
+    db.session.add(r)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['uid'] = admin.id
+    data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
+    segments = (
+        ReservationSegment.query.filter_by(reservation_id=r.id)
+        .order_by(ReservationSegment.start_at)
+        .all()
+    )
+    assert len(segments) == 4
+    seg_day1, seg_day2, seg_day3, seg_day4 = segments
+    assert seg_day1.start_at.date() == datetime(2024, 1, 1).date()
+    assert seg_day2.start_at.date() == datetime(2024, 1, 2).date()
+    assert seg_day3.start_at.date() == datetime(2024, 1, 3).date()
+    assert seg_day4.start_at.date() == datetime(2024, 1, 4).date()
+    assert seg_day1.vehicle_id == v1.id
+    assert seg_day2.vehicle_id == v2.id
+    assert seg_day3.vehicle_id == v1.id
+    assert seg_day4.vehicle_id == v1.id
+
+
 def test_segment_day_can_be_repeated_and_managed(app_ctx):
     admin = create_user(role=User.ROLE_ADMIN)
     user = create_user()
