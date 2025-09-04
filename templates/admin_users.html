@@ -1,5 +1,9 @@
 {% extends "base.html" %}{% block title %}Administration – Utilisateurs{% endblock %}{% block content %}
 <h4 class="mb-3">Utilisateurs</h4>
+<form method="get" action="{{ url_for('admin_users') }}" class="mb-3">
+  <input type="text" name="q" value="{{ request.args.get('q','') }}" />
+  <button type="submit">Chercher</button>
+</form>
 <table class="table table-striped align-middle">
   <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
   <tbody>
