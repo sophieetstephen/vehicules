@@ -4,17 +4,24 @@
   <input type="text" name="q" value="{{ request.args.get('q','') }}" />
   <button type="submit">Chercher</button>
 </form>
+<p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
 <table class="table table-striped align-middle">
   <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
   <tbody>
   {% for u in users %}
-    <tr>
+    <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
       <td>{{u.id}}</td>
       <td>{{u.first_name or ""}}</td>
       <td>{{u.last_name or ""}}</td>
       <td>{{u.email}}</td>
       <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
-      <td><span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span></td>
+      <td>
+        {% if (u.status or '') == 'pending' %}
+          <span class="badge bg-warning">En attente</span>
+        {% else %}
+          <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
+        {% endif %}
+      </td>
       <td class="d-flex gap-2">
         <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
         {% if (u.status or '') == 'active' %}
