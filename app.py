@@ -678,33 +678,6 @@ def manage_request(rid):
                 db.session.commit()
                 flash("Segment ajouté.", "success")
                 return redirect(url_for("admin_reservations"))
-        elif action == "split":
-            split_at = datetime.fromisoformat(request.form.get("split_at"))
-            veh1 = int(request.form.get("vehicle_id1"))
-            veh2 = int(request.form.get("vehicle_id2"))
-            conflict1 = has_conflict(veh1, r.start_at, split_at, exclude_reservation_id=r.id)
-            conflict2 = has_conflict(veh2, split_at, r.end_at, exclude_reservation_id=r.id)
-            if conflict1 or conflict2:
-                flash("Conflit détecté lors de la création du segment.", "danger")
-            else:
-                seg1 = ReservationSegment(
-                    reservation_id=r.id,
-                    vehicle_id=veh1,
-                    start_at=r.start_at,
-                    end_at=split_at,
-                )
-                seg2 = ReservationSegment(
-                    reservation_id=r.id,
-                    vehicle_id=veh2,
-                    start_at=split_at,
-                    end_at=r.end_at,
-                )
-                r.vehicle_id = None
-                r.status = "approved"
-                db.session.add_all([seg1, seg2])
-                db.session.commit()
-                flash("Segments créés et véhicules attribués.", "success")
-                return redirect(url_for("admin_reservations"))
         elif action == "reject":
             r.status = "rejected"
             db.session.commit()
