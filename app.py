@@ -336,7 +336,11 @@ def contact():
 @role_required("admin", "superadmin")
 def admin_users():
     u = current_user()
-    users = User.query.order_by(User.name).all()
+    q = request.args.get("q")
+    users_query = User.query
+    if q:
+        users_query = users_query.filter(User.name.ilike(f"%{q}%"))
+    users = users_query.order_by(User.name).all()
     return render_template(
         "admin_users.html",
         users=users,
