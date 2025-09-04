@@ -26,7 +26,7 @@ def _render_nav(role: str) -> str:
 def test_links_hidden_for_superadmin(role):
     html = _render_nav(role)
     assert 'Accueil' in html
-    assert 'Vue mensuelle' not in html
+    assert 'Planning mensuel' not in html
     assert 'Nouvelle demande' not in html
 
 
@@ -51,10 +51,10 @@ def _render_home(role: str) -> str:
 @pytest.mark.parametrize(
     'role,links',
     [
-        (User.ROLE_USER, ['Vue mensuelle', 'Nouvelle demande', 'Contact']),
+        (User.ROLE_USER, ['Planning mensuel', 'Nouvelle demande', 'Contact']),
         (
             User.ROLE_ADMIN,
-            ['Gestion du parc', 'Gestion des réservations', 'Vue mensuelle', 'Nouvelle demande'],
+            ['Gestion du parc', 'Gestion des réservations', 'Planning mensuel', 'Nouvelle demande'],
         ),
         (
             User.ROLE_SUPERADMIN,
@@ -63,7 +63,7 @@ def _render_home(role: str) -> str:
                 'Gestion du parc',
                 'Gestion des réservations',
                 'Gestion des congés',
-                'Vue mensuelle',
+                'Planning mensuel',
                 'Nouvelle demande',
             ],
         ),
