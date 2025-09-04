@@ -612,40 +612,31 @@ def manage_request(rid):
         action = request.form.get("action")
         if action == "segment_day" and day:
             veh_id = int(request.form.get("vehicle_id"))
-            original_vehicle_id = r.vehicle_id
             if has_conflict(
                 veh_id, day_start, day_end, exclude_reservation_id=r.id
             ):
                 flash("Conflit détecté lors de la création du segment.", "danger")
             else:
-                seg = ReservationSegment(
-                    reservation_id=r.id,
-                    vehicle_id=veh_id,
-                    start_at=day_start,
-                    end_at=day_end,
-                )
-                db.session.add(seg)
-                if r.start_at < day_start:
-                    before_seg = ReservationSegment(
+                existing = ReservationSegment.query.filter(
+                    ReservationSegment.reservation_id == r.id,
+                    ReservationSegment.end_at > day_start,
+                    ReservationSegment.start_at < day_end,
+                ).first()
+                if existing:
+                    flash("Cette journée est déjà segmentée.", "warning")
+                else:
+                    seg = ReservationSegment(
                         reservation_id=r.id,
-                        vehicle_id=original_vehicle_id,
-                        start_at=r.start_at,
-                        end_at=day_start - timedelta(microseconds=1),
+                        vehicle_id=veh_id,
+                        start_at=day_start,
+                        end_at=day_end,
                     )
-                    db.session.add(before_seg)
-                if day_end < r.end_at:
-                    after_seg = ReservationSegment(
-                        reservation_id=r.id,
-                        vehicle_id=original_vehicle_id,
-                        start_at=day_end + timedelta(microseconds=1),
-                        end_at=r.end_at,
-                    )
-                    db.session.add(after_seg)
-                r.vehicle_id = None
-                r.status = "approved"
-                db.session.commit()
-                flash("Segment ajouté.", "success")
-                return redirect(url_for("admin_reservations"))
+                    db.session.add(seg)
+                    r.vehicle_id = None
+                    r.status = "approved"
+                    db.session.commit()
+                    flash("Segment ajouté.", "success")
+                    return redirect(url_for("admin_reservations"))
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
             v = Vehicle.query.get_or_404(veh_id)
@@ -693,6 +684,41 @@ def manage_request(rid):
         current_user=user,
         slot_label=reservation_slot_label,
         day=day,
+    )
+
+
+@app.route("/admin/manage/segment/<int:sid>", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def manage_segment(sid):
+    seg = ReservationSegment.query.get_or_404(sid)
+    r = seg.reservation
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "update":
+            veh_id = int(request.form.get("vehicle_id"))
+            if has_conflict(
+                veh_id, seg.start_at, seg.end_at, exclude_reservation_id=r.id
+            ):
+                flash("Conflit détecté lors de la modification du segment.", "danger")
+            else:
+                seg.vehicle_id = veh_id
+                db.session.commit()
+                flash("Segment mis à jour.", "success")
+                return redirect(url_for("admin_reservations"))
+        elif action == "delete":
+            db.session.delete(seg)
+            db.session.commit()
+            flash("Segment supprimé.", "info")
+            return redirect(url_for("admin_reservations"))
+    avail = vehicles_availability(seg.start_at, seg.end_at)
+    user = current_user()
+    return render_template(
+        "manage_segment.html",
+        seg=seg,
+        availability=avail,
+        user=user,
+        current_user=user,
+        slot_label=reservation_slot_label,
     )
 
 
