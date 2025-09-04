@@ -612,6 +612,7 @@ def manage_request(rid):
         action = request.form.get("action")
         if action == "segment_day" and day:
             veh_id = int(request.form.get("vehicle_id"))
+            original_vehicle_id = r.vehicle_id
             if has_conflict(
                 veh_id, day_start, day_end, exclude_reservation_id=r.id
             ):
@@ -623,9 +624,25 @@ def manage_request(rid):
                     start_at=day_start,
                     end_at=day_end,
                 )
+                db.session.add(seg)
+                if r.start_at < day_start:
+                    before_seg = ReservationSegment(
+                        reservation_id=r.id,
+                        vehicle_id=original_vehicle_id,
+                        start_at=r.start_at,
+                        end_at=day_start,
+                    )
+                    db.session.add(before_seg)
+                if day_end < r.end_at:
+                    after_seg = ReservationSegment(
+                        reservation_id=r.id,
+                        vehicle_id=original_vehicle_id,
+                        start_at=day_end,
+                        end_at=r.end_at,
+                    )
+                    db.session.add(after_seg)
                 r.vehicle_id = None
                 r.status = "approved"
-                db.session.add(seg)
                 db.session.commit()
                 flash("Segment ajouté.", "success")
                 return redirect(url_for("admin_reservations"))
