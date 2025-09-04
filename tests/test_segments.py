@@ -88,6 +88,48 @@ def test_calendar_month_segment_link(app_ctx):
     assert f"/admin/manage/segment/{seg.id}" in html
 
 
+def test_calendar_month_partially_segmented_shows_remaining_days(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    v2 = Vehicle(code='V2', label='Vehicule 2')
+    db.session.add_all([v1, v2])
+    db.session.commit()
+    r = Reservation(
+        vehicle_id=v1.id,
+        user_id=user.id,
+        start_at=datetime(2024, 1, 10, 8),
+        end_at=datetime(2024, 1, 12, 16),
+        status='approved',
+    )
+    db.session.add(r)
+    db.session.commit()
+    seg = ReservationSegment(
+        reservation_id=r.id,
+        vehicle_id=v2.id,
+        start_at=datetime(2024, 1, 11, 8),
+        end_at=datetime(2024, 1, 11, 16),
+    )
+    db.session.add(seg)
+    db.session.commit()
+    with app.test_request_context('/calendar/month'):
+        html = render_template(
+            'calendar_month.html',
+            vehicles=[v1, v2],
+            reservations=[r],
+            segments=[seg],
+            start=datetime(2024, 1, 1),
+            end=datetime(2024, 2, 1),
+            user=admin,
+            timedelta=timedelta,
+            slot_label=reservation_slot_label,
+        )
+    assert f"/admin/manage/{r.id}?day=2024-01-10" in html
+    assert f"/admin/manage/{r.id}?day=2024-01-12" in html
+    assert f"/admin/manage/{r.id}?day=2024-01-11" not in html
+    assert f"/admin/manage/segment/{seg.id}" in html
+
+
 def test_segment_day_preserves_other_days(app_ctx):
     admin = create_user(role=User.ROLE_ADMIN)
     user = create_user()
