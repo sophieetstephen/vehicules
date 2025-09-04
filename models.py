@@ -48,6 +48,21 @@ class Reservation(db.Model):
     user = db.relationship("User", backref="reservations")
 
 
+class ReservationSegment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    reservation_id = db.Column(
+        db.Integer, db.ForeignKey('reservation.id'), nullable=False
+    )
+    vehicle_id = db.Column(
+        db.Integer, db.ForeignKey('vehicle.id'), nullable=False
+    )
+    start_at = db.Column(db.DateTime, nullable=False)
+    end_at = db.Column(db.DateTime, nullable=False)
+
+    reservation = db.relationship('Reservation', backref='segments')
+    vehicle = db.relationship('Vehicle')
+
+
 class NotificationSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     notify_superadmin = db.Column(db.Boolean, default=False)

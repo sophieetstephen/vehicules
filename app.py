@@ -27,7 +27,7 @@ from forms import (
     NotificationSettingsForm,
     ContactForm,
 )
-from models import db, User, Vehicle, Reservation, NotificationSettings
+from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
 import secrets
 from notify import send_mail_msmtp
@@ -503,16 +503,34 @@ def admin_vehicle_delete(vehicle_id):
     return redirect(url_for("admin_vehicles"))
 
 
+def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
+    q_seg = ReservationSegment.query.filter(
+        ReservationSegment.vehicle_id == vehicle_id,
+        ReservationSegment.end_at > start,
+        ReservationSegment.start_at < end,
+    )
+    if exclude_reservation_id is not None:
+        q_seg = q_seg.filter(
+            ReservationSegment.reservation_id != exclude_reservation_id
+        )
+    if q_seg.first():
+        return True
+    q_res = Reservation.query.filter(
+        Reservation.vehicle_id == vehicle_id,
+        Reservation.status != "rejected",
+        Reservation.end_at > start,
+        Reservation.start_at < end,
+    )
+    if exclude_reservation_id is not None:
+        q_res = q_res.filter(Reservation.id != exclude_reservation_id)
+    return q_res.first() is not None
+
+
 def vehicles_availability(start, end):
     out = []
     for v in Vehicle.query.order_by(Vehicle.code).all():
-        conflict = Reservation.query.filter(
-            Reservation.vehicle_id == v.id,
-            Reservation.status != "rejected",
-            Reservation.end_at > start,
-            Reservation.start_at < end,
-        ).first()
-        out.append((v, conflict is None))
+        conflict = has_conflict(v.id, start, end)
+        out.append((v, not conflict))
     return out
 
 
@@ -574,14 +592,7 @@ def manage_request(rid):
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
             v = Vehicle.query.get_or_404(veh_id)
-            conflict = Reservation.query.filter(
-                Reservation.vehicle_id == v.id,
-                Reservation.status != "rejected",
-                Reservation.end_at > r.start_at,
-                Reservation.start_at < r.end_at,
-                Reservation.id != r.id,
-            ).first()
-            if conflict:
+            if has_conflict(v.id, r.start_at, r.end_at, exclude_reservation_id=r.id):
                 flash(
                     "Conflit détecté sur ce véhicule pour la période.", "danger"
                 )
@@ -590,6 +601,52 @@ def manage_request(rid):
                 r.status = "approved"
                 db.session.commit()
                 flash("Demande approuvée et véhicule attribué.", "success")
+                return redirect(url_for("admin_reservations"))
+        elif action == "segment":
+            start_at = datetime.fromisoformat(request.form.get("start_at"))
+            end_at = datetime.fromisoformat(request.form.get("end_at"))
+            veh_id = int(request.form.get("vehicle_id"))
+            if has_conflict(veh_id, start_at, end_at, exclude_reservation_id=r.id):
+                flash("Conflit détecté lors de la création du segment.", "danger")
+            else:
+                seg = ReservationSegment(
+                    reservation_id=r.id,
+                    vehicle_id=veh_id,
+                    start_at=start_at,
+                    end_at=end_at,
+                )
+                r.vehicle_id = None
+                r.status = "approved"
+                db.session.add(seg)
+                db.session.commit()
+                flash("Segment ajouté.", "success")
+                return redirect(url_for("admin_reservations"))
+        elif action == "split":
+            split_at = datetime.fromisoformat(request.form.get("split_at"))
+            veh1 = int(request.form.get("vehicle_id1"))
+            veh2 = int(request.form.get("vehicle_id2"))
+            conflict1 = has_conflict(veh1, r.start_at, split_at, exclude_reservation_id=r.id)
+            conflict2 = has_conflict(veh2, split_at, r.end_at, exclude_reservation_id=r.id)
+            if conflict1 or conflict2:
+                flash("Conflit détecté lors de la création du segment.", "danger")
+            else:
+                seg1 = ReservationSegment(
+                    reservation_id=r.id,
+                    vehicle_id=veh1,
+                    start_at=r.start_at,
+                    end_at=split_at,
+                )
+                seg2 = ReservationSegment(
+                    reservation_id=r.id,
+                    vehicle_id=veh2,
+                    start_at=split_at,
+                    end_at=r.end_at,
+                )
+                r.vehicle_id = None
+                r.status = "approved"
+                db.session.add_all([seg1, seg2])
+                db.session.commit()
+                flash("Segments créés et véhicules attribués.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "reject":
             r.status = "rejected"
@@ -655,10 +712,16 @@ def calendar_month():
         Reservation.start_at < end,
         Reservation.end_at > start,
     ).all()
+    segs = ReservationSegment.query.join(Reservation).filter(
+        Reservation.status == "approved",
+        ReservationSegment.start_at < end,
+        ReservationSegment.end_at > start,
+    ).all()
     return render_template(
         "calendar_month.html",
         vehicles=vehicles,
         reservations=res,
+        segments=segs,
         start=start,
         end=end,
         user=user,

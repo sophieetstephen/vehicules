@@ -41,4 +41,32 @@
   <button name="action" value="approve" class="btn btn-success">Approuver avec ce véhicule</button>
   <button name="action" value="reject"  class="btn btn-outline-danger">Refuser</button>
 </form>
+
+<hr/>
+<h2 class="h6">Diviser la réservation</h2>
+<form method="post" class="row g-2">
+  <div class="col-md-4">
+    <label class="form-label">Véhicule segment 1</label>
+    <select name="vehicle_id1" class="form-select" required>
+      {% for v, _ in availability %}
+        <option value="{{ v.id }}">{{ v.code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Heure de coupure</label>
+    <input type="datetime-local" name="split_at" class="form-control" required>
+  </div>
+  <div class="col-md-4">
+    <label class="form-label">Véhicule segment 2</label>
+    <select name="vehicle_id2" class="form-select" required>
+      {% for v, _ in availability %}
+        <option value="{{ v.id }}">{{ v.code }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-12">
+    <button name="action" value="split" class="btn btn-primary mt-2">Créer les segments</button>
+  </div>
+</form>
 {% endblock %}
