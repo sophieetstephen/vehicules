@@ -121,6 +121,7 @@ def _force_login():
     public = {
         "/login",
         "/first_login",
+        "/register",
         "/logout",
         "/__ping__",
         "/home",
