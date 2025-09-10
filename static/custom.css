@@ -19,3 +19,14 @@
     margin-bottom: 0.5rem;
   }
 }
+
+.user-name {
+  max-width: 12rem;
+}
+
+@media (max-width: 576px) {
+  .user-name {
+    max-width: 8rem;
+  }
+}
+
