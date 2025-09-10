@@ -50,6 +50,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 1rem;
 }
 
 @media (max-width: 576px) {
@@ -63,6 +64,7 @@
   background-color: var(--bs-navbar-bg, var(--bs-secondary)) !important;
   margin-left: 0.25rem;
   padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
 }
 
 .navbar .fa {
