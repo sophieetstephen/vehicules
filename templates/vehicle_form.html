@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block title %}Administration – Véhicule{% endblock %}
 {% block content %}
 <h2>{{ "Nouveau véhicule" if not vehicle else "Modifier véhicule #" ~ vehicle.id }}</h2>
 <form method="post">
