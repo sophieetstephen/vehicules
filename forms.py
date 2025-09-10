@@ -41,7 +41,6 @@ class RegisterForm(FlaskForm):
             ),
         ],
     )
-    team_code = StringField("Code d'équipe", validators=[DataRequired(), Length(max=60)])
     submit = SubmitField("Créer mon compte")
 
 class NewRequestForm(FlaskForm):
