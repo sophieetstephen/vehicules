@@ -2,10 +2,30 @@
 {% block title %}Administration – Accueil{% endblock %}
 {% block content %}
 <h1 class="h4">Accueil administration</h1>
-<div class="list-group">
-  <a class="list-group-item list-group-item-action" href="{{ url_for('admin_reservations') }}">Gestion des réservations</a>
-  <a class="list-group-item list-group-item-action" href="{{ url_for('admin_vehicles') }}">Gestion du parc</a>
-  <a class="list-group-item list-group-item-action" href="{{ url_for('calendar_month') }}">Planning mensuel</a>
-  <a class="list-group-item list-group-item-action" href="{{ url_for('new_request') }}">Demande de réservation</a>
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('admin_reservations') }}">
+      <i class="fa-solid fa-calendar-check fa-2x mb-2"></i>
+      <h5 class="card-title">Gestion des réservations</h5>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('admin_vehicles') }}">
+      <i class="fa-solid fa-car-side fa-2x mb-2"></i>
+      <h5 class="card-title">Gestion du parc</h5>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('calendar_month') }}">
+      <i class="fa-solid fa-calendar fa-2x mb-2"></i>
+      <h5 class="card-title">Planning mensuel</h5>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('new_request') }}">
+      <i class="fa-solid fa-calendar-plus fa-2x mb-2"></i>
+      <h5 class="card-title">Demande de réservation</h5>
+    </a>
+  </div>
 </div>
 {% endblock %}
