@@ -2,9 +2,24 @@
 {% block title %}Accueil utilisateur – Véhicules{% endblock %}
 {% block content %}
 <h1 class="h4">Accueil utilisateur</h1>
-<div class="list-group">
-  <a class="list-group-item list-group-item-action" href="{{ url_for('calendar_month') }}">Planning mensuel</a>
-  <a class="list-group-item list-group-item-action" href="{{ url_for('new_request') }}">Demande de réservation</a>
-  <a class="list-group-item list-group-item-action" href="{{ url_for('contact') }}">Contact</a>
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('calendar_month') }}">
+      <i class="fa-solid fa-calendar fa-2x mb-2"></i>
+      <h5 class="card-title">Planning mensuel</h5>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('new_request') }}">
+      <i class="fa-solid fa-car-side fa-2x mb-2"></i>
+      <h5 class="card-title">Demande de réservation</h5>
+    </a>
+  </div>
+  <div class="col">
+    <a class="card text-center dashboard-card" href="{{ url_for('contact') }}">
+      <i class="fa-solid fa-envelope fa-2x mb-2"></i>
+      <h5 class="card-title">Contact</h5>
+    </a>
+  </div>
 </div>
 {% endblock %}
