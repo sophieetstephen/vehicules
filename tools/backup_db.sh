@@ -15,9 +15,7 @@ if [ "${COMPRESS:-true}" = "true" ]; then
 fi
 
 if [ -n "${REMOTE_URI:-}" ]; then
-  # Exemple : scp "$DB_FILE" "$REMOTE_URI"
-  # Exemple : aws s3 cp "$DB_FILE" "$REMOTE_URI"
-  :
+  rclone copy "$DB_FILE" "$REMOTE_URI"
 fi
 
 find "$BACKUP_DIR" -type f -mtime +30 -name 'vehicules_*' -delete

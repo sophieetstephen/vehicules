@@ -41,14 +41,23 @@ Les utilisateurs connectés disposent d'un onglet **Contact** permettant d'envoy
 ## Sauvegarde et restauration
 
 Une tâche planifiée exécute `tools/backup_db.sh` chaque jour pour sauvegarder `vehicules.db` et conserver 30 jours d'historique.
+Le script envoie automatiquement la sauvegarde vers Google Drive avec
+[`rclone`](https://rclone.org/).
 
-Pour restaurer une sauvegarde :
+### Installation et configuration de rclone
 
-1. Décompressez le fichier si nécessaire :
-   ```bash
-   gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
-   ```
-2. Restaurez la base :
-   ```bash
-   sqlite3 vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
-   ```
+```bash
+sudo apt-get install rclone
+rclone config    # créer le remote « gdrive » de type Google Drive
+```
+
+### Restaurer depuis Google Drive
+
+```bash
+# Télécharger la sauvegarde depuis Drive
+rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
+
+# Décompresser puis restaurer dans SQLite
+gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
+sqlite3 vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
+```
