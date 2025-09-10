@@ -61,6 +61,30 @@ db.init_app(app)
 Migrate(app, db)
 
 
+def purge_expired_requests():
+    """Delete pending reservations older than two days."""
+    threshold = datetime.utcnow() - timedelta(days=2)
+    expired = Reservation.query.filter(
+        Reservation.status == "pending",
+        Reservation.end_at < threshold,
+    )
+    count = expired.count()
+    if count:
+        expired.delete(synchronize_session=False)
+        db.session.commit()
+    return count
+
+
+@app.cli.command("purge-expired-requests")
+def purge_expired_requests_command():
+    """Remove pending reservations older than two days.
+
+    Usage: ``flask purge-expired-requests``
+    """
+    deleted = purge_expired_requests()
+    print(f"Purged {deleted} expired reservation(s).")
+
+
 def current_user():
     uid = session.get("uid")
     return User.query.get(uid) if uid else None
