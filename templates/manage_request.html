@@ -18,26 +18,28 @@
 
 <h2 class="h6">Disponibilité des véhicules</h2>
 <form method="post">
-  <table class="table table-bordered align-middle">
-    <thead>
-      <tr><th>Véhicule</th><th>Disponible</th><th>Sélection</th></tr>
-    </thead>
-    <tbody>
-    {% for v, free in availability %}
-      <tr>
-        <td><strong>{{ v.code }}</strong>{% if v.label %} — {{ v.label }}{% endif %}</td>
-        <td>{% if free %}✅ Libre{% else %}❌ Occupé{% endif %}</td>
-        <td>
-          <input type="radio" name="vehicle_id" value="{{ v.id }}"
-                 {% if not free %}disabled{% endif %}
-                 {% if loop.first %}required{% endif %}>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="3" class="text-center">Aucun véhicule.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-responsive">
+    <table class="table table-bordered align-middle">
+      <thead>
+        <tr><th>Véhicule</th><th>Disponible</th><th>Sélection</th></tr>
+      </thead>
+      <tbody>
+      {% for v, free in availability %}
+        <tr>
+          <td><strong>{{ v.code }}</strong>{% if v.label %} — {{ v.label }}{% endif %}</td>
+          <td>{% if free %}✅ Libre{% else %}❌ Occupé{% endif %}</td>
+          <td>
+            <input type="radio" name="vehicle_id" value="{{ v.id }}"
+                   {% if not free %}disabled{% endif %}
+                   {% if loop.first %}required{% endif %}>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="3" class="text-center">Aucun véhicule.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 
   <button name="action" value="approve" class="btn btn-success">Approuver avec ce véhicule</button>
   <button name="action" value="reject"  class="btn btn-outline-danger">Refuser</button>
