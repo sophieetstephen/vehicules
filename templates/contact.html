@@ -1,10 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Contact – Véhicules{% endblock %}
 {% block content %}
-<h1 class="h4">Contact</h1>
-<form method="post">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">{{ form.message.label }} {{ form.message(class="form-control", rows=3) }}</div>
-  {{ form.submit(class="btn btn-success") }}
-</form>
+<div class="card">
+  <div class="card-body">
+    <h1 class="h4">Contact</h1>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">{{ form.message.label(class="form-label") }} {{ form.message(class="form-control", rows=3) }}</div>
+      {{ form.submit(class="btn btn-success") }}
+    </form>
+  </div>
+</div>
 {% endblock %}
