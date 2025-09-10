@@ -1,8 +1,8 @@
 {% extends "base.html" %}{% block title %}Administration – Utilisateurs{% endblock %}{% block content %}
 <h4 class="mb-3">Utilisateurs</h4>
 <form method="get" action="{{ url_for('admin_users') }}" class="mb-3">
-  <input type="text" name="q" value="{{ request.args.get('q','') }}" />
-  <button type="submit">Chercher</button>
+  <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" />
+  <button type="submit" class="btn btn-primary">Chercher</button>
 </form>
 <p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
 <div class="table-responsive">
