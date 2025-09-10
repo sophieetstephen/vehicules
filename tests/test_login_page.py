@@ -17,6 +17,6 @@ def test_login_page_bootstrap_classes():
         html = resp.data.decode('utf-8')
         assert 'class="card' in html
         assert 'class="form-label"' in html
-        assert 'Créer un compte' not in html
+        assert 'Créer un compte' in html
         assert 'Première connexion' not in html
         db.drop_all()
