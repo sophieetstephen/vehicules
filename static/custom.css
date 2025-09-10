@@ -45,13 +45,22 @@
 }
 
 .user-name {
+  display: inline-block;
   max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 576px) {
   .user-name {
     max-width: 8rem;
   }
+}
+
+.navbar .badge {
+  color: var(--bs-navbar-color);
+  background-color: var(--bs-navbar-bg, var(--bs-secondary)) !important;
 }
 
 /* Dashboard cards and icons */
