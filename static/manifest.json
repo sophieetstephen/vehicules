@@ -1,0 +1,8 @@
+{
+  "name": "Vehicules",
+  "short_name": "Vehicules",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d6efd"
+}
