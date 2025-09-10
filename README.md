@@ -4,9 +4,7 @@ Application Flask de gestion des véhicules.
 
 ## Rôles administratifs
 
-Lors de la création d'un compte via `/register`,
-l'application vérifie si l'adresse e‑mail figure dans les variables
-d'environnement `SUPERADMIN_EMAILS` ou `ADMIN_EMAILS`.
+Lors de l'inscription via la page `/register`, l'application vérifie si l'adresse e‑mail figure dans les variables d'environnement `SUPERADMIN_EMAILS` ou `ADMIN_EMAILS` afin d'attribuer automatiquement le rôle approprié.
 
 * `SUPERADMIN_EMAILS` – adresses séparées par des virgules qui recevront le
   rôle `superadmin`.
