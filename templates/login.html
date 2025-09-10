@@ -1,16 +1,20 @@
 {% extends "base.html" %}
 {% block title %}Connexion – Véhicules{% endblock %}
 {% block content %}
-<h1 class="h4">Connexion</h1>
-<form method="post">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">{{ form.email.label }} {{ form.email(class="form-control") }}</div>
-  <div class="mb-3">{{ form.password.label }} {{ form.password(class="form-control") }}</div>
-  {{ form.submit(class="btn btn-primary") }}
-</form>
-<hr class="my-3">
-<div class="text-center">
-  <a class="d-block fw-semibold" href="{{ url_for('register') }}">Première connexion ? Créer un compte</a>
+<div class="card mx-auto max-w-420">
+  <div class="card-body">
+    <h5 class="card-title mb-3">Connexion</h5>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">{{ form.email.label(class="form-label") }} {{ form.email(class="form-control") }}</div>
+      <div class="mb-3">{{ form.password.label(class="form-label") }} {{ form.password(class="form-control") }}</div>
+      {{ form.submit(class="btn btn-primary w-100") }}
+    </form>
+    <hr class="my-3">
+    <div class="text-center">
+      <a class="d-block fw-semibold" href="{{ url_for('register') }}">Première connexion ? Créer un compte</a>
+    </div>
+  </div>
 </div>
 {% endblock %}
 <!-- MARK: LOGIN-TPL -->

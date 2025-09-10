@@ -1,10 +1,10 @@
 
 <!doctype html><html><head><meta charset="utf-8">
+<link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/litera/bootstrap.min.css" rel="stylesheet">
 <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
 <style>
 body{font-family:sans-serif;font-size:11px}
 table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:3px;vertical-align:top;text-align:center}
-.badge{display:inline-block;background:#d1e7dd;border-radius:3px;padding:2px 4px}
 th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 </style></head><body>
 <h1>Planning véhicules — {{ start.strftime("%B %Y") }}</h1>
@@ -23,7 +23,7 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 {% set day = start + timedelta(days=i) %}
 <td>
 {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-<span class="badge">{{ slot_label(r, day) }}</span>
+<span class="badge text-bg-success">{{ slot_label(r, day) }}</span>
 {% endfor %}
 </td>
 {% endfor %}
