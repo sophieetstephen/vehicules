@@ -1,4 +1,21 @@
-
 .bg-success-subtle{background:#d1e7dd}
 
-body { overflow-x: hidden; }
+@media (max-width: 768px) {
+  body {
+    font-size: 0.9rem;
+    padding: 0 1rem;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+}
