@@ -4,7 +4,7 @@ Application Flask de gestion des véhicules.
 
 ## Rôles administratifs
 
-Lors de la création d'un compte via `/register` ou `/first_login`,
+Lors de la création d'un compte via `/register`,
 l'application vérifie si l'adresse e‑mail figure dans les variables
 d'environnement `SUPERADMIN_EMAILS` ou `ADMIN_EMAILS`.
 
