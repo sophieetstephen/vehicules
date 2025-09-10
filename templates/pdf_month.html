@@ -8,6 +8,7 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 </style></head><body>
 <h1>Planning véhicules — {{ start.strftime("%B %Y") }}</h1>
 {% set days = (end - start).days %}
+<div class="table-responsive">
 <table>
 <thead>
 <tr><th class="sticky">Véhicule</th>
@@ -29,5 +30,6 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 {% endfor %}
 </tbody>
 </table>
+</div>
 <p style="font-size:10px;color:#666;">Légende: Matin / Après-midi / Journée = Réservé (approuvé)</p>
 </body></html>

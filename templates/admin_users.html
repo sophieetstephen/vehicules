@@ -5,46 +5,48 @@
   <button type="submit">Chercher</button>
 </form>
 <p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
-<table class="table table-striped align-middle">
-  <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
-  <tbody>
-  {% for u in users %}
-    <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
-      <td>{{u.id}}</td>
-      <td>{{u.first_name or ""}}</td>
-      <td>{{u.last_name or ""}}</td>
-      <td>{{u.email}}</td>
-      <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
-      <td>
-        {% if (u.status or '') == 'pending' %}
-          <span class="badge bg-warning">En attente</span>
-        {% else %}
-          <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
-        {% endif %}
-      </td>
-      <td class="d-flex gap-2">
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
-        {% if (u.status or '') == 'active' %}
-          <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_deactivate', user_id=u.id) }}">Désactiver</a>
-        {% else %}
-          <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
-        {% endif %}
-        {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-          <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
-            <button class="btn btn-sm btn-outline-secondary" type="submit">Réinitialiser mot de passe</button>
-          </form>
-        {% endif %}
-        {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
-          {% if u.role==ROLE_ADMIN %}
-            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_demote', user_id=u.id) }}">Rétrograder</a>
+<div class="table-responsive">
+  <table class="table table-striped align-middle">
+    <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for u in users %}
+      <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
+        <td>{{u.id}}</td>
+        <td>{{u.first_name or ""}}</td>
+        <td>{{u.last_name or ""}}</td>
+        <td>{{u.email}}</td>
+        <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
+        <td>
+          {% if (u.status or '') == 'pending' %}
+            <span class="badge bg-warning">En attente</span>
           {% else %}
-            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
+            <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
           {% endif %}
-          <a class="btn btn-sm btn-outline-danger" href="{{ url_for('admin_user_delete', user_id=u.id) }}" onclick="return confirm('Confirmer la suppression ?');">Supprimer</a>
-        {% endif %}
-      </td>
-    </tr>
-  {% endfor %}
-  </tbody>
-</table>
+        </td>
+        <td class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
+          {% if (u.status or '') == 'active' %}
+            <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_deactivate', user_id=u.id) }}">Désactiver</a>
+          {% else %}
+            <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
+          {% endif %}
+          {% if current_user and current_user.role==ROLE_SUPERADMIN %}
+            <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Réinitialiser mot de passe</button>
+            </form>
+          {% endif %}
+          {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
+            {% if u.role==ROLE_ADMIN %}
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_demote', user_id=u.id) }}">Rétrograder</a>
+            {% else %}
+              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
+            {% endif %}
+            <a class="btn btn-sm btn-outline-danger" href="{{ url_for('admin_user_delete', user_id=u.id) }}" onclick="return confirm('Confirmer la suppression ?');">Supprimer</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
