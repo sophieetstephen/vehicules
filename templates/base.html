@@ -13,14 +13,16 @@
 <body>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
   <div class="container">
+    {% if user %}
+      <a class="navbar-brand" href="{{ url_for('home') }}">
+        <i class="fa-solid fa-house me-1"></i>Accueil
+      </a>
+    {% endif %}
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
       <span class="navbar-toggler-icon"></span>
     </button>
     <div class="collapse navbar-collapse" id="nav">
       <ul class="navbar-nav me-auto">
-        {% if user %}
-          <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('home') }}">Accueil</a></li>
-        {% endif %}
       </ul>
       <ul class="navbar-nav ms-auto align-items-center">
         {% if user %}
