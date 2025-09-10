@@ -20,7 +20,7 @@
     </label>
   </div>
   <div class="form-text mb-3">La date de fin est uniquement nécessaire pour les réservations de plusieurs jours.</div>
-  <div id="end_fields" class="row" style="display: none;">
+  <div id="end_fields" class="row d-none">
     <div class="col-md-6 mb-3">{{ form.end_date.label }} {{ form.end_date(class="form-control") }}</div>
     <div class="col-md-6 mb-3">{{ form.end_slot.label }} {{ form.end_slot(class="form-select") }}</div>
   </div>
@@ -37,7 +37,7 @@
   const endSlotSelect = document.getElementById('end_slot');
   function toggleEndFields() {
     const enabled = multiDay.checked;
-    endFields.style.display = enabled ? 'flex' : 'none';
+    endFields.classList.toggle('d-none', !enabled);
     endDateInput.disabled = endSlotSelect.disabled = !enabled;
     if (!enabled) {
       endDateInput.value = '';

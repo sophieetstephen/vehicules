@@ -1,5 +1,24 @@
 .bg-success-subtle{background:#d1e7dd}
 
+.legend-text {
+  font-size: 10px;
+  color: #666;
+}
+
+.sticky-col {
+  position: sticky;
+  left: 0;
+  background: #fff;
+}
+
+.min-w-40 {
+  min-width: 40px;
+}
+
+.max-w-520 {
+  max-width: 520px;
+}
+
 @media (max-width: 768px) {
   body {
     font-size: 0.9rem;

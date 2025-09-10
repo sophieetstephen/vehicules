@@ -20,7 +20,7 @@
 <table class="table table-bordered table-sm align-middle">
   <thead>
     <tr>
-      <th style="position: sticky; left:0; background:#fff;">Véhicule</th>
+      <th class="sticky-col">Véhicule</th>
       {% for i in range(days) %}
         <th class="text-center">{{ (start + timedelta(days=(i|int))).strftime("%d") }}</th>
       {% endfor %}
@@ -29,10 +29,10 @@
   <tbody>
     {% for v in vehicles %}
     <tr>
-      <td style="position: sticky; left:0; background:#fff;"><strong>{{ v.code }}</strong></td>
+      <td class="sticky-col"><strong>{{ v.code }}</strong></td>
       {% for i in range(days) %}
     {% set day = start + timedelta(days=(i|int)) %}
-        <td class="text-center" style="min-width:40px;">
+        <td class="text-center min-w-40">
           {% set cell_has_res = false %}
           {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
             {% set ns = namespace(has_seg=false) %}
