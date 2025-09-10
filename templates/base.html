@@ -7,6 +7,7 @@
   <title>{% block title %}Vehicules{% endblock %}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="{{ url_for('static', filename='styles.css') }}" rel="stylesheet">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 <style> .user-name{max-width:12rem} @media (max-width:576px){ .user-name{max-width:8rem} } </style>
 </head>
 <body>
@@ -43,5 +44,10 @@
   {% block content %}{% endblock %}
 </div>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
+}
+</script>
 </body>
 </html>
