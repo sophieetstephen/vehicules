@@ -61,6 +61,13 @@
 .navbar .badge {
   color: var(--bs-navbar-color);
   background-color: var(--bs-navbar-bg, var(--bs-secondary)) !important;
+  margin-left: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.navbar .fa {
+  margin-right: 0.25rem;
+  padding: 0.25rem;
 }
 
 /* Dashboard cards and icons */
