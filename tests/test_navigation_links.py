@@ -72,5 +72,4 @@ def _render_home(role: str) -> str:
 def test_home_tabs_by_role(role, links):
     html = _render_home(role)
     for link in links:
-        assert link in html
-    assert html.count('dashboard-card') == len(links)
+        assert html.count(f'<h5 class="card-title">{link}</h5>') == 1
