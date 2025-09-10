@@ -1,0 +1,7 @@
+[Unit]
+Description=Sauvegarde de la base Vehicules
+
+[Service]
+Type=oneshot
+WorkingDirectory=/path/to/vehicules
+ExecStart=/usr/bin/env bash tools/backup_db.sh

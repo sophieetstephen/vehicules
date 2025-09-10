@@ -37,3 +37,18 @@ Lorsqu'une journée d'une réservation sur plusieurs jours est segmentée vers u
 ## Contact
 
 Les utilisateurs connectés disposent d'un onglet **Contact** permettant d'envoyer un message aux administrateurs. Les destinataires sont définis via les paramètres de notification et chaque expéditeur reçoit un e‑mail de confirmation.
+
+## Sauvegarde et restauration
+
+Une tâche planifiée exécute `tools/backup_db.sh` chaque jour pour sauvegarder `vehicules.db` et conserver 30 jours d'historique.
+
+Pour restaurer une sauvegarde :
+
+1. Décompressez le fichier si nécessaire :
+   ```bash
+   gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
+   ```
+2. Restaurez la base :
+   ```bash
+   sqlite3 vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
+   ```

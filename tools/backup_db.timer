@@ -1,0 +1,9 @@
+[Unit]
+Description=Exécution quotidienne de la sauvegarde de la base Vehicules
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+
+[Install]
+WantedBy=timers.target
