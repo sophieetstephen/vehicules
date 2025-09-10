@@ -3,6 +3,6 @@ Description=Sauvegarde de la base Vehicules
 
 [Service]
 Type=oneshot
-WorkingDirectory=/path/to/vehicules
+WorkingDirectory=/workspace/vehicules
 Environment=REMOTE_URI=gdrive:vehicules-backups
 ExecStart=/usr/bin/env bash tools/backup_db.sh
