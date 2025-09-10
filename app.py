@@ -20,7 +20,6 @@ from datetime import datetime, timedelta, time
 from io import BytesIO
 from forms import (
     LoginForm,
-    FirstLoginForm,
     RegisterForm,
     NewRequestForm,
     UserForm,
@@ -120,7 +119,6 @@ def _force_login():
     p = request.path or "/"
     public = {
         "/login",
-        "/first_login",
         "/register",
         "/logout",
         "/__ping__",
@@ -219,37 +217,6 @@ def register():
         session["uid"] = user.id
         return redirect(url_for("home"))
     return render_template("register.html", form=form), 200
-
-
-@app.route("/first_login", methods=["GET", "POST"])
-def first_login():
-    form = FirstLoginForm()
-    if form.validate_on_submit():
-        name = f"{form.last_name.data} {form.first_name.data}"
-        email = form.email.data.lower()
-        role = User.ROLE_USER
-        if email in app.config.get("SUPERADMIN_EMAILS", []):
-            role = User.ROLE_SUPERADMIN
-        elif email in app.config.get("ADMIN_EMAILS", []):
-            role = User.ROLE_ADMIN
-        user = User(
-            name=name,
-            first_name=form.first_name.data,
-            last_name=form.last_name.data,
-            email=email,
-            role=role,
-        )
-        user.set_password(form.password.data)
-        db.session.add(user)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            flash("Adresse e‑mail déjà utilisée", "danger")
-            return render_template("first_login.html", form=form), 200
-        session["uid"] = user.id
-        return redirect(url_for("home"))
-    return render_template("first_login.html", form=form), 200
 
 
 @app.route("/request/new", methods=["GET", "POST"])
