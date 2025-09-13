@@ -786,8 +786,23 @@ def manage_segment(sid):
             ):
                 flash("Conflit détecté lors de la modification du segment.", "danger")
             else:
+                old_vehicle = seg.vehicle
                 seg.vehicle_id = veh_id
                 db.session.commit()
+                new_vehicle = Vehicle.query.get(veh_id)
+                try:
+                    send_mail_msmtp(
+                        "Modification de votre réservation",
+                        (
+                            f"Le segment du {seg.start_at.strftime('%d/%m/%Y %H:%M')} au "
+                            f"{seg.end_at.strftime('%d/%m/%Y %H:%M')} a été mis à jour.\n"
+                            f"Ancien véhicule : {old_vehicle.label if old_vehicle else 'N/A'}.\n"
+                            f"Nouveau véhicule : {new_vehicle.label}."
+                        ),
+                        r.user.email,
+                    )
+                except Exception:
+                    app.logger.exception("Erreur lors de l'envoi du mail")
                 flash("Segment mis à jour.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "delete":

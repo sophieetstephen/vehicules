@@ -250,6 +250,54 @@ def test_segment_day_can_be_repeated_and_managed(app_ctx):
     assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 3
 
 
+def test_segment_update_sends_mail(app_ctx, monkeypatch):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code="V1", label="Vehicule 1")
+    v2 = Vehicle(code="V2", label="Vehicule 2")
+    db.session.add_all([v1, v2])
+    db.session.commit()
+    r = Reservation(
+        user_id=user.id,
+        start_at=datetime(2024, 1, 1, 8),
+        end_at=datetime(2024, 1, 1, 12),
+        status="approved",
+    )
+    db.session.add(r)
+    db.session.commit()
+    seg = ReservationSegment(
+        reservation_id=r.id,
+        vehicle_id=v1.id,
+        start_at=datetime(2024, 1, 1, 8),
+        end_at=datetime(2024, 1, 1, 12),
+    )
+    db.session.add(seg)
+    db.session.commit()
+
+    called = {}
+
+    def fake_send_mail(subject, body, to_addr):
+        called["args"] = (subject, body, to_addr)
+        return True, "sent"
+
+    monkeypatch.setattr("app.send_mail_msmtp", fake_send_mail)
+
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess["uid"] = admin.id
+    data = {"action": "update", "vehicle_id": str(v2.id)}
+    client.post(f"/admin/manage/segment/{seg.id}", data=data)
+
+    assert ReservationSegment.query.get(seg.id).vehicle_id == v2.id
+    subject, body, to_addr = called["args"]
+    assert subject == "Modification de votre réservation"
+    assert to_addr == user.email
+    assert "Vehicule 1" in body
+    assert "Vehicule 2" in body
+    assert "01/01/2024 08:00" in body
+    assert "01/01/2024 12:00" in body
+
+
 def test_calendar_links_for_multiple_day_segments(app_ctx):
     admin = create_user(role=User.ROLE_ADMIN)
     user = create_user()
