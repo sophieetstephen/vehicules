@@ -352,3 +352,36 @@ def test_calendar_links_for_multiple_day_segments(app_ctx):
         )
     for seg in segments:
         assert f"/admin/manage/segment/{seg.id}" in html
+
+
+def test_delete_day_from_reservation(app_ctx):
+    admin = create_user(role=User.ROLE_ADMIN)
+    user = create_user()
+    v1 = Vehicle(code='V1', label='Vehicule 1')
+    db.session.add(v1)
+    db.session.commit()
+    r = Reservation(
+        vehicle_id=v1.id,
+        user_id=user.id,
+        start_at=datetime(2024, 1, 1, 8),
+        end_at=datetime(2024, 1, 3, 16),
+        status='approved',
+    )
+    db.session.add(r)
+    db.session.commit()
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['uid'] = admin.id
+    data = {'action': 'delete_day'}
+    client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
+    segments = (
+        ReservationSegment.query.filter_by(reservation_id=r.id)
+        .order_by(ReservationSegment.start_at)
+        .all()
+    )
+    assert len(segments) == 2
+    assert segments[0].start_at.date() == datetime(2024, 1, 1).date()
+    assert segments[1].start_at.date() == datetime(2024, 1, 3).date()
+    for seg in segments:
+        assert seg.start_at.date() != datetime(2024, 1, 2).date()
+    assert r.vehicle_id is None

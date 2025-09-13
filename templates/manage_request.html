@@ -65,6 +65,10 @@
     <button name="action" value="segment_day" class="btn btn-primary mt-2">Attribuer ce véhicule</button>
   </div>
 </form>
+<form method="post" class="mt-2" onsubmit="return confirm('Supprimer cette journée ?');">
+  <input type="hidden" name="action" value="delete_day">
+  <button class="btn btn-outline-danger">Supprimer cette journée</button>
+</form>
 {% endif %}
 
 {% endblock %}
