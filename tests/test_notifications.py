@@ -80,10 +80,13 @@ def test_new_request_notifies_selected_users(monkeypatch):
         db.session.add(settings)
         db.session.commit()
 
-        sent = {}
+        calls = []
 
         def fake_send_mail(subject, body, recipients):
-            sent['recipients'] = set(recipients)
+            if isinstance(recipients, str):
+                calls.append({recipients})
+            else:
+                calls.append(set(recipients))
 
         monkeypatch.setattr('app.send_mail_msmtp', fake_send_mail)
 
@@ -103,6 +106,9 @@ def test_new_request_notifies_selected_users(monkeypatch):
             'notes': '',
         }
         client.post('/request/new', data=data, follow_redirects=True)
-        assert sent['recipients'] == {sa.email, ad.email}
-        assert other.email not in sent['recipients']
+        assert len(calls) == 2
+        admin_recipients, user_recipients = calls
+        assert admin_recipients == {sa.email, ad.email}
+        assert other.email not in admin_recipients
+        assert user_recipients == {user.email}
         db.drop_all()
