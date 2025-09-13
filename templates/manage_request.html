@@ -45,6 +45,10 @@
   <button name="action" value="reject"  class="btn btn-outline-danger">Refuser</button>
 </form>
 
+<form method="post" class="mt-2">
+  <button name="action" value="delete" class="btn btn-danger" onclick="return confirm('Supprimer cette réservation ?');">Supprimer la réservation</button>
+</form>
+
 {% if day %}
 <hr/>
 <h2 class="h6">Segmenter la journée du {{ day.strftime('%d/%m/%Y') }}</h2>

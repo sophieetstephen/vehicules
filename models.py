@@ -63,6 +63,11 @@ class Reservation(db.Model):
 
     vehicle = db.relationship("Vehicle", backref="reservations")
     user = db.relationship("User", backref="reservations")
+    segments = db.relationship(
+        "ReservationSegment",
+        back_populates="reservation",
+        cascade="all, delete-orphan",
+    )
 
 
 class ReservationSegment(db.Model):
@@ -76,8 +81,8 @@ class ReservationSegment(db.Model):
     start_at = db.Column(db.DateTime, nullable=False)
     end_at = db.Column(db.DateTime, nullable=False)
 
-    reservation = db.relationship('Reservation', backref='segments')
-    vehicle = db.relationship('Vehicle')
+    reservation = db.relationship("Reservation", back_populates="segments")
+    vehicle = db.relationship("Vehicle")
 
 
 class NotificationSettings(db.Model):
