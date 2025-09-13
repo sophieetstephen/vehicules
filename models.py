@@ -2,6 +2,8 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask import current_app
+from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 db = SQLAlchemy()
 
 class User(db.Model):
@@ -23,6 +25,21 @@ class User(db.Model):
 
     def check_password(self, pwd):
         return check_password_hash(self.password_hash, pwd)
+
+    def generate_reset_token(self):
+        """Return a signed token to reset the password."""
+        s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+        return s.dumps({"user_id": self.id})
+
+    @staticmethod
+    def verify_reset_token(token, max_age=3600):
+        """Validate a reset token and return the associated user if valid."""
+        s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+        try:
+            data = s.loads(token, max_age=max_age)
+        except (BadSignature, SignatureExpired):
+            return None
+        return User.query.get(data.get("user_id"))
 
 class Vehicle(db.Model):
     id = db.Column(db.Integer, primary_key=True)
