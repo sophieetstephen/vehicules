@@ -773,6 +773,11 @@ def manage_request(rid):
             db.session.commit()
             flash("Demande refusée.", "warning")
             return redirect(url_for("admin_reservations"))
+        elif action == "delete":
+            db.session.delete(r)
+            db.session.commit()
+            flash("Réservation supprimée.", "info")
+            return redirect(url_for("admin_reservations"))
     avail = vehicles_availability(day_start, day_end)
     user = current_user()
     return render_template(

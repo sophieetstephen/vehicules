@@ -19,7 +19,13 @@
           {% elif r.status=='rejected' %}<span class="badge bg-secondary">refusée</span>
           {% else %}<span class="badge bg-warning text-dark">en attente</span>{% endif %}
         </td>
-        <td class="text-end"><a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">Gérer</a></td>
+        <td class="text-end">
+          <a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">Gérer</a>
+          <form method="post" action="{{ url_for('manage_request', rid=r.id) }}" class="d-inline">
+            <input type="hidden" name="action" value="delete">
+            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer cette réservation ?');">Supprimer</button>
+          </form>
+        </td>
       </tr>
     {% else %}
       <tr><td colspan="7">Aucune réservation.</td></tr>
