@@ -21,6 +21,7 @@ from io import BytesIO
 from forms import (
     LoginForm,
     RegisterForm,
+    ResetPasswordForm,
     NewRequestForm,
     UserForm,
     NotificationSettingsForm,
@@ -28,7 +29,6 @@ from forms import (
 )
 from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
-import secrets
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
 from utils import reservation_slot_label
@@ -125,7 +125,7 @@ def _force_login():
         "/home",
         "/",
     }
-    if p in public or p.startswith("/static/"):
+    if p in public or p.startswith("/static/") or p.startswith("/reset/"):
         return None
     if not session.get("uid"):
         nxt = request.full_path if request.query_string else p
@@ -217,6 +217,21 @@ def register():
         session["uid"] = user.id
         return redirect(url_for("home"))
     return render_template("register.html", form=form), 200
+
+
+@app.route("/reset/<token>", methods=["GET", "POST"])
+def reset_with_token(token):
+    user = User.verify_reset_token(token)
+    if not user:
+        flash("Lien de réinitialisation invalide ou expiré", "danger")
+        return redirect(url_for("login"))
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        db.session.commit()
+        flash("Mot de passe mis à jour", "success")
+        return redirect(url_for("login"))
+    return render_template("reset_password.html", form=form), 200
 
 
 @app.route("/request/new", methods=["GET", "POST"])
@@ -424,18 +439,17 @@ def admin_deactivate(user_id):
 @role_required("superadmin")
 def admin_reset_password(user_id):
     target = User.query.get_or_404(user_id)
-    new_password = request.form.get("password") or secrets.token_urlsafe(8)
-    target.set_password(new_password)
-    db.session.commit()
+    token = target.generate_reset_token()
+    reset_url = url_for("reset_with_token", token=token, _external=True)
     try:
         send_mail_msmtp(
             "Réinitialisation de mot de passe",
-            f"Bonjour, votre nouveau mot de passe est: {new_password}",
+            f"Bonjour, pour réinitialiser votre mot de passe, suivez ce lien : {reset_url}",
             target.email,
         )
     except Exception:
         pass
-    flash(f"Nouveau mot de passe: {new_password}", "info")
+    flash("Lien de réinitialisation envoyé", "info")
     return redirect(url_for("admin_users"))
 
 

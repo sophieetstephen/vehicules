@@ -43,6 +43,23 @@ class RegisterForm(FlaskForm):
     )
     submit = SubmitField("Créer mon compte")
 
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField(
+        "Nouveau mot de passe", validators=[DataRequired(), Length(min=8)]
+    )
+    password2 = PasswordField(
+        "Confirmer le mot de passe",
+        validators=[
+            DataRequired(),
+            EqualTo(
+                "password",
+                message="Les mots de passe doivent correspondre.",
+            ),
+        ],
+    )
+    submit = SubmitField("Enregistrer")
+
 class NewRequestForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
     last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
