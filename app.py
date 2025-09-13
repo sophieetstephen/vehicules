@@ -281,6 +281,18 @@ def new_request():
                 )
             except Exception:
                 app.logger.exception("Erreur lors de l'envoi du mail")
+        try:
+            send_mail_msmtp(
+                "Demande de réservation reçue",
+                (
+                    f"Nous avons bien reçu votre demande de réservation du "
+                    f"{start_at.strftime('%d/%m/%Y %H:%M')} au {end_at.strftime('%d/%m/%Y %H:%M')}. "
+                    "Elle est en attente de validation."
+                ),
+                current_user().email,
+            )
+        except Exception:
+            app.logger.exception("Erreur lors de l'envoi du mail")
         flash("Votre demande a été transmise.", "success")
         return redirect(url_for("home"))
     return render_template("new_request.html", form=form, user=current_user())
