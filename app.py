@@ -712,6 +712,41 @@ def manage_request(rid):
                     app.logger.exception("Erreur lors de l'envoi du mail")
                 flash("Segment ajouté.", "success")
                 return redirect(url_for("admin_reservations"))
+        elif action == "delete_day" and day:
+            existing = ReservationSegment.query.filter(
+                ReservationSegment.reservation_id == r.id,
+                ReservationSegment.end_at > day_start,
+                ReservationSegment.start_at < day_end,
+            ).first()
+            if existing:
+                db.session.delete(existing)
+            else:
+                old_vehicle = r.vehicle_id
+                if old_vehicle is not None:
+                    current_date = r.start_at.date()
+                    end_date = r.end_at.date()
+                    while current_date <= end_date:
+                        if current_date != day_start.date():
+                            day_start_fill = datetime.combine(current_date, time.min)
+                            day_end_fill = datetime.combine(current_date, time.max)
+                            if current_date == r.start_at.date():
+                                day_start_fill = r.start_at
+                            if current_date == r.end_at.date():
+                                day_end_fill = r.end_at
+                            db.session.add(
+                                ReservationSegment(
+                                    reservation_id=r.id,
+                                    vehicle_id=old_vehicle,
+                                    start_at=day_start_fill,
+                                    end_at=day_end_fill,
+                                )
+                            )
+                        current_date += timedelta(days=1)
+                    r.vehicle_id = None
+            r.status = "approved"
+            db.session.commit()
+            flash("Journée supprimée.", "info")
+            return redirect(url_for("admin_reservations"))
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
             v = Vehicle.query.get_or_404(veh_id)
