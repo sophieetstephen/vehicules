@@ -7,7 +7,7 @@ body{font-family:sans-serif;font-size:11px}
 table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:3px;vertical-align:top;text-align:center}
 th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 </style></head><body>
-<h1>Planning véhicules — {{ start.strftime("%B %Y") }}</h1>
+<h1>Planning véhicules — {{ month_year_label(start) }}</h1>
 {% set days = (end - start).days %}
 <div class="table-responsive">
 <table>

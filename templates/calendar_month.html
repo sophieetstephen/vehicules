@@ -12,7 +12,7 @@
 <h1 class="h4">Planning mensuel (lecture seule)</h1>
 <p>
   <a href="{{ url_for('calendar_month', y=prev_y, m=prev_m) }}">&larr;</a>
-  Mois: {{ start.strftime('%B %Y') }}
+  Mois: {{ month_year_label(start) }}
   <a href="{{ url_for('calendar_month', y=next_y, m=next_m) }}">&rarr;</a>
 </p>
 {% set days = (end - start).days %}

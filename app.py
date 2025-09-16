@@ -70,6 +70,35 @@ except locale.Error:
 
 _FRENCH_WEEKDAY_ABBRS = ("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
 _FRENCH_WEEKDAY_SET = set(_FRENCH_WEEKDAY_ABBRS)
+_FRENCH_MONTH_BY_NUMBER = {
+    1: "janvier",
+    2: "février",
+    3: "mars",
+    4: "avril",
+    5: "mai",
+    6: "juin",
+    7: "juillet",
+    8: "août",
+    9: "septembre",
+    10: "octobre",
+    11: "novembre",
+    12: "décembre",
+}
+_FRENCH_MONTH_NAMES = set(_FRENCH_MONTH_BY_NUMBER.values())
+_ENGLISH_TO_FRENCH_MONTHS = {
+    "january": "janvier",
+    "february": "février",
+    "march": "mars",
+    "april": "avril",
+    "may": "mai",
+    "june": "juin",
+    "july": "juillet",
+    "august": "août",
+    "september": "septembre",
+    "october": "octobre",
+    "november": "novembre",
+    "december": "décembre",
+}
 
 
 def _weekday_abbr(dt):
@@ -83,9 +112,23 @@ def _weekday_abbr(dt):
     return _FRENCH_WEEKDAY_ABBRS[dt.weekday()]
 
 
+def _month_year_label(dt):
+    if not dt:
+        return ""
+    month_name = dt.strftime("%B") or ""
+    normalized = month_name.strip().lower()
+    if normalized in _FRENCH_MONTH_NAMES:
+        month = normalized
+    else:
+        month = _ENGLISH_TO_FRENCH_MONTHS.get(normalized)
+        if not month:
+            month = _FRENCH_MONTH_BY_NUMBER.get(dt.month, normalized)
+    return f"{month} {dt.year}" if month else dt.strftime("%B %Y")
+
+
 @app.context_processor
 def _inject_locale_helpers():
-    return {"weekday_abbr": _weekday_abbr}
+    return {"weekday_abbr": _weekday_abbr, "month_year_label": _month_year_label}
 
 
 def purge_expired_requests():
