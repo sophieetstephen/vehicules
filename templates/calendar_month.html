@@ -22,7 +22,10 @@
     <tr>
       <th class="sticky-col">Véhicule</th>
       {% for i in range(days) %}
-        <th class="text-center">{{ (start + timedelta(days=(i|int))).strftime("%d") }}</th>
+        {% set day = start + timedelta(days=(i|int)) %}
+        <th class="text-center">
+          <div class="calendar-day-header">{{ weekday_abbr(day) }}<br>{{ day.day }}</div>
+        </th>
       {% endfor %}
     </tr>
   </thead>
