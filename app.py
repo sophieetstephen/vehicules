@@ -113,6 +113,36 @@ def __ping__():
     return "OK", 200
 
 
+# --- Gestion de l'expiration de session
+@app.before_request
+def _check_session_timeout():
+    timeout = app.config.get("SESSION_TIMEOUT_MINUTES")
+    if not timeout:
+        return None
+    uid = session.get("uid")
+    if not uid:
+        return None
+    last_activity = session.get("last_activity")
+    if not last_activity:
+        session["last_activity"] = datetime.utcnow().isoformat()
+        session.permanent = True
+        return None
+    try:
+        last_dt = datetime.fromisoformat(last_activity)
+    except (TypeError, ValueError):
+        session["last_activity"] = datetime.utcnow().isoformat()
+        session.permanent = True
+        return None
+    if datetime.utcnow() - last_dt > timedelta(minutes=timeout):
+        session.pop("uid", None)
+        session.pop("last_activity", None)
+        flash("Session expirée pour inactivité", "warning")
+        return redirect(url_for("login"))
+    session["last_activity"] = datetime.utcnow().isoformat()
+    session.permanent = True
+    return None
+
+
 # --- Garde: force /login pour les non-connectés (sans boucle)
 @app.before_request
 def _force_login():
@@ -171,6 +201,8 @@ def login():
         ).first()
         if u and u.check_password(form.password.data):
             session["uid"] = u.id
+            session["last_activity"] = datetime.utcnow().isoformat()
+            session.permanent = True
             return redirect(
                 request.args.get("next") or url_for("home")
             )
@@ -181,6 +213,7 @@ def login():
 @app.route("/logout")
 def logout():
     session.pop("uid", None)
+    session.pop("last_activity", None)
     flash("Déconnecté", "info")
     return redirect(url_for("login"))
 

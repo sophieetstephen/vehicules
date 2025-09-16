@@ -1,5 +1,7 @@
 
 import os
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY","change-me")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL","sqlite:///vehicules.db")
@@ -15,3 +17,4 @@ class Config:
     )
     SUPERADMIN_EMAILS = ["gestionvehiculestomer@gmail.com"]
     ADMIN_EMAILS = ["alexandre.stephen@free.fr"]
+    SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "30"))
