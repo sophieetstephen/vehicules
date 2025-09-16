@@ -363,10 +363,17 @@ def contact():
             ]
         if recipients:
             recipients = list(set(recipients))
+            u = current_user()
+            body_admin = (
+                f"{form.message.data}\n\n"
+                f"Nom : {u.last_name}\n"
+                f"Prénom : {u.first_name}\n"
+                f"Email : {u.email}"
+            )
             try:
                 send_mail_msmtp(
                     "Message de contact",
-                    form.message.data,
+                    body_admin,
                     recipients,
                 )
             except Exception:
