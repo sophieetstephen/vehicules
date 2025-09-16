@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import locale
 import os
 import sys
 from urllib.parse import quote as _urlquote
@@ -58,6 +59,33 @@ app = Flask(__name__)
 app.config.from_object(Config)
 db.init_app(app)
 Migrate(app, db)
+
+try:
+    locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
+except locale.Error:
+    try:
+        locale.setlocale(locale.LC_TIME, "fr_FR")
+    except locale.Error:
+        pass
+
+_FRENCH_WEEKDAY_ABBRS = ("lun", "mar", "mer", "jeu", "ven", "sam", "dim")
+_FRENCH_WEEKDAY_SET = set(_FRENCH_WEEKDAY_ABBRS)
+
+
+def _weekday_abbr(dt):
+    if not dt:
+        return ""
+    label = dt.strftime("%a")
+    if label:
+        normalized = label.lower().strip(".")
+        if normalized in _FRENCH_WEEKDAY_SET:
+            return normalized
+    return _FRENCH_WEEKDAY_ABBRS[dt.weekday()]
+
+
+@app.context_processor
+def _inject_locale_helpers():
+    return {"weekday_abbr": _weekday_abbr}
 
 
 def purge_expired_requests():
