@@ -2,6 +2,8 @@
 
 Application Flask de gestion des véhicules.
 
+Projet développé par Mr Alexandre Stephen.
+
 ## Rôles administratifs
 
 Lors de l'inscription via la page `/register`, l'application vérifie si l'adresse e‑mail figure dans les variables d'environnement `SUPERADMIN_EMAILS` ou `ADMIN_EMAILS` afin d'attribuer automatiquement le rôle approprié.
@@ -84,3 +86,10 @@ rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
 gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
 sqlite3 vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
 ```
+
+## Licence
+
+Ce projet est distribué sous une licence “Tous droits réservés”.
+Toute utilisation, reproduction, modification, distribution ou vente
+est interdite sans l’autorisation écrite explicite de l’auteur.
+Voir le fichier [LICENSE](LICENSE) pour plus de détails.
