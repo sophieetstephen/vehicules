@@ -4,6 +4,7 @@ Description=Sauvegarde de la base Vehicules
 [Service]
 Type=oneshot
 WorkingDirectory=/workspace/vehicules
+Environment=DB_PATH=/var/lib/vehicules/vehicules.db
 Environment=REMOTE_URI=gdrive:vehicules-backups
 Environment=RCLONE_CONFIG=/path/to/rclone.conf
 ExecStart=/usr/bin/env bash tools/backup_db.sh

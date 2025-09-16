@@ -27,10 +27,15 @@ python tools/create_admin.py <email> <role>
 
 Pour repartir sur une base saine :
 
-1. Supprimez l'ancien fichier `vehicules.db` si nécessaire.
+1. Supprimez l'ancien fichier `/var/lib/vehicules/vehicules.db` (ou celui défini via `DATABASE_URL`) si nécessaire.
 2. Exécutez `flask db upgrade` ou `python seed.py` pour créer la base et appliquer les migrations.
 
 Sans migration appliquée, l'application échouera lors de la connexion avec des erreurs de colonnes manquantes.
+
+Par défaut, l'application utilise la base SQLite située dans `/var/lib/vehicules/vehicules.db`. Assurez-vous que ce répertoire
+existe et que l'utilisateur disposant du service possède les droits en lecture/écriture. Vous pouvez remplacer cet emplacement en
+définissant la variable d'environnement `DATABASE_URL` (par exemple `sqlite:////srv/vehicules/data.db`) avant de lancer
+l'application.
 
 ## Segmentation des réservations
 
@@ -42,9 +47,9 @@ Les utilisateurs connectés disposent d'un onglet **Contact** permettant d'envoy
 
 ## Sauvegarde et restauration
 
-Une tâche planifiée exécute `tools/backup_db.sh` chaque jour pour sauvegarder `vehicules.db` et conserver 30 jours d'historique.
-Le script envoie automatiquement la sauvegarde vers Google Drive avec
-[`rclone`](https://rclone.org/).
+Une tâche planifiée exécute `tools/backup_db.sh` chaque jour pour sauvegarder `/var/lib/vehicules/vehicules.db` (ou le chemin
+fourni via `DB_PATH`/`DATABASE_URL`) et conserver 30 jours d'historique. Le script envoie automatiquement la sauvegarde vers
+Google Drive avec [`rclone`](https://rclone.org/).
 
 ### Installation et configuration de rclone
 
@@ -71,10 +76,12 @@ Notez ensuite le chemin du fichier afin de l'exposer via les variables d'environ
 ```bash
 export RCLONE_CONFIG=/home/user/.config/rclone/rclone.conf
 export REMOTE_URI=gdrive:vehicules-backups
+# Indiquez le chemin réel de la base SQLite si différent
+export DB_PATH=/var/lib/vehicules/vehicules.db
 # (optionnel) export GDRIVE_SERVICE_ACCOUNT=/chemin/vers/service-account.json
 ```
 
-Dans `tools/backup_db.service`, ajustez la directive `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers ces fichiers avant de relancer le service.
+Dans `tools/backup_db.service`, ajustez les directives `Environment=DB_PATH=…`, `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers les chemins adaptés avant de relancer le service.
 
 ### Restaurer depuis Google Drive
 
@@ -84,7 +91,7 @@ rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
 
 # Décompresser puis restaurer dans SQLite
 gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
-sqlite3 vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
+sqlite3 /var/lib/vehicules/vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"  # adaptez ce chemin si nécessaire
 ```
 
 ## Licence
