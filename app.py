@@ -28,6 +28,7 @@ from forms import (
     NotificationSettingsForm,
     ContactForm,
 )
+from wtforms.validators import DataRequired
 from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
 from notify import send_mail_msmtp
@@ -345,6 +346,20 @@ def new_request():
         flash("Compte non activé", "danger")
         return redirect(url_for("home"))
     form = NewRequestForm()
+    if u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]:
+        form.first_name.validators = []
+        form.last_name.validators = []
+        users = (
+            User.query.filter(User.status == "active")
+            .order_by(User.first_name)
+            .all()
+        )
+        form.user_id.choices = [
+            (usr.id, f"{usr.first_name} {usr.last_name}") for usr in users
+        ]
+        form.user_id.validators = [DataRequired()]
+        if request.method == "GET":
+            form.user_id.data = u.id
     if form.validate_on_submit():
         start_times = {
             "morning": time(8, 0),
@@ -368,8 +383,13 @@ def new_request():
         if end_at <= start_at:
             flash("La date de fin doit être postérieure à la date de début", "danger")
             return render_template("new_request.html", form=form, user=current_user()), 200
+        target_user_id = (
+            form.user_id.data
+            if u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]
+            else current_user().id
+        )
         r = Reservation(
-            user_id=current_user().id,
+            user_id=target_user_id,
             start_at=start_at,
             end_at=end_at,
             purpose=form.purpose.data,
@@ -390,28 +410,34 @@ def new_request():
                     User.status == "active",
                 )
             ]
+        target_user = User.query.get(target_user_id)
         if recipients:
             recipients = list(set(recipients))
             try:
+                msg = f"Une nouvelle demande a été soumise par {u.name}"
+                if target_user and target_user.id != u.id:
+                    msg += f" pour {target_user.name}"
+                msg += "."
                 send_mail_msmtp(
                     "Demande de réservation",
-                    f"Une nouvelle demande a été soumise par {current_user().name}.",
+                    msg,
                     recipients,
                 )
             except Exception:
                 app.logger.exception("Erreur lors de l'envoi du mail")
-        try:
-            send_mail_msmtp(
-                "Demande de réservation reçue",
-                (
-                    f"Nous avons bien reçu votre demande de réservation du "
-                    f"{start_at.strftime('%d/%m/%Y %H:%M')} au {end_at.strftime('%d/%m/%Y %H:%M')}. "
-                    "Elle est en attente de validation."
-                ),
-                current_user().email,
-            )
-        except Exception:
-            app.logger.exception("Erreur lors de l'envoi du mail")
+        if target_user:
+            try:
+                send_mail_msmtp(
+                    "Demande de réservation reçue",
+                    (
+                        f"Nous avons bien reçu votre demande de réservation du "
+                        f"{start_at.strftime('%d/%m/%Y %H:%M')} au {end_at.strftime('%d/%m/%Y %H:%M')}. "
+                        "Elle est en attente de validation."
+                    ),
+                    target_user.email,
+                )
+            except Exception:
+                app.logger.exception("Erreur lors de l'envoi du mail")
         flash("Votre demande a été transmise.", "success")
         return redirect(url_for("home"))
     return render_template("new_request.html", form=form, user=current_user())
