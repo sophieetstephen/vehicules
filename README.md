@@ -51,6 +51,29 @@ sudo apt-get install rclone
 rclone config    # créer le remote « gdrive » de type Google Drive
 ```
 
+Lors de l'assistant interactif :
+
+1. Choisissez `n` pour créer un nouveau remote puis nommez-le `gdrive`.
+2. Sélectionnez le type `drive`.
+3. Lorsque rclone propose l'authentification, ouvrez le lien indiqué et connectez-vous avec le compte `gestionvehiculestomer@gmail.com`.
+4. Autorisez l'accès Google Drive, puis copiez-collez le code de validation dans le terminal pour finaliser la configuration.
+
+Le fichier de configuration généré est enregistré par défaut dans `~/.config/rclone/rclone.conf`. Pour vérifier son emplacement exact, exécutez :
+
+```bash
+rclone config file
+```
+
+Notez ensuite le chemin du fichier afin de l'exposer via les variables d'environnement utilisées par le script et le service de sauvegarde :
+
+```bash
+export RCLONE_CONFIG=/home/user/.config/rclone/rclone.conf
+export REMOTE_URI=gdrive:vehicules-backups
+# (optionnel) export GDRIVE_SERVICE_ACCOUNT=/chemin/vers/service-account.json
+```
+
+Dans `tools/backup_db.service`, ajustez la directive `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers ces fichiers avant de relancer le service.
+
 ### Restaurer depuis Google Drive
 
 ```bash
