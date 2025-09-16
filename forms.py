@@ -63,6 +63,7 @@ class ResetPasswordForm(FlaskForm):
 class NewRequestForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
     last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
+    user_id = SelectField("Réserver pour", coerce=int, validators=[Optional()], validate_choice=False)
     start_date = DateField("Date début", format="%Y-%m-%d", validators=[DataRequired()])
     start_slot = SelectField(
         "Créneau début",

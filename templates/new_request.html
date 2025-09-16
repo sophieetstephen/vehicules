@@ -7,10 +7,14 @@
     <h1 class="h4">Demande de réservation</h1>
     <form method="post">
       {{ form.hidden_tag() }}
+      {% if user and user.role in ['admin', 'superadmin'] %}
+      <div class="mb-3">{{ form.user_id.label(class="form-label") }} {{ form.user_id(class="form-select") }}</div>
+      {% else %}
       <div class="row">
         <div class="col-md-6 mb-3">{{ form.first_name.label(class="form-label") }} {{ form.first_name(class="form-control") }}</div>
         <div class="col-md-6 mb-3">{{ form.last_name.label(class="form-label") }} {{ form.last_name(class="form-control") }}</div>
       </div>
+      {% endif %}
       <div class="row">
         <div class="col-md-6 mb-3">{{ form.start_date.label(class="form-label") }} {{ form.start_date(class="form-control") }}</div>
         <div class="col-md-6 mb-3">{{ form.start_slot.label(class="form-label") }} {{ form.start_slot(class="form-select") }}</div>
