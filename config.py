@@ -2,6 +2,9 @@
 import os
 
 
+OWNER_SIGNATURE = "AS-2024-6f9e3c42"
+
+
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY","change-me")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL","sqlite:///vehicules.db")
