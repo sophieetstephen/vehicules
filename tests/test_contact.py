@@ -75,10 +75,14 @@ def test_contact_sends_emails(monkeypatch):
         client.post('/contact', data={'message': 'Hello'}, follow_redirects=True)
 
         assert len(calls) == 2
+        body_admin = calls[0][1]
         rec1 = calls[0][2]
         rec2 = calls[1][2]
         rec1_set = set(rec1 if isinstance(rec1, (list, set)) else [rec1])
         rec2_set = set(rec2 if isinstance(rec2, (list, set)) else [rec2])
         assert rec1_set == {admin.email}
         assert rec2_set == {user.email}
+        assert user.first_name in body_admin
+        assert user.last_name in body_admin
+        assert user.email in body_admin
         db.drop_all()
