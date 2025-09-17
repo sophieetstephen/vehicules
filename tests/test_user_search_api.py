@@ -61,3 +61,57 @@ def test_search_users_returns_matches_and_excludes_current_user():
 
         db.drop_all()
 
+
+def test_search_users_allows_admin_to_include_self():
+    setup_app()
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = create_user('Ada', 'Admin', 'admin@example.com', role=User.ROLE_ADMIN)
+        colleague = create_user('Alan', 'Cooper', 'alan@example.com')
+        db.session.add_all([admin, colleague])
+        db.session.commit()
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+
+        response = client.get('/api/users/search?q=ad&include_self=1')
+        assert response.status_code == 200
+        payload = response.get_json()
+        ids = {entry['id'] for entry in payload}
+        assert admin.id in ids
+
+        without_flag = client.get('/api/users/search?q=ad')
+        assert without_flag.status_code == 200
+        ids_without_flag = {entry['id'] for entry in without_flag.get_json()}
+        assert admin.id not in ids_without_flag
+
+        db.drop_all()
+
+
+def test_search_users_include_self_flag_ignored_for_regular_user():
+    setup_app()
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        regular = create_user('Rex', 'Regular', 'regular@example.com')
+        other = create_user('Rita', 'Rivers', 'rita@example.com')
+        db.session.add_all([regular, other])
+        db.session.commit()
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = regular.id
+
+        response = client.get('/api/users/search?q=ri&include_self=1')
+        assert response.status_code == 200
+        payload = response.get_json()
+        ids = {entry['id'] for entry in payload}
+        assert regular.id not in ids
+        assert other.id in ids
+
+        db.drop_all()
+

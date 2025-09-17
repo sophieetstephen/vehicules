@@ -31,7 +31,7 @@ from forms import (
     NotificationSettingsForm,
     ContactForm,
 )
-from wtforms.validators import DataRequired
+from wtforms.validators import DataRequired, Length
 from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_
@@ -174,23 +174,35 @@ def current_user():
 
 @app.route("/api/users/search", methods=["GET"])
 def search_users():
-    """Return active users matching the search term, excluding the current user."""
+    """Return active users matching the search term.
+
+    The current user is excluded by default unless an administrator requests
+    suggestions with the ``include_self`` flag enabled.
+    """
     u = current_user()
     if not u or u.status != "active":
         return jsonify([]), 403
     term = (request.args.get("q") or "").strip()
     if not term:
         return jsonify([])
+    include_self_param = (request.args.get("include_self") or "").strip().lower()
+    include_self_requested = include_self_param in {"1", "true", "yes", "on"}
+    can_include_self = include_self_requested and u.role in {
+        User.ROLE_ADMIN,
+        User.ROLE_SUPERADMIN,
+    }
     pattern = f"%{term}%"
+    filters = [
+        User.status == "active",
+        or_(
+            User.first_name.ilike(pattern),
+            User.last_name.ilike(pattern),
+        ),
+    ]
+    if not can_include_self:
+        filters.append(User.id != u.id)
     users = (
-        User.query.filter(
-            User.status == "active",
-            User.id != u.id,
-            or_(
-                User.first_name.ilike(pattern),
-                User.last_name.ilike(pattern),
-            ),
-        )
+        User.query.filter(*filters)
         .order_by(User.first_name.asc(), User.last_name.asc())
         .limit(10)
         .all()
@@ -401,21 +413,41 @@ def new_request():
         flash("Compte non activé", "danger")
         return redirect(url_for("home"))
     form = NewRequestForm()
-    if u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]:
+    is_admin = u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]
+    if is_admin:
         form.first_name.validators = []
         form.last_name.validators = []
-        users = (
-            User.query.filter(User.status == "active")
-            .order_by(User.first_name)
-            .all()
-        )
-        form.user_id.choices = [
-            (usr.id, f"{usr.first_name} {usr.last_name}") for usr in users
-        ]
-        form.user_id.validators = [DataRequired()]
+        form.user_lookup.validators = [DataRequired(), Length(max=120)]
+        form.user_id.validators = []
         if request.method == "GET":
-            form.user_id.data = u.id
+            full_name = f"{(u.first_name or '').strip()} {(u.last_name or '').strip()}".strip()
+            form.user_lookup.data = full_name or u.name or ""
+            form.user_id.data = str(u.id)
+    else:
+        form.user_lookup.validators = []
+        form.user_id.validators = []
     if form.validate_on_submit():
+        target_user = u
+        target_user_id = u.id
+        if is_admin:
+            raw_user_id = (form.user_id.data or "").strip()
+            try:
+                target_user_id = int(raw_user_id)
+            except (TypeError, ValueError):
+                form.user_id.errors.append("Sélectionnez un utilisateur valide.")
+                flash("Sélectionnez un utilisateur valide.", "danger")
+                return render_template("new_request.html", form=form, user=current_user()), 200
+            target_user = (
+                User.query.filter(
+                    User.id == target_user_id,
+                    User.status == "active",
+                )
+                .first()
+            )
+            if not target_user:
+                form.user_id.errors.append("Sélectionnez un utilisateur valide.")
+                flash("Sélectionnez un utilisateur valide.", "danger")
+                return render_template("new_request.html", form=form, user=current_user()), 200
         start_times = {
             "morning": time(8, 0),
             "afternoon": time(13, 0),
@@ -438,11 +470,6 @@ def new_request():
         if end_at <= start_at:
             flash("La date de fin doit être postérieure à la date de début", "danger")
             return render_template("new_request.html", form=form, user=current_user()), 200
-        target_user_id = (
-            form.user_id.data
-            if u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]
-            else current_user().id
-        )
         raw_carpool_data = form.carpool_with_ids.data or "[]"
         try:
             carpool_entries = json.loads(raw_carpool_data)
@@ -533,7 +560,8 @@ def new_request():
                     User.status == "active",
                 )
             ]
-        target_user = User.query.get(target_user_id)
+        if not target_user:
+            target_user = User.query.get(target_user_id)
         if recipients:
             recipients = list(set(recipients))
             try:
