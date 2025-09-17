@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import json
 import locale
 import os
 import sys
@@ -17,6 +18,7 @@ from flask import (
     url_for,
     abort,
     send_file,
+    jsonify,
 )
 from datetime import datetime, timedelta, time
 from io import BytesIO
@@ -32,6 +34,7 @@ from forms import (
 from wtforms.validators import DataRequired
 from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import or_
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
 from utils import reservation_slot_label
@@ -59,6 +62,13 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+_database_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
+if _database_uri and _database_uri.startswith("sqlite:///"):
+    _db_path = _database_uri.replace("sqlite:///", "", 1)
+    if _db_path and not _db_path.startswith(":"):
+        _db_dir = os.path.dirname(_db_path)
+        if _db_dir and not os.path.isdir(_db_dir):
+            os.makedirs(_db_dir, exist_ok=True)
 db.init_app(app)
 Migrate(app, db)
 
@@ -160,6 +170,50 @@ def purge_expired_requests_command():
 def current_user():
     uid = session.get("uid")
     return User.query.get(uid) if uid else None
+
+
+@app.route("/api/users/search", methods=["GET"])
+def search_users():
+    """Return active users matching the search term, excluding the current user."""
+    u = current_user()
+    if not u or u.status != "active":
+        return jsonify([]), 403
+    term = (request.args.get("q") or "").strip()
+    if not term:
+        return jsonify([])
+    pattern = f"%{term}%"
+    users = (
+        User.query.filter(
+            User.status == "active",
+            User.id != u.id,
+            or_(
+                User.first_name.ilike(pattern),
+                User.last_name.ilike(pattern),
+            ),
+        )
+        .order_by(User.first_name.asc(), User.last_name.asc())
+        .limit(10)
+        .all()
+    )
+    payload = []
+    for user in users:
+        first = (user.first_name or "").strip()
+        last = (user.last_name or "").strip()
+        if first and last:
+            label = f"{first} {last}"
+        elif first:
+            label = first
+        elif last:
+            label = last
+        else:
+            label = user.name
+        payload.append({
+            "id": user.id,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "label": label.strip(),
+        })
+    return jsonify(payload)
 
 
 def role_required(*roles):
@@ -389,13 +443,59 @@ def new_request():
             if u.role in [User.ROLE_ADMIN, User.ROLE_SUPERADMIN]
             else current_user().id
         )
+        raw_carpool_data = form.carpool_with_ids.data or "[]"
+        try:
+            carpool_entries = json.loads(raw_carpool_data)
+        except json.JSONDecodeError:
+            carpool_entries = []
+        carpool_ids = []
+        carpool_labels = []
+        if isinstance(carpool_entries, list):
+            for entry in carpool_entries:
+                if isinstance(entry, dict):
+                    entry_id = entry.get("id")
+                    entry_label = entry.get("label")
+                    if entry_label:
+                        carpool_labels.append(str(entry_label))
+                    if entry_id is not None:
+                        try:
+                            entry_id = int(entry_id)
+                        except (TypeError, ValueError):
+                            entry_id = None
+                    if entry_id is not None:
+                        carpool_ids.append(entry_id)
+                elif isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                    entry_id = entry[0]
+                    entry_label = entry[1]
+                    if entry_label:
+                        carpool_labels.append(str(entry_label))
+                    try:
+                        carpool_ids.append(int(entry_id))
+                    except (TypeError, ValueError):
+                        continue
+                elif isinstance(entry, (int, float)):
+                    carpool_ids.append(int(entry))
+                elif isinstance(entry, str) and entry:
+                    carpool_labels.append(entry)
+        normalized_ids = []
+        seen_ids = set()
+        for entry_id in carpool_ids:
+            if entry_id in seen_ids:
+                continue
+            seen_ids.add(entry_id)
+            normalized_ids.append(entry_id)
+        carpool_ids = [cid for cid in normalized_ids if cid != target_user_id]
+        carpool_names = form.carpool_with.data.strip() if form.carpool_with.data else ""
+        if not carpool_names and carpool_labels:
+            carpool_names = ", ".join(carpool_labels)
         r = Reservation(
             user_id=target_user_id,
             start_at=start_at,
             end_at=end_at,
             purpose=form.purpose.data,
             carpool=form.carpool.data,
-            carpool_with=form.carpool_with.data,
+            carpool_with=carpool_names or None,
+            carpool_with_ids=carpool_ids or None,
             notes=form.notes.data,
             status="pending",
         )

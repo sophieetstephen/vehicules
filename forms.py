@@ -9,6 +9,7 @@ from wtforms import (
     TextAreaField,
     SelectField,
     SelectMultipleField,
+    HiddenField,
 )
 from wtforms.validators import DataRequired, Email, Length, EqualTo, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
@@ -94,6 +95,7 @@ class NewRequestForm(FlaskForm):
     purpose = StringField("Motif", validators=[Length(max=200)])
     carpool = BooleanField("Covoiturage")
     carpool_with = StringField("Avec qui")
+    carpool_with_ids = HiddenField()
     notes = TextAreaField("Précisions", validators=[Length(max=1000)])
     submit = SubmitField("Envoyer la demande")
 
