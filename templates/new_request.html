@@ -6,14 +6,14 @@
   <div class="card-body">
     <h1 class="h4">Demande de réservation</h1>
     <form method="post">
-      {{ form.hidden_tag() }}
+      {{ form.csrf_token }}
       {% if user and user.role in ['admin', 'superadmin'] %}
       {% set user_errors = form.user_lookup.errors + form.user_id.errors %}
       <div class="mb-3">
         {{ form.user_lookup.label(class="form-label") }}
         {{ form.user_lookup(class="form-control" + (' is-invalid' if user_errors else ''), list="user_suggestions") }}
         <datalist id="user_suggestions"></datalist>
-        {{ form.user_id(id="user_id") }}
+        {{ form.user_id(id="admin_user_id") }}
         {% if user_errors %}
         <div class="invalid-feedback d-block">{{ user_errors[0] }}</div>
         {% endif %}
@@ -55,7 +55,7 @@
 </div>
 <script>
   const adminUserInput = document.getElementById('user_lookup');
-  const adminUserHidden = document.getElementById('user_id');
+  const adminUserHidden = document.getElementById('admin_user_id');
   const adminUserDatalist = document.getElementById('user_suggestions');
   const multiDay = document.getElementById('multiDay');
   const endFields = document.getElementById('end_fields');
