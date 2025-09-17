@@ -58,6 +58,7 @@ class Reservation(db.Model):
     carpool = db.Column(db.Boolean, default=False)
     carpool_with = db.Column(db.String(200), nullable=True)
     carpool_with_ids = db.Column(db.JSON, default=list)
+    carpool_with_details = db.Column(db.JSON, default=list)
     notes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
