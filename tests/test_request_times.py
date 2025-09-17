@@ -203,3 +203,100 @@ def test_new_request_with_end_before_start_shows_error():
         assert "La date de fin doit être postérieure à la date de début" in resp.get_data(as_text=True)
         assert Reservation.query.count() == 0
         db.drop_all()
+
+
+def test_admin_new_request_requires_valid_user_selection():
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        target = User(
+            name='Target Person',
+            first_name='Target',
+            last_name='Person',
+            email='target@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        db.session.add_all([admin, target])
+        db.session.commit()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        data = {
+            'user_lookup': 'Target Person',
+            'user_id': '',
+            'start_date': '2024-01-01',
+            'start_slot': 'morning',
+            'purpose': '',
+            'carpool': '',
+            'carpool_with': '',
+            'notes': '',
+        }
+        resp = client.post('/request/new', data=data, follow_redirects=True)
+        body = resp.get_data(as_text=True)
+        assert "Sélectionnez un utilisateur valide." in body
+        assert Reservation.query.count() == 0
+        db.drop_all()
+
+
+def test_admin_new_request_accepts_valid_user_selection():
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        target = User(
+            name='Target Person',
+            first_name='Target',
+            last_name='Person',
+            email='target@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        db.session.add_all([admin, target])
+        db.session.commit()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        data = {
+            'user_lookup': 'Target Person',
+            'user_id': str(target.id),
+            'start_date': '2024-01-01',
+            'start_slot': 'morning',
+            'purpose': '',
+            'carpool': '',
+            'carpool_with': '',
+            'notes': '',
+        }
+        resp = client.post('/request/new', data=data, follow_redirects=True)
+        assert resp.status_code == 200
+        reservation = Reservation.query.one()
+        assert reservation.user_id == target.id
+        assert reservation.start_at == datetime(2024, 1, 1, 8, 0)
+        db.drop_all()

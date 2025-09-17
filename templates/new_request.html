@@ -8,7 +8,16 @@
     <form method="post">
       {{ form.hidden_tag() }}
       {% if user and user.role in ['admin', 'superadmin'] %}
-      <div class="mb-3">{{ form.user_id.label(class="form-label") }} {{ form.user_id(class="form-select") }}</div>
+      {% set user_errors = form.user_lookup.errors + form.user_id.errors %}
+      <div class="mb-3">
+        {{ form.user_lookup.label(class="form-label") }}
+        {{ form.user_lookup(class="form-control" + (' is-invalid' if user_errors else ''), list="user_suggestions") }}
+        <datalist id="user_suggestions"></datalist>
+        {{ form.user_id(id="user_id") }}
+        {% if user_errors %}
+        <div class="invalid-feedback d-block">{{ user_errors[0] }}</div>
+        {% endif %}
+      </div>
       {% else %}
       <div class="row">
         <div class="col-md-6 mb-3">{{ form.first_name.label(class="form-label") }} {{ form.first_name(class="form-control") }}</div>
@@ -45,6 +54,9 @@
   </div>
 </div>
 <script>
+  const adminUserInput = document.getElementById('user_lookup');
+  const adminUserHidden = document.getElementById('user_id');
+  const adminUserDatalist = document.getElementById('user_suggestions');
   const multiDay = document.getElementById('multiDay');
   const endFields = document.getElementById('end_fields');
   const endDateInput = document.getElementById('end_date');
@@ -64,6 +76,96 @@
   }
   multiDay.addEventListener('change', toggleEndFields);
   toggleEndFields();
+
+  if (adminUserInput && adminUserHidden && adminUserDatalist) {
+    let adminUserResults = [];
+    let adminUserFetchController = null;
+
+    function resetAdminSelection() {
+      adminUserHidden.value = '';
+    }
+
+    function updateAdminUserSuggestions(results) {
+      adminUserResults = Array.isArray(results) ? results : [];
+      adminUserDatalist.innerHTML = '';
+      adminUserResults.forEach((user) => {
+        if (!user || !user.label) {
+          return;
+        }
+        const option = document.createElement('option');
+        option.value = user.label;
+        adminUserDatalist.appendChild(option);
+      });
+    }
+
+    function commitAdminSelection() {
+      const value = adminUserInput.value.trim();
+      if (!value) {
+        resetAdminSelection();
+        return;
+      }
+      const normalized = value.toLowerCase();
+      const match = adminUserResults.find((user) =>
+        user && user.label && user.label.toLowerCase() === normalized,
+      );
+      if (match && match.id !== null && match.id !== undefined) {
+        adminUserHidden.value = String(match.id);
+        adminUserInput.value = match.label;
+      } else {
+        resetAdminSelection();
+      }
+    }
+
+    async function fetchAdminUserSuggestions(query) {
+      if (adminUserFetchController) {
+        adminUserFetchController.abort();
+      }
+      adminUserFetchController = new AbortController();
+      try {
+        const response = await fetch(
+          `/api/users/search?q=${encodeURIComponent(query)}&include_self=1`,
+          { signal: adminUserFetchController.signal },
+        );
+        if (!response.ok) {
+          updateAdminUserSuggestions([]);
+          return;
+        }
+        const payload = await response.json();
+        updateAdminUserSuggestions(payload);
+        if (adminUserInput.value.trim()) {
+          commitAdminSelection();
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Unable to fetch user suggestions', err);
+        }
+      } finally {
+        adminUserFetchController = null;
+      }
+    }
+
+    adminUserInput.addEventListener('input', (event) => {
+      const term = event.target.value.trim();
+      if (term.length < 2) {
+        updateAdminUserSuggestions([]);
+        resetAdminSelection();
+        return;
+      }
+      fetchAdminUserSuggestions(term);
+    });
+
+    adminUserInput.addEventListener('change', commitAdminSelection);
+    adminUserInput.addEventListener('blur', () => {
+      commitAdminSelection();
+    });
+
+    const adminForm = adminUserInput.closest('form');
+    if (adminForm) {
+      adminForm.addEventListener('submit', () => {
+        commitAdminSelection();
+      });
+    }
+  }
 
   let currentResults = [];
   let selectedUsers = [];
