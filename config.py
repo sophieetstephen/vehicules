@@ -8,7 +8,7 @@ OWNER_SIGNATURE = "AS-2024-6f9e3c42"
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY","change-me")
     SQLALCHEMY_DATABASE_URI = os.environ.get(
-        "DATABASE_URL", "sqlite:////var/lib/vehicules/vehicules.db"
+        "DATABASE_URL", "sqlite:///instance/vehicules.db"
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     VEHICLE_ROLE_RULES = { "VL1": ["chef"], "VL2": ["chef","adjoint"] }
