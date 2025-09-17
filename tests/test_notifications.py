@@ -1,6 +1,16 @@
 import pytest
+import json
+from datetime import datetime
+
 from app import app
-from models import db, User, NotificationSettings
+from models import (
+    db,
+    User,
+    Vehicle,
+    Reservation,
+    ReservationSegment,
+    NotificationSettings,
+)
 
 
 def setup_users():
@@ -82,7 +92,7 @@ def test_new_request_notifies_selected_users(monkeypatch):
 
         calls = []
 
-        def fake_send_mail(subject, body, recipients):
+        def fake_send_mail(subject, body, recipients, sender="gestionvehiculestomer@gmail.com", profile="gmail"):
             if isinstance(recipients, str):
                 calls.append({recipients})
             else:
@@ -111,4 +121,217 @@ def test_new_request_notifies_selected_users(monkeypatch):
         assert admin_recipients == {sa.email, ad.email}
         assert other.email not in admin_recipients
         assert user_recipients == {user.email}
+        db.drop_all()
+
+
+def test_manage_request_approval_notifies_carpoolers(monkeypatch):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        requester = User(
+            name='Requester User',
+            first_name='Requester',
+            last_name='User',
+            email='requester@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        carpool_active = User(
+            name='Active Carpooler',
+            first_name='Active',
+            last_name='Carpooler',
+            email='carpool-active@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        carpool_inactive = User(
+            name='Inactive Carpooler',
+            first_name='Inactive',
+            last_name='Carpooler',
+            email='carpool-inactive@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='inactive',
+        )
+        vehicle = Vehicle(code='V1', label='Vehicule 1')
+        db.session.add_all([admin, requester, carpool_active, carpool_inactive, vehicle])
+        db.session.commit()
+
+        calls = []
+
+        def fake_send_mail(subject, body, recipients, sender="gestionvehiculestomer@gmail.com", profile="gmail"):
+            if isinstance(recipients, str):
+                rec_list = [recipients]
+            else:
+                rec_list = list(recipients)
+            calls.append((subject, rec_list))
+            return True
+
+        monkeypatch.setattr('app.send_mail_msmtp', fake_send_mail)
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = requester.id
+        data = {
+            'first_name': requester.first_name,
+            'last_name': requester.last_name,
+            'start_date': '2024-01-01',
+            'start_slot': 'day',
+            'end_date': '2024-01-01',
+            'end_slot': 'day',
+            'purpose': '',
+            'carpool': 'y',
+            'carpool_with': 'Active, Inactive',
+            'carpool_with_ids': json.dumps([
+                {'id': carpool_active.id, 'label': 'Active Carpooler'},
+                {'id': carpool_inactive.id, 'label': 'Inactive Carpooler'},
+            ]),
+            'notes': '',
+        }
+        client.post('/request/new', data=data, follow_redirects=True)
+        reservation = Reservation.query.filter_by(user_id=requester.id).first()
+        assert reservation is not None
+        calls.clear()
+
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        approve_data = {'action': 'approve', 'vehicle_id': str(vehicle.id)}
+        client.post(f'/admin/manage/{reservation.id}', data=approve_data, follow_redirects=True)
+
+        assert len(calls) == 1
+        subject, recipients = calls[0]
+        assert subject == 'Réservation validée'
+        assert set(recipients) == {requester.email, carpool_active.email}
+        assert carpool_inactive.email not in recipients
+        db.drop_all()
+
+
+def test_manage_segment_change_vehicle_notifies_carpoolers(monkeypatch):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        requester = User(
+            name='Requester User',
+            first_name='Requester',
+            last_name='User',
+            email='requester@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        carpool_active = User(
+            name='Active Carpooler',
+            first_name='Active',
+            last_name='Carpooler',
+            email='carpool-active@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        carpool_inactive = User(
+            name='Inactive Carpooler',
+            first_name='Inactive',
+            last_name='Carpooler',
+            email='carpool-inactive@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='inactive',
+        )
+        vehicle_old = Vehicle(code='VOLD', label='Vehicule Ancien')
+        vehicle_new = Vehicle(code='VNEW', label='Vehicule Nouveau')
+        db.session.add_all([
+            admin,
+            requester,
+            carpool_active,
+            carpool_inactive,
+            vehicle_old,
+            vehicle_new,
+        ])
+        db.session.commit()
+
+        reservation = Reservation(
+            user_id=requester.id,
+            start_at=datetime(2024, 1, 1, 8, 0),
+            end_at=datetime(2024, 1, 1, 12, 0),
+            status='approved',
+            carpool=True,
+            carpool_with_ids=[carpool_active.id, carpool_inactive.id],
+            carpool_with_details=[
+                {
+                    'id': carpool_active.id,
+                    'email': carpool_active.email,
+                    'name': carpool_active.name,
+                    'status': carpool_active.status,
+                },
+                {
+                    'id': carpool_inactive.id,
+                    'email': carpool_inactive.email,
+                    'name': carpool_inactive.name,
+                    'status': carpool_inactive.status,
+                },
+            ],
+        )
+        db.session.add(reservation)
+        db.session.commit()
+
+        segment = ReservationSegment(
+            reservation_id=reservation.id,
+            vehicle_id=vehicle_old.id,
+            start_at=datetime(2024, 1, 1, 8, 0),
+            end_at=datetime(2024, 1, 1, 12, 0),
+        )
+        db.session.add(segment)
+        db.session.commit()
+
+        calls = []
+
+        def fake_send_mail(subject, body, recipients, sender="gestionvehiculestomer@gmail.com", profile="gmail"):
+            if isinstance(recipients, str):
+                rec_list = [recipients]
+            else:
+                rec_list = list(recipients)
+            calls.append((subject, rec_list))
+            return True
+
+        monkeypatch.setattr('app.send_mail_msmtp', fake_send_mail)
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        update_data = {'action': 'update', 'vehicle_id': str(vehicle_new.id)}
+        client.post(f'/admin/manage/segment/{segment.id}', data=update_data, follow_redirects=True)
+
+        assert len(calls) == 1
+        subject, recipients = calls[0]
+        assert subject == 'Modification de votre réservation'
+        assert set(recipients) == {requester.email, carpool_active.email}
+        assert carpool_inactive.email not in recipients
         db.drop_all()

@@ -276,8 +276,12 @@ def test_segment_update_sends_mail(app_ctx, monkeypatch):
 
     called = {}
 
-    def fake_send_mail(subject, body, to_addr):
-        called["args"] = (subject, body, to_addr)
+    def fake_send_mail(subject, body, to_addr, sender="gestionvehiculestomer@gmail.com", profile="gmail"):
+        if isinstance(to_addr, str):
+            recipients = [to_addr]
+        else:
+            recipients = list(to_addr)
+        called["args"] = (subject, body, recipients)
         return True, "sent"
 
     monkeypatch.setattr("app.send_mail_msmtp", fake_send_mail)
@@ -291,7 +295,7 @@ def test_segment_update_sends_mail(app_ctx, monkeypatch):
     assert ReservationSegment.query.get(seg.id).vehicle_id == v2.id
     subject, body, to_addr = called["args"]
     assert subject == "Modification de votre réservation"
-    assert to_addr == user.email
+    assert to_addr == [user.email]
     assert "Vehicule 1" in body
     assert "Vehicule 2" in body
     assert "01/01/2024 08:00" in body
