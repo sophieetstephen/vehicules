@@ -25,6 +25,17 @@ th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 <td>
 {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
 <span class="badge text-bg-success">{{ slot_label(r, day) }}</span>
+{% set full_name = (r.user.first_name or '') ~ (' ' if r.user.first_name and r.user.last_name else '') ~ (r.user.last_name or '') %}
+{% if full_name|trim %}
+    {% set reserver_name = full_name|trim %}
+{% else %}
+    {% set reserver_name = r.user.name %}
+{% endif %}
+{% set purpose = r.purpose|default('', true)|trim %}
+{% if not purpose %}
+    {% set purpose = 'Motif non renseigné' %}
+{% endif %}
+<div class="small text-muted">{{ reserver_name }} — {{ purpose }}</div>
 {% endfor %}
 </td>
 {% endfor %}
