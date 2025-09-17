@@ -3,8 +3,9 @@
 <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/litera/bootstrap.min.css" rel="stylesheet">
 <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
 <style>
-body{font-family:sans-serif;font-size:11px}
-table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:3px;vertical-align:top;text-align:center}
+@page{size:A3 landscape;margin:8mm}
+body{font-family:sans-serif;font-size:10px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #999;padding:2px 3px;vertical-align:top;text-align:center}
 th.sticky, td.sticky{position:sticky;left:0;background:#fff}
 </style></head><body>
 <h1>Planning véhicules — {{ month_year_label(start) }}</h1>
