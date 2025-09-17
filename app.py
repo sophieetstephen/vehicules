@@ -5,6 +5,7 @@ import json
 import locale
 import os
 import sys
+import tempfile
 # Signature: AS-2024-6f9e3c42
 from urllib.parse import quote as _urlquote
 from functools import wraps
@@ -62,13 +63,42 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+_storage_root = app.instance_path
+try:
+    os.makedirs(_storage_root, exist_ok=True)
+except PermissionError:
+    _fallback_root = os.path.join(tempfile.gettempdir(), "vehicules-instance")
+    os.makedirs(_fallback_root, exist_ok=True)
+    app.logger.warning(
+        "Instance path '%s' is not writable. Using fallback '%s' instead.",
+        _storage_root,
+        _fallback_root,
+    )
+    _storage_root = _fallback_root
+
 _database_uri = app.config.get("SQLALCHEMY_DATABASE_URI")
 if _database_uri and _database_uri.startswith("sqlite:///"):
     _db_path = _database_uri.replace("sqlite:///", "", 1)
     if _db_path and not _db_path.startswith(":"):
+        if not os.path.isabs(_db_path):
+            _db_path = os.path.join(_storage_root, _db_path)
         _db_dir = os.path.dirname(_db_path)
-        if _db_dir and not os.path.isdir(_db_dir):
-            os.makedirs(_db_dir, exist_ok=True)
+        try:
+            if _db_dir:
+                os.makedirs(_db_dir, exist_ok=True)
+        except PermissionError:
+            _fallback_path = os.path.join(
+                _storage_root, os.path.basename(_db_path) or "vehicules.db"
+            )
+            os.makedirs(os.path.dirname(_fallback_path), exist_ok=True)
+            app.logger.warning(
+                "Database directory '%s' is not writable. Falling back to '%s'.",
+                _db_dir,
+                _fallback_path,
+            )
+            _db_path = _fallback_path
+        app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{_db_path}"
 db.init_app(app)
 Migrate(app, db)
 
