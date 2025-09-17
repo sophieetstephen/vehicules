@@ -32,7 +32,13 @@
       </div>
       <div class="mb-3">{{ form.purpose.label(class="form-label") }} {{ form.purpose(class="form-control") }}</div>
       <div class="form-check mb-3">{{ form.carpool(class="form-check-input") }} {{ form.carpool.label(class="form-check-label") }}</div>
-      <div class="mb-3">{{ form.carpool_with.label(class="form-label") }} {{ form.carpool_with(class="form-control") }}</div>
+      <div class="mb-3">
+        {{ form.carpool_with.label(class="form-label") }}
+        {{ form.carpool_with(class="form-control", list="carpool_suggestions", autocomplete="off") }}
+        <datalist id="carpool_suggestions"></datalist>
+        {{ form.carpool_with_ids(id="carpool_with_ids") }}
+        <div id="carpool_selected" class="mt-2 d-none"></div>
+      </div>
       <div class="mb-3">{{ form.notes.label(class="form-label") }} {{ form.notes(class="form-control", rows=3) }}</div>
       {{ form.submit(class="btn btn-success") }}
     </form>
@@ -43,6 +49,10 @@
   const endFields = document.getElementById('end_fields');
   const endDateInput = document.getElementById('end_date');
   const endSlotSelect = document.getElementById('end_slot');
+  const carpoolInput = document.getElementById('carpool_with');
+  const carpoolHidden = document.getElementById('carpool_with_ids');
+  const carpoolDatalist = document.getElementById('carpool_suggestions');
+  const carpoolSelected = document.getElementById('carpool_selected');
   function toggleEndFields() {
     const enabled = multiDay.checked;
     endFields.classList.toggle('d-none', !enabled);
@@ -54,5 +64,164 @@
   }
   multiDay.addEventListener('change', toggleEndFields);
   toggleEndFields();
+
+  let currentResults = [];
+  let selectedUsers = [];
+  let fetchController = null;
+
+  function syncSelectedDisplay() {
+    if (!Array.isArray(selectedUsers)) {
+      selectedUsers = [];
+    }
+    carpoolHidden.value = JSON.stringify(selectedUsers);
+    carpoolSelected.innerHTML = '';
+    if (selectedUsers.length === 0) {
+      carpoolSelected.classList.add('d-none');
+      return;
+    }
+    carpoolSelected.classList.remove('d-none');
+    selectedUsers.forEach((user, index) => {
+      const badge = document.createElement('span');
+      badge.className = 'badge bg-light text-dark border me-2 mb-2 d-inline-flex align-items-center';
+      const label = document.createElement('span');
+      label.textContent = user.label;
+      badge.appendChild(label);
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'btn btn-sm btn-link text-danger ms-2 p-0';
+      removeButton.setAttribute('aria-label', 'Retirer');
+      removeButton.innerHTML = '&times;';
+      removeButton.addEventListener('click', () => {
+        selectedUsers.splice(index, 1);
+        syncSelectedDisplay();
+      });
+      badge.appendChild(removeButton);
+      carpoolSelected.appendChild(badge);
+    });
+  }
+
+  function addSelectedUser(user) {
+    if (!user || !user.label) {
+      return;
+    }
+    if (user.id !== null && user.id !== undefined) {
+      const exists = selectedUsers.some((entry) => entry.id === user.id);
+      if (exists) {
+        return;
+      }
+    }
+    selectedUsers.push({ id: user.id ?? null, label: user.label });
+    syncSelectedDisplay();
+  }
+
+  function commitCurrentValue() {
+    const value = carpoolInput.value.trim();
+    if (!value) {
+      carpoolInput.value = '';
+      return;
+    }
+    const normalized = value.toLowerCase();
+    const match = currentResults.find((user) => user.label && user.label.toLowerCase() === normalized);
+    if (match) {
+      addSelectedUser({ id: match.id, label: match.label });
+    } else {
+      addSelectedUser({ id: null, label: value });
+    }
+    carpoolInput.value = '';
+    currentResults = [];
+    carpoolDatalist.innerHTML = '';
+  }
+
+  function updateSuggestions(results) {
+    currentResults = Array.isArray(results) ? results : [];
+    carpoolDatalist.innerHTML = '';
+    currentResults.forEach((user) => {
+      if (!user || !user.label) {
+        return;
+      }
+      const option = document.createElement('option');
+      option.value = user.label;
+      carpoolDatalist.appendChild(option);
+    });
+  }
+
+  async function fetchSuggestions(query) {
+    if (fetchController) {
+      fetchController.abort();
+    }
+    fetchController = new AbortController();
+    try {
+      const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+        signal: fetchController.signal,
+      });
+      if (!response.ok) {
+        updateSuggestions([]);
+        return;
+      }
+      const payload = await response.json();
+      updateSuggestions(payload);
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('Unable to fetch suggestions', err);
+      }
+    }
+  }
+
+  carpoolInput.addEventListener('input', (event) => {
+    const term = event.target.value.trim();
+    if (term.length < 2) {
+      updateSuggestions([]);
+      return;
+    }
+    fetchSuggestions(term);
+  });
+
+  carpoolInput.addEventListener('change', () => {
+    commitCurrentValue();
+  });
+
+  carpoolInput.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      commitCurrentValue();
+    }
+  });
+
+  carpoolInput.addEventListener('blur', () => {
+    commitCurrentValue();
+  });
+
+  const formElement = carpoolInput.closest('form');
+  if (formElement) {
+    formElement.addEventListener('submit', () => {
+      syncSelectedDisplay();
+      const labels = selectedUsers.map((user) => user.label).join(', ');
+      carpoolInput.value = labels;
+    });
+  }
+
+  function initializeSelectedFromHidden() {
+    let raw = carpoolHidden.value;
+    if (!raw) {
+      raw = '[]';
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        selectedUsers = parsed
+          .filter((entry) => entry && typeof entry.label === 'string' && entry.label.trim() !== '')
+          .map((entry) => ({
+            id: entry.id ?? null,
+            label: entry.label.trim(),
+          }));
+      }
+    } catch (err) {
+      selectedUsers = [];
+    }
+    syncSelectedDisplay();
+    carpoolInput.value = '';
+  }
+
+  initializeSelectedFromHidden();
 </script>
 {% endblock %}
