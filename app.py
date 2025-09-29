@@ -1231,7 +1231,7 @@ def manage_request(rid):
                             (
                                 f"Votre réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
                                 f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été validée.\n"
-                                f"Véhicule attribué : {v.label}."
+                                f"Véhicule attribué : {v.code}."
                             ),
                             recipients,
                         )
