@@ -87,6 +87,6 @@
 </div>
 <p class="text-muted">Légende : <span class="badge bg-success">Nom du réservant (Matin/Après-midi/Journée)</span> = Réservé (approuvé)</p>
 {% if user and user.role in ['admin', 'superadmin'] %}
-  <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month') }}">Exporter PDF du mois</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month', y=start.year, m=start.month) }}">Exporter PDF du mois</a>
 {% endif %}
 {% endblock %}
