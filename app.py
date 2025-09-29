@@ -461,19 +461,86 @@ def new_request():
         target_user_id = u.id
         if is_admin:
             raw_user_id = (form.user_id.data or "").strip()
+            fallback_user = None
+            if not raw_user_id:
+                lookup_term = (form.user_lookup.data or "").strip()
+                if lookup_term:
+                    normalized_lookup = lookup_term.lower()
+                    include_self = u.role in {
+                        User.ROLE_ADMIN,
+                        User.ROLE_SUPERADMIN,
+                    }
+
+                    def _build_user_label(user_obj):
+                        first = (user_obj.first_name or "").strip()
+                        last = (user_obj.last_name or "").strip()
+                        if first and last:
+                            label = f"{first} {last}"
+                        elif first:
+                            label = first
+                        elif last:
+                            label = last
+                        else:
+                            label = user_obj.name or ""
+                        return label.strip()
+
+                    pattern = f"%{lookup_term}%"
+                    filters = [
+                        User.status == "active",
+                        or_(
+                            User.first_name.ilike(pattern),
+                            User.last_name.ilike(pattern),
+                        ),
+                    ]
+                    if not include_self:
+                        filters.append(User.id != u.id)
+                    candidate_query = (
+                        User.query.filter(*filters)
+                        .order_by(User.first_name.asc(), User.last_name.asc())
+                        .limit(10)
+                    )
+                    candidates = candidate_query.all()
+                    if len(candidates) == 1:
+                        fallback_user = candidates[0]
+                    else:
+                        for candidate in candidates:
+                            if (
+                                _build_user_label(candidate).lower()
+                                == normalized_lookup
+                            ):
+                                fallback_user = candidate
+                                break
+                    if not fallback_user:
+                        base_query = User.query.filter(User.status == "active")
+                        if not include_self:
+                            base_query = base_query.filter(User.id != u.id)
+                        exact_matches = [
+                            candidate
+                            for candidate in base_query.all()
+                            if _build_user_label(candidate).lower()
+                            == normalized_lookup
+                        ]
+                        if len(exact_matches) == 1:
+                            fallback_user = exact_matches[0]
+                    if fallback_user:
+                        raw_user_id = str(fallback_user.id)
+                        form.user_id.data = raw_user_id
             try:
                 target_user_id = int(raw_user_id)
             except (TypeError, ValueError):
                 form.user_id.errors.append("Sélectionnez un utilisateur valide.")
                 flash("Sélectionnez un utilisateur valide.", "danger")
                 return render_template("new_request.html", form=form, user=current_user()), 200
-            target_user = (
-                User.query.filter(
-                    User.id == target_user_id,
-                    User.status == "active",
+            if fallback_user and fallback_user.id == target_user_id:
+                target_user = fallback_user
+            else:
+                target_user = (
+                    User.query.filter(
+                        User.id == target_user_id,
+                        User.status == "active",
+                    )
+                    .first()
                 )
-                .first()
-            )
             if not target_user:
                 form.user_id.errors.append("Sélectionnez un utilisateur valide.")
                 flash("Sélectionnez un utilisateur valide.", "danger")

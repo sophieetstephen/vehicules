@@ -205,7 +205,7 @@ def test_new_request_with_end_before_start_shows_error():
         db.drop_all()
 
 
-def test_admin_new_request_requires_valid_user_selection():
+def test_admin_lookup_fallback_uses_single_match_when_user_id_missing():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
@@ -237,7 +237,69 @@ def test_admin_new_request_requires_valid_user_selection():
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
         data = {
-            'user_lookup': 'Target Person',
+            'user_lookup': f"{target.first_name} {target.last_name}",
+            'user_id': '',
+            'start_date': '2024-01-01',
+            'start_slot': 'morning',
+            'end_date': '',
+            'end_slot': '',
+            'purpose': '',
+            'carpool': '',
+            'carpool_with': '',
+            'carpool_with_ids': '[]',
+            'notes': '',
+        }
+        resp = client.post('/request/new', data=data, follow_redirects=True)
+        assert resp.status_code == 200
+        reservation = Reservation.query.one()
+        assert reservation.user_id == target.id
+        assert reservation.start_at == datetime(2024, 1, 1, 8, 0)
+        assert reservation.end_at == datetime(2024, 1, 1, 12, 0)
+        db.drop_all()
+
+
+def test_admin_new_request_requires_valid_user_selection():
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        target = User(
+            name='Target Person',
+            first_name='Target',
+            last_name='Person',
+            email='target@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        other_match = User(
+            name='Target Someone',
+            first_name='Target',
+            last_name='Someone',
+            email='other@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        db.session.add_all([admin, target, other_match])
+        db.session.commit()
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        data = {
+            'user_lookup': 'Target',
             'user_id': '',
             'start_date': '2024-01-01',
             'start_slot': 'morning',

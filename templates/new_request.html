@@ -80,9 +80,18 @@
   if (adminUserInput && adminUserHidden && adminUserDatalist) {
     let adminUserResults = [];
     let adminUserFetchController = null;
+    let lastConfirmedAdminUser = null;
 
-    function resetAdminSelection() {
+    if (adminUserHidden.value && adminUserInput.value.trim()) {
+      lastConfirmedAdminUser = {
+        id: adminUserHidden.value,
+        label: adminUserInput.value.trim(),
+      };
+    }
+
+    function clearAdminSelection() {
       adminUserHidden.value = '';
+      lastConfirmedAdminUser = null;
     }
 
     function updateAdminUserSuggestions(results) {
@@ -101,7 +110,7 @@
     function commitAdminSelection() {
       const value = adminUserInput.value.trim();
       if (!value) {
-        resetAdminSelection();
+        clearAdminSelection();
         return;
       }
       const normalized = value.toLowerCase();
@@ -109,10 +118,12 @@
         user && user.label && user.label.toLowerCase() === normalized,
       );
       if (match && match.id !== null && match.id !== undefined) {
-        adminUserHidden.value = String(match.id);
+        const confirmedId = String(match.id);
+        adminUserHidden.value = confirmedId;
         adminUserInput.value = match.label;
-      } else {
-        resetAdminSelection();
+        lastConfirmedAdminUser = { id: confirmedId, label: match.label };
+      } else if (!adminUserHidden.value && lastConfirmedAdminUser) {
+        adminUserHidden.value = String(lastConfirmedAdminUser.id);
       }
     }
 
@@ -148,7 +159,9 @@
       const term = event.target.value.trim();
       if (term.length < 2) {
         updateAdminUserSuggestions([]);
-        resetAdminSelection();
+        if (!term.length) {
+          clearAdminSelection();
+        }
         return;
       }
       fetchAdminUserSuggestions(term);
@@ -163,6 +176,12 @@
     if (adminForm) {
       adminForm.addEventListener('submit', () => {
         commitAdminSelection();
+        if (!adminUserHidden.value && lastConfirmedAdminUser) {
+          adminUserHidden.value = String(lastConfirmedAdminUser.id);
+          if (!adminUserInput.value.trim()) {
+            adminUserInput.value = lastConfirmedAdminUser.label;
+          }
+        }
       });
     }
   }
