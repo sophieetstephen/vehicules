@@ -218,6 +218,83 @@ def test_manage_request_approval_notifies_carpoolers(monkeypatch):
         assert subject == 'Réservation validée'
         assert set(recipients) == {requester.email, carpool_active.email}
         assert carpool_inactive.email not in recipients
+
+
+def test_manage_request_approval_includes_manual_carpool_email(monkeypatch):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        admin = User(
+            name='Admin User',
+            first_name='Admin',
+            last_name='User',
+            email='admin@example.com',
+            role=User.ROLE_ADMIN,
+            password_hash='x',
+            status='active',
+        )
+        requester = User(
+            name='Requester User',
+            first_name='Requester',
+            last_name='User',
+            email='requester@example.com',
+            role=User.ROLE_USER,
+            password_hash='x',
+            status='active',
+        )
+        vehicle = Vehicle(code='V1', label='Vehicule 1')
+        db.session.add_all([admin, requester, vehicle])
+        db.session.commit()
+
+        captured = []
+
+        def fake_send_mail(subject, body, recipients, sender="gestionvehiculestomer@gmail.com", profile="gmail"):
+            if isinstance(recipients, str):
+                rec_list = [recipients]
+            else:
+                rec_list = list(recipients)
+            captured.append((subject, rec_list))
+            return True
+
+        monkeypatch.setattr('app.send_mail_msmtp', fake_send_mail)
+
+        manual_email = 'friend.carpool@example.net'
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = requester.id
+        data = {
+            'first_name': requester.first_name,
+            'last_name': requester.last_name,
+            'start_date': '2024-01-01',
+            'start_slot': 'day',
+            'end_date': '2024-01-01',
+            'end_slot': 'day',
+            'purpose': '',
+            'carpool': 'y',
+            'carpool_with': manual_email,
+            'carpool_with_ids': '',
+            'notes': '',
+        }
+        client.post('/request/new', data=data, follow_redirects=True)
+        reservation = Reservation.query.filter_by(user_id=requester.id).first()
+        assert reservation is not None
+
+        captured.clear()
+
+        with client.session_transaction() as sess:
+            sess['uid'] = admin.id
+        approve_data = {'action': 'approve', 'vehicle_id': str(vehicle.id)}
+        client.post(f'/admin/manage/{reservation.id}', data=approve_data, follow_redirects=True)
+
+        assert len(captured) == 1
+        subject, recipients = captured[0]
+        assert subject == 'Réservation validée'
+        assert set(recipients) == {requester.email, manual_email}
         db.drop_all()
 
 

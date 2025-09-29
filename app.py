@@ -4,6 +4,7 @@
 import json
 import locale
 import os
+import re
 import sys
 import tempfile
 # Signature: AS-2024-6f9e3c42
@@ -983,16 +984,36 @@ def reservation_notification_recipients(reservation):
 
     recipients = []
     seen = set()
+
+    def _normalize_email(value):
+        if not value:
+            return ""
+        cleaned = value.strip().strip(",;")
+        if cleaned.startswith("<") and cleaned.endswith(">"):
+            cleaned = cleaned[1:-1].strip()
+        return cleaned.lower()
+
+    def _add_email(email, *, use_normalized_value=False):
+        normalized = _normalize_email(email)
+        if not normalized or normalized in seen:
+            return
+        seen.add(normalized)
+        if use_normalized_value or not email:
+            recipients.append(normalized)
+        else:
+            recipients.append(email.strip())
+
     main_user = reservation.user
     if main_user and main_user.status == "active" and main_user.email:
-        recipients.append(main_user.email)
-        seen.add(main_user.email)
+        _add_email(main_user.email)
     for carpooler in reservation_carpool_users(reservation):
         email = carpooler.email
-        if not email or email in seen:
-            continue
-        recipients.append(email)
-        seen.add(email)
+        _add_email(email)
+    if reservation.carpool_with:
+        for token in re.split(r"[;,\s]+", reservation.carpool_with):
+            if "@" not in token:
+                continue
+            _add_email(token, use_normalized_value=True)
     return recipients
 
 
