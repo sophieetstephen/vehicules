@@ -46,9 +46,12 @@ def test_same_day_reservations_have_distinct_slots():
     assert 'Bob (Après-midi)' in html
     assert 'Matin' in pdf_html
     assert 'Après-midi' in pdf_html
-    assert 'rowspan="2"' in pdf_html
-    assert 'vehicle-row--second' in pdf_html
-    assert 'class="filler-cell"' in pdf_html
+    tables = pdf_html.split('<table class="planning-table">')[1:]
+    assert len(tables) == 2
+    assert '<th>15</th>' in tables[0]
+    assert '<th>16</th>' in tables[1]
+    assert 'badge text-bg-success">Matin' in pdf_html
+    assert 'badge text-bg-success">Après-midi' in pdf_html
 
 
 def test_partial_afternoon_reservation_is_labelled_afternoon():
