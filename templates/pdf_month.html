@@ -11,12 +11,9 @@
 {% else %}
     {% set font_size = 7.5 %}
 {% endif %}
-{% set split_index = (days + 1) // 2 %}
-{% set first_half = range(split_index) %}
-{% set second_half = range(split_index, days) %}
-{% set first_half_len = first_half|length %}
-{% set second_half_len = second_half|length %}
-{% set filler_count = first_half_len - second_half_len %}
+{% set first_half_limit = 15 if days > 15 else days %}
+{% set first_half = range(0, first_half_limit) %}
+{% set second_half = range(first_half_limit, days) %}
 <style>
 @page{size:A3 landscape;margin:5mm}
 body{font-family:sans-serif;font-size:{{ font_size }}px}
@@ -26,7 +23,8 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 .badge{padding:0.15rem 0.3rem;line-height:1.1;font-weight:600}
 .reservation-details{line-height:1.2;margin-top:1px}
 .vehicle-info{min-width:120px}
-.filler-cell{background:#f7f7f7}
+.planning-table{margin-bottom:24px}
+.planning-table:last-of-type{margin-bottom:0}
 </style>
 {% macro render_day_cell(vehicle, day) %}
 <td>
@@ -49,50 +47,34 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 </head><body>
 <h1>Planning véhicules — {{ month_year_label(start) }}</h1>
 <div class="table-responsive">
-<table>
+{% macro render_table(day_range) %}
+<table class="planning-table">
 <thead>
 <tr>
-    <th class="sticky" rowspan="2">Véhicule</th>
-    {% for i in first_half %}
+    <th class="sticky">Véhicule</th>
+    {% for i in day_range %}
         {% set day = start + timedelta(days=i) %}
         <th>{{ day.strftime("%d") }}</th>
     {% endfor %}
-</tr>
-<tr>
-    {% for i in second_half %}
-        {% set day = start + timedelta(days=i) %}
-        <th>{{ day.strftime("%d") }}</th>
-    {% endfor %}
-    {% if filler_count > 0 %}
-        {% for _ in range(filler_count) %}
-            <th></th>
-        {% endfor %}
-    {% endif %}
 </tr>
 </thead>
 <tbody>
 {% for v in vehicles %}
-<tr class="vehicle-row vehicle-row--first">
-    <td class="sticky vehicle-info" rowspan="2"><strong>{{ v.code }}</strong><br>{{ v.label }}</td>
-    {% for i in first_half %}
+<tr class="vehicle-row">
+    <td class="sticky vehicle-info"><strong>{{ v.code }}</strong><br>{{ v.label }}</td>
+    {% for i in day_range %}
         {% set day = start + timedelta(days=i) %}
         {{ render_day_cell(v, day) }}
     {% endfor %}
-</tr>
-<tr class="vehicle-row vehicle-row--second">
-    {% for i in second_half %}
-        {% set day = start + timedelta(days=i) %}
-        {{ render_day_cell(v, day) }}
-    {% endfor %}
-    {% if filler_count > 0 %}
-        {% for _ in range(filler_count) %}
-            <td class="filler-cell"></td>
-        {% endfor %}
-    {% endif %}
 </tr>
 {% endfor %}
 </tbody>
 </table>
+{% endmacro %}
+{{ render_table(first_half) }}
+{% if second_half|length > 0 %}
+{{ render_table(second_half) }}
+{% endif %}
 </div>
 <p class="legend-text">Légende: Matin / Après-midi / Journée = Réservé (approuvé)</p>
 </body></html>
