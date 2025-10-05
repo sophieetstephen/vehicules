@@ -14,15 +14,19 @@
 {% set first_half_limit = 15 if days > 15 else days %}
 {% set first_half = range(0, first_half_limit) %}
 {% set second_half = range(first_half_limit, days) %}
+{% set compact_layout = second_half|length > 15 %}
+{% if compact_layout %}
+    {% set font_size = 7.2 %}
+{% endif %}
 <style>
 @page{size:A3 landscape;margin:5mm}
 body{font-family:sans-serif;font-size:{{ font_size }}px}
 table{width:100%;border-collapse:collapse}
-th,td{border:1px solid #999;padding:1px 2px;vertical-align:top;text-align:center}
+th,td{border:1px solid #999;padding:{{ '0 1px' if compact_layout else '1px 2px' }};vertical-align:top;text-align:center}
 th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 .badge{padding:0.15rem 0.3rem;line-height:1.1;font-weight:600}
 .reservation-details{line-height:1.2;margin-top:1px}
-.vehicle-info{min-width:120px}
+.vehicle-info{min-width:{{ '110px' if compact_layout else '120px' }}}
 .planning-table{margin-bottom:24px}
 .planning-table:last-of-type{margin-bottom:0}
 </style>
