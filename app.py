@@ -36,7 +36,7 @@ from forms import (
 from wtforms.validators import DataRequired, Length
 from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import or_
+from sqlalchemy import or_, case
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
 from utils import reservation_slot_label
@@ -1040,7 +1040,12 @@ def reservation_notification_recipients(reservation):
 def admin_reservations():
     user = current_user()
     res = (
-        Reservation.query.order_by(Reservation.start_at.desc()).limit(200).all()
+        Reservation.query.order_by(
+            case((Reservation.status == "pending", 0), else_=1),
+            Reservation.start_at.desc(),
+        )
+        .limit(200)
+        .all()
     )
     return render_template(
         "admin_reservations.html",
