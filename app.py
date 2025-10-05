@@ -435,6 +435,42 @@ def register():
             db.session.rollback()
             flash("Adresse e‑mail déjà utilisée", "danger")
             return render_template("register.html", form=form), 200
+        recipients = set(app.config.get("SUPERADMIN_EMAILS", []) or [])
+        active_superadmins = (
+            User.query.filter_by(role=User.ROLE_SUPERADMIN, status="active")
+            .with_entities(User.email)
+            .all()
+        )
+        recipients.update(
+            email.strip().lower()
+            for (email,) in active_superadmins
+            if email and email.strip()
+        )
+        recipients = [addr for addr in sorted(recipients) if addr]
+        if recipients:
+            subject = "Nouvelle demande de création de compte"
+            applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+            if not applicant_name:
+                applicant_name = user.name
+            body_lines = [
+                "Bonjour,",
+                "",
+                "Une nouvelle demande de création de compte vient d'être soumise.",
+                "",
+                f"Nom : {applicant_name}",
+                f"Email : {user.email}",
+            ]
+            if request.remote_addr:
+                body_lines.extend(["", f"Adresse IP : {request.remote_addr}"])
+            body_lines.append("")
+            body_lines.append("Merci de traiter cette demande dans les meilleurs délais.")
+            body = "\n".join(body_lines)
+            try:
+                send_mail_msmtp(subject, body, recipients)
+            except Exception:
+                app.logger.exception(
+                    "Impossible d'envoyer la notification de création de compte"
+                )
         session["uid"] = user.id
         return redirect(url_for("home"))
     return render_template("register.html", form=form), 200
