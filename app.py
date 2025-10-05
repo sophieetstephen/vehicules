@@ -175,27 +175,45 @@ def _inject_locale_helpers():
 
 
 def purge_expired_requests():
-    """Delete pending reservations older than two days."""
-    threshold = datetime.utcnow() - timedelta(days=2)
-    expired = Reservation.query.filter(
+    """Delete expired reservations.
+
+    Pending reservations are removed once their ``end_at`` is older than two
+    days. All other reservations (approved, rejected, etc.) are purged once
+    their ``end_at`` is older than seven days.
+    """
+
+    now = datetime.utcnow()
+    pending_threshold = now - timedelta(days=2)
+    final_threshold = now - timedelta(days=7)
+
+    pending_deleted = Reservation.query.filter(
         Reservation.status == "pending",
-        Reservation.end_at < threshold,
-    )
-    count = expired.count()
-    if count:
-        expired.delete(synchronize_session=False)
+        Reservation.end_at < pending_threshold,
+    ).delete(synchronize_session=False)
+
+    other_deleted = Reservation.query.filter(
+        Reservation.status != "pending",
+        Reservation.end_at < final_threshold,
+    ).delete(synchronize_session=False)
+
+    total_deleted = (pending_deleted or 0) + (other_deleted or 0)
+    if total_deleted:
         db.session.commit()
-    return count
+    return total_deleted
 
 
 @app.cli.command("purge-expired-requests")
 def purge_expired_requests_command():
-    """Remove pending reservations older than two days.
+    """Remove expired reservations older than their respective grace period.
 
     Usage: ``flask purge-expired-requests``
     """
     deleted = purge_expired_requests()
-    print(f"Purged {deleted} expired reservation(s).")
+    print(
+        "Purged {} expired reservation(s) (pending >2d, others >7d).".format(
+            deleted
+        )
+    )
 
 
 def current_user():
