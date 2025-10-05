@@ -8,7 +8,7 @@
     <thead><tr><th>ID</th><th>Véhicule</th><th>Début</th><th>Fin</th><th>Demandeur</th><th>Statut</th><th></th></tr></thead>
     <tbody>
     {% for r in reservations %}
-      <tr>
+      <tr class="{% if r.status == 'pending' %}table-warning{% endif %}">
         <td>{{ r.id }}</td>
         <td>{{ r.vehicle.code if r.vehicle else "A AFFECTER" }}</td>
         <td>{{ r.start_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.start_at) }}</td>
