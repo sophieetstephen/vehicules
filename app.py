@@ -861,6 +861,19 @@ def admin_activate(user_id):
     target = User.query.get_or_404(user_id)
     target.status = "active"
     db.session.commit()
+    subject = "Votre compte est activé"
+    body = (
+        "Votre compte est activé. Vous pouvez désormais accéder à la plateforme "
+        "de réservation."
+    )
+    try:
+        send_mail_msmtp(subject, body, target.email)
+    except Exception:
+        app.logger.exception("Erreur lors de l'envoi du mail d'activation")
+        flash(
+            "Utilisateur activé mais l'e-mail de notification n'a pas pu être envoyé.",
+            "warning",
+        )
     flash("Utilisateur activé", "success")
     return redirect(url_for("admin_users"))
 
