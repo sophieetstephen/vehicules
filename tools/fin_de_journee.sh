@@ -10,7 +10,7 @@ TS="$(date +%Y%m%d_%H%M%S)"
 echo "== Fin de journée - $DATE =="
 echo "Répertoire: $REPO"
 
-# Purge quotidienne des demandes de réservation expirées
+# Purge quotidienne des réservations expirées (en attente >2j, autres >7j)
 flask --app app purge-expired-requests >/dev/null 2>&1 || true
 
 # 1) Patch des changements non commités (inclut l'intention d'ajout des nouveaux fichiers)
