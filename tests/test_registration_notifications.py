@@ -1,9 +1,9 @@
 import importlib
 
-from app import app, ACCOUNT_REVIEW_RECIPIENTS
+from app import ACCOUNT_REVIEW_RECIPIENTS, app
+from models import db, User
 
 app_module = importlib.import_module("app")
-from models import db, User
 
 
 def test_register_sends_notification_to_superadmins(monkeypatch):

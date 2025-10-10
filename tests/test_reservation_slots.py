@@ -3,8 +3,8 @@ import sys
 from datetime import datetime, timedelta
 
 from flask import render_template
-import pytest
 
+# Ensure repository root available for imports when executing the test file directly.
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from app import app
 from models import Vehicle, Reservation, User

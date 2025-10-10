@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime
 from app import app
 from models import db, User, Reservation

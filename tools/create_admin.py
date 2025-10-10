@@ -2,16 +2,24 @@
 """Promote or demote user accounts."""
 
 import argparse
+import importlib
 import os
 import sys
 
-# Ensure repository root is in import path
-ROOT_DIR = os.path.dirname(os.path.dirname(__file__))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
 
-from app import app
-from models import db, User
+def _load_app_and_models():
+    """Return ``(app, db, User)`` after ensuring the repository root is importable."""
+
+    root_dir = os.path.dirname(os.path.dirname(__file__))
+    if root_dir not in sys.path:
+        sys.path.insert(0, root_dir)
+
+    app_module = importlib.import_module("app")
+    models_module = importlib.import_module("models")
+    return app_module.app, models_module.db, models_module.User
+
+
+app, db, User = _load_app_and_models()
 
 
 def main() -> int:

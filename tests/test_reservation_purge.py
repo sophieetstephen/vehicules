@@ -1,4 +1,3 @@
-import pytest
 from datetime import datetime, timedelta
 from app import app, purge_expired_requests, purge_archived_reservations
 from models import db, User, Reservation
