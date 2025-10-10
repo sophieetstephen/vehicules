@@ -90,11 +90,44 @@ def _coerce_int_ids(values):
     result = []
     if not values:
         return result
+
+    def _extend_from_iterable(iterable):
+        for entry in iterable:
+            result.extend(_coerce_int_ids([entry]))
+
     for value in values:
         if value is None:
             continue
         if isinstance(value, int):
             result.append(value)
+            continue
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                continue
+            if text.startswith("[") and text.endswith("]"):
+                try:
+                    decoded = json.loads(text)
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    if isinstance(decoded, list):
+                        _extend_from_iterable(decoded)
+                        continue
+                    _extend_from_iterable([decoded])
+                    continue
+            if "," in text:
+                parts = [part.strip() for part in text.split(",") if part.strip()]
+                if parts:
+                    _extend_from_iterable(parts)
+                    continue
+            try:
+                result.append(int(text))
+            except ValueError:
+                continue
+            continue
+        if isinstance(value, Iterable):
+            _extend_from_iterable(value)
             continue
         try:
             int_value = int(str(value).strip())
@@ -569,24 +602,7 @@ def register():
             db.session.rollback()
             flash("Adresse e‑mail déjà utilisée", "danger")
             return render_template("register.html", form=form), 200
-        recipients = admin_notification_recipients(
-            fallback_when_empty=True,
-            include_account_review=True,
-        )
-        recipients = _normalize_email_candidates(
-            recipients,
-            app.config.get("SUPERADMIN_EMAILS", []) or [],
-            app.config.get("ADMIN_EMAILS", []) or [],
-        )
-        active_superadmins = (
-            User.query.filter_by(role=User.ROLE_SUPERADMIN, status="active")
-            .with_entities(User.email)
-            .all()
-        )
-        recipients = _normalize_email_candidates(
-            recipients,
-            (email for (email,) in active_superadmins),
-        )
+        recipients = sorted(ACCOUNT_REVIEW_RECIPIENTS)
         if recipients:
             subject = "Nouvelle demande de création de compte"
             applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()

@@ -175,6 +175,54 @@ def test_new_request_notifies_users_when_ids_are_strings(monkeypatch):
         db.drop_all()
 
 
+def test_new_request_handles_json_string_ids(monkeypatch):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    app.config['WTF_CSRF_ENABLED'] = False
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+        sa, ad, user = setup_users()
+        db.session.add_all([sa, ad, user])
+        db.session.commit()
+
+        settings = NotificationSettings(
+            notify_user_ids=f"[{sa.id}, {ad.id}]"
+        )
+        db.session.add(settings)
+        db.session.commit()
+
+        captured = []
+
+        def fake_send_mail(subject, body, recipients, **kwargs):
+            captured.append(list(recipients))
+
+        monkeypatch.setattr('app.send_mail_msmtp', fake_send_mail)
+
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess['uid'] = user.id
+        data = {
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'start_date': '2024-01-01',
+            'start_slot': 'day',
+            'end_date': '2024-01-01',
+            'end_slot': 'day',
+            'purpose': '',
+            'carpool': '',
+            'carpool_with': '',
+            'notes': '',
+        }
+        client.post('/request/new', data=data, follow_redirects=True)
+
+        assert captured, "Expected a notification email"
+        admin_recipients = captured[0]
+        assert sorted(admin_recipients) == sorted([sa.email, ad.email])
+        db.drop_all()
+
+
 def test_manage_request_approval_notifies_carpoolers(monkeypatch):
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     app.config['TESTING'] = True
