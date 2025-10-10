@@ -13,6 +13,20 @@ Lors de l'inscription via la page `/register`, l'application vérifie si l'adres
 * `ADMIN_EMAILS` – adresses séparées par des virgules qui recevront le rôle
   `admin`.
 
+## Notifications par e‑mail
+
+* **Création de compte** – chaque nouvelle demande génère un message envoyé à
+  tous les super administrateurs actifs, aux adresses présentes dans la
+  configuration `SUPERADMIN_EMAILS` ainsi qu'à `salexandre@sdis62.fr` afin de
+  faciliter l'activation du compte.
+* **Activation de compte** – dès qu'un administrateur active un utilisateur, ce
+  dernier reçoit une confirmation par e‑mail l'informant que la plateforme est
+  accessible.
+* **Demandes de réservation** – le demandeur est notifié lors du dépôt de la
+  requête puis lors de sa validation. Par ailleurs, les responsables définis
+  dans l'onglet « Gestion des congés » reçoivent immédiatement une alerte pour
+  pouvoir traiter la demande.
+
 ## Promotion/Déclassement
 
 Les rôles des comptes existants peuvent être modifiés via le script CLI :
