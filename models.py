@@ -62,6 +62,7 @@ class Reservation(db.Model):
     notes = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), default="pending")  # pending/approved/rejected
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    archived_at = db.Column(db.DateTime, nullable=True)
 
     vehicle = db.relationship("Vehicle", backref="reservations")
     user = db.relationship("User", backref="reservations")

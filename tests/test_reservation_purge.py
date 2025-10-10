@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
-from app import app, purge_expired_requests
+from app import app, purge_expired_requests, purge_archived_reservations
 from models import db, User, Reservation
 
 
@@ -112,12 +112,71 @@ def test_purge_expired_non_pending_reservations():
 
         deleted = purge_expired_requests()
 
-        remaining_ids = {res.id for res in Reservation.query.all()}
+        remaining = Reservation.query.all()
         assert deleted == 2
-        assert remaining_ids == {
+        assert {res.id for res in remaining} == {
+            old_approved.id,
+            old_rejected.id,
             recent_approved.id,
             recent_rejected.id,
             recent_pending.id,
         }
+        archived_ids = {
+            res.id for res in remaining if res.archived_at is not None
+        }
+        assert archived_ids == {old_approved.id, old_rejected.id}
+
+        db.drop_all()
+
+
+def test_purge_archived_reservations():
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
+    app.config['TESTING'] = True
+    with app.app_context():
+        db.session.remove()
+        db.drop_all()
+        db.create_all()
+
+        user = User(
+            name='User',
+            first_name='Foo',
+            last_name='Bar',
+            email='u3@example.com',
+            role=User.ROLE_USER,
+            password_hash='x'
+        )
+        db.session.add(user)
+        db.session.commit()
+
+        now = datetime.utcnow()
+        archived_old = Reservation(
+            user_id=user.id,
+            start_at=now - timedelta(days=200, hours=2),
+            end_at=now - timedelta(days=200, hours=1),
+            status='approved',
+            archived_at=now - timedelta(days=190),
+        )
+        archived_recent = Reservation(
+            user_id=user.id,
+            start_at=now - timedelta(days=40, hours=2),
+            end_at=now - timedelta(days=40, hours=1),
+            status='approved',
+            archived_at=now - timedelta(days=10),
+        )
+        active_res = Reservation(
+            user_id=user.id,
+            start_at=now - timedelta(days=1, hours=2),
+            end_at=now - timedelta(days=1, hours=1),
+            status='approved',
+        )
+
+        db.session.add_all([archived_old, archived_recent, active_res])
+        db.session.commit()
+
+        deleted = purge_archived_reservations(max_age_days=180)
+
+        remaining_ids = {res.id for res in Reservation.query.all()}
+        assert deleted == 1
+        assert remaining_ids == {archived_recent.id, active_res.id}
 
         db.drop_all()
