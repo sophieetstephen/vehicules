@@ -175,11 +175,13 @@ def _inject_locale_helpers():
 
 
 def purge_expired_requests():
-    """Delete expired reservations.
+    """Archive or delete expired reservations depending on their status.
 
-    Pending reservations are removed once their ``end_at`` is older than two
-    days. All other reservations (approved, rejected, etc.) are purged once
-    their ``end_at`` is older than seven days.
+    * Pending reservations are **deleted** once their ``end_at`` is older than
+      two days.
+    * Approved/rejected reservations are **archived** (``archived_at`` set) once
+      their ``end_at`` is older than seven days so that they disappear from the
+      admin listing while remaining available in the monthly calendar.
     """
 
     now = datetime.utcnow()
@@ -191,15 +193,30 @@ def purge_expired_requests():
         Reservation.end_at < pending_threshold,
     ).delete(synchronize_session=False)
 
-    other_deleted = Reservation.query.filter(
+    archived_count = Reservation.query.filter(
         Reservation.status != "pending",
         Reservation.end_at < final_threshold,
+        Reservation.archived_at.is_(None),
+    ).update({"archived_at": now}, synchronize_session=False)
+
+    total_processed = (pending_deleted or 0) + (archived_count or 0)
+    if total_processed:
+        db.session.commit()
+    return total_processed
+
+
+def purge_archived_reservations(max_age_days=180):
+    """Permanently delete reservations archived for longer than ``max_age_days``."""
+
+    cutoff = datetime.utcnow() - timedelta(days=max_age_days)
+    deleted = Reservation.query.filter(
+        Reservation.archived_at.isnot(None),
+        Reservation.archived_at < cutoff,
     ).delete(synchronize_session=False)
 
-    total_deleted = (pending_deleted or 0) + (other_deleted or 0)
-    if total_deleted:
+    if deleted:
         db.session.commit()
-    return total_deleted
+    return deleted
 
 
 @app.cli.command("purge-expired-requests")
@@ -210,7 +227,19 @@ def purge_expired_requests_command():
     """
     deleted = purge_expired_requests()
     print(
-        "Purged {} expired reservation(s) (pending >2d, others >7d).".format(
+        "Processed {} expired reservation(s) (pending deleted >2d, others archived >7d).".format(
+            deleted
+        )
+    )
+
+
+@app.cli.command("purge-archived-reservations")
+def purge_archived_reservations_command():
+    """Delete archived reservations older than six months (180 days)."""
+
+    deleted = purge_archived_reservations()
+    print(
+        "Purged {} archived reservation(s) older than 180 days.".format(
             deleted
         )
     )
@@ -1089,7 +1118,8 @@ def reservation_notification_recipients(reservation):
 def admin_reservations():
     user = current_user()
     res = (
-        Reservation.query.order_by(
+        Reservation.query.filter(Reservation.archived_at.is_(None))
+        .order_by(
             case((Reservation.status == "pending", 0), else_=1),
             Reservation.start_at.desc(),
         )
