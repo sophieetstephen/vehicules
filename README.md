@@ -95,3 +95,36 @@ Ce projet est distribué sous une licence “Tous droits réservés”.
 Toute utilisation, reproduction, modification, distribution ou vente
 est interdite sans l’autorisation écrite explicite de l’auteur.
 Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
+## Archivage des réservations
+
+Les réservations approuvées ou rejetées ne sont plus supprimées
+immédiatement par la tâche automatique : elles sont d’abord archivées
+(`archived_at` est renseigné) afin de rester visibles dans le planning
+mensuel et exportables en PDF pendant plusieurs mois.
+
+### Purge manuelle des archives
+
+Une commande CLI est disponible pour effacer définitivement les
+réservations archivées plus anciennes qu’un délai donné (180 jours par
+défaut) :
+
+```bash
+flask purge-archived-reservations
+```
+
+Si l’application tourne sur un serveur distant (par exemple un
+Raspberry Pi), vous pouvez exécuter cette commande depuis votre terminal
+Mac en vous connectant en SSH puis en lançant la commande Flask :
+
+```bash
+ssh pi@<adresse-ip-du-serveur>
+cd /chemin/vers/le/projet
+source venv/bin/activate  # si vous utilisez un environnement virtuel
+export FLASK_APP=app.py   # ou la valeur adaptée à votre déploiement
+flask purge-archived-reservations
+```
+
+Adaptez l’utilisateur (`pi`), l’adresse IP et les chemins à votre
+installation. Vous pouvez aussi planifier cette commande (par exemple via
+`cron`) pour nettoyer les archives à intervalle régulier.
