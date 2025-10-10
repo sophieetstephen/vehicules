@@ -14,8 +14,8 @@ with app.app_context():
         ("VIDXL", "Véhicule d'Instruction XL", 7),
         ("VRID", "Véhicule Rapide d'Intervention Dép", 5),
     ]
-    for c, l, s in data:
-        db.session.add(Vehicle(code=c, label=l, seats=s))
+    for code, label, seats in data:
+        db.session.add(Vehicle(code=code, label=label, seats=seats))
 
     # users
     super_admin = User(
