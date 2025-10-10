@@ -47,6 +47,8 @@ def test_admin_leaves_renders_checkboxes():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['SUPERADMIN_EMAILS'] = ['legacy@example.com']
+    app.config['ADMIN_EMAILS'] = ['legacy-admin@example.com']
     with app.app_context():
         db.session.remove()
         db.drop_all()
@@ -119,6 +121,8 @@ def test_new_request_notifies_selected_users(monkeypatch):
         admin_recipients, user_recipients = calls
         assert admin_recipients == {sa.email, ad.email}
         assert other.email not in admin_recipients
+        assert 'legacy@example.com' not in admin_recipients
+        assert 'legacy-admin@example.com' not in admin_recipients
         assert user_recipients == {user.email}
         db.drop_all()
 

@@ -1,7 +1,7 @@
 import importlib
 
 from app import ACCOUNT_REVIEW_RECIPIENTS, app
-from models import db, User
+from models import db, User, NotificationSettings
 
 app_module = importlib.import_module("app")
 
@@ -28,6 +28,9 @@ def test_register_sends_notification_to_superadmins(monkeypatch):
         )
         existing_superadmin.set_password("password123")
         db.session.add(existing_superadmin)
+        db.session.commit()
+
+        db.session.add(NotificationSettings(notify_user_ids=[existing_superadmin.id]))
         db.session.commit()
 
         captured_calls = []
