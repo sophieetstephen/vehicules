@@ -1,17 +1,17 @@
 import importlib
 
 from app import ACCOUNT_REVIEW_RECIPIENTS, app
-from models import db, User, NotificationSettings
+from models import db, User
 
 app_module = importlib.import_module("app")
 
 
-def test_register_sends_notification_to_superadmins(monkeypatch):
+def test_register_sends_notification_only_to_review_mailbox(monkeypatch):
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite://"
     app.config["TESTING"] = True
     app.config["WTF_CSRF_ENABLED"] = False
     app.config["SUPERADMIN_EMAILS"] = ["supercfg@example.com"]
-    app.config["ADMIN_EMAILS"] = []
+    app.config["ADMIN_EMAILS"] = ["legacy-admin@example.com"]
 
     with app.app_context():
         db.session.remove()
@@ -28,9 +28,6 @@ def test_register_sends_notification_to_superadmins(monkeypatch):
         )
         existing_superadmin.set_password("password123")
         db.session.add(existing_superadmin)
-        db.session.commit()
-
-        db.session.add(NotificationSettings(notify_user_ids=[existing_superadmin.id]))
         db.session.commit()
 
         captured_calls = []
@@ -63,12 +60,7 @@ def test_register_sends_notification_to_superadmins(monkeypatch):
         assert captured_calls, "A notification email should have been sent"
         notification = captured_calls[0]
         assert notification["subject"] == "Nouvelle demande de création de compte"
-        expected_recipients = {
-            "chief@example.com",
-            "supercfg@example.com",
-            *ACCOUNT_REVIEW_RECIPIENTS,
-        }
-        assert set(notification["recipients"]) == expected_recipients
+        assert set(notification["recipients"]) == set(ACCOUNT_REVIEW_RECIPIENTS)
         assert "john.doe@example.com" in notification["body"]
 
         db.drop_all()
