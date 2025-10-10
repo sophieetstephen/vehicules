@@ -95,3 +95,40 @@ Ce projet est distribué sous une licence “Tous droits réservés”.
 Toute utilisation, reproduction, modification, distribution ou vente
 est interdite sans l’autorisation écrite explicite de l’auteur.
 Voir le fichier [LICENSE](LICENSE) pour plus de détails.
+
+## Archivage des réservations
+
+Les réservations approuvées ou rejetées ne sont plus supprimées
+immédiatement par la tâche automatique : elles sont d’abord archivées
+(`archived_at` est renseigné) afin de rester visibles dans le planning
+mensuel et exportables en PDF pendant plusieurs mois.
+
+### Purge manuelle des archives
+
+Une commande CLI est disponible pour effacer définitivement les
+réservations archivées plus anciennes qu’un délai donné (180 jours par
+défaut) :
+
+```bash
+flask purge-archived-reservations
+```
+
+Si l’application tourne sur un serveur distant (par exemple un
+Raspberry Pi), vous pouvez exécuter cette commande depuis votre terminal
+Mac en vous connectant en SSH puis en lançant la commande Flask :
+
+```bash
+ssh pi@192.168.1.34
+cd /opt/vehicules/app
+source venv/bin/activate
+export FLASK_APP=app.py
+flask purge-archived-reservations
+```
+
+Les deux premières lignes établissent la connexion SSH à votre Raspberry Pi
+et se placent dans le dossier de l’application. Les deux suivantes activent
+l’environnement virtuel Python puis définissent la variable `FLASK_APP`
+avant d’exécuter la commande de purge. Adaptez seulement l’adresse IP ou le
+chemin si votre installation diffère. Vous pouvez aussi planifier cette
+commande (par exemple via `cron`) pour nettoyer les archives à intervalle
+régulier.
