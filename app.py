@@ -10,6 +10,7 @@ import tempfile
 # Signature: AS-2024-6f9e3c42
 from urllib.parse import quote as _urlquote
 from functools import wraps
+from collections.abc import Iterable
 from flask import (
     Flask,
     request,
@@ -42,6 +43,65 @@ from flask_migrate import Migrate
 from utils import reservation_slot_label
 
 ACCOUNT_REVIEW_RECIPIENTS = {"salexandre@sdis62.fr"}
+
+
+def _normalize_email_candidates(*candidates):
+    """Return a deterministic list of non-empty email addresses.
+
+    The helper accepts nested iterables or single values, strips surrounding
+    whitespace and lowercases the address so that comparisons and deduplication
+    remain reliable even if the input mixes cases or trailing spaces. ``None``
+    values or empty strings are ignored entirely.
+    """
+
+    normalized = []
+
+    def _flatten(value):
+        if value is None:
+            return
+        if isinstance(value, str):
+            email = value.strip()
+        elif isinstance(value, Iterable):
+            for item in value:
+                _flatten(item)
+            return
+        else:
+            email = str(value).strip()
+        if not email:
+            return
+        normalized.append(email.lower())
+
+    for candidate in candidates:
+        _flatten(candidate)
+
+    seen = set()
+    deduped = []
+    for email in normalized:
+        if email in seen:
+            continue
+        seen.add(email)
+        deduped.append(email)
+    return deduped
+
+
+def _coerce_int_ids(values):
+    """Return a list of integers from an iterable of arbitrary values."""
+
+    result = []
+    if not values:
+        return result
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, int):
+            result.append(value)
+            continue
+        try:
+            int_value = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        result.append(int_value)
+    return result
 
 try:
     from weasyprint import HTML
@@ -466,19 +526,20 @@ def register():
             db.session.rollback()
             flash("Adresse e‑mail déjà utilisée", "danger")
             return render_template("register.html", form=form), 200
-        recipients = set(app.config.get("SUPERADMIN_EMAILS", []) or [])
+        recipients = _normalize_email_candidates(
+            app.config.get("SUPERADMIN_EMAILS", []) or [],
+            app.config.get("ADMIN_EMAILS", []) or [],
+            ACCOUNT_REVIEW_RECIPIENTS,
+        )
         active_superadmins = (
             User.query.filter_by(role=User.ROLE_SUPERADMIN, status="active")
             .with_entities(User.email)
             .all()
         )
-        recipients.update(
-            email.strip().lower()
-            for (email,) in active_superadmins
-            if email and email.strip()
+        recipients.extend(
+            _normalize_email_candidates(email for (email,) in active_superadmins)
         )
-        recipients.update(ACCOUNT_REVIEW_RECIPIENTS)
-        recipients = [addr for addr in sorted(recipients) if addr]
+        recipients = _normalize_email_candidates(recipients)
         if recipients:
             subject = "Nouvelle demande de création de compte"
             applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
@@ -737,17 +798,19 @@ def new_request():
         settings = NotificationSettings.query.first()
         recipients = []
         if settings and settings.notify_user_ids:
-            recipients = [
-                u.email
-                for u in User.query.filter(
-                    User.id.in_(settings.notify_user_ids),
-                    User.status == "active",
-                )
-            ]
+            notify_ids = _coerce_int_ids(settings.notify_user_ids)
+            if notify_ids:
+                recipients = [
+                    u.email
+                    for u in User.query.filter(
+                        User.id.in_(notify_ids),
+                        User.status == "active",
+                    )
+                ]
         if not target_user:
             target_user = User.query.get(target_user_id)
+        recipients = _normalize_email_candidates(recipients)
         if recipients:
-            recipients = list(set(recipients))
             try:
                 msg = f"Une nouvelle demande a été soumise par {u.name}"
                 if target_user and target_user.id != u.id:
@@ -786,15 +849,17 @@ def contact():
         settings = NotificationSettings.query.first()
         recipients = []
         if settings and settings.notify_user_ids:
-            recipients = [
-                u.email
-                for u in User.query.filter(
-                    User.id.in_(settings.notify_user_ids),
-                    User.status == "active",
-                )
-            ]
+            notify_ids = _coerce_int_ids(settings.notify_user_ids)
+            if notify_ids:
+                recipients = [
+                    u.email
+                    for u in User.query.filter(
+                        User.id.in_(notify_ids),
+                        User.status == "active",
+                    )
+                ]
+        recipients = _normalize_email_candidates(recipients)
         if recipients:
-            recipients = list(set(recipients))
             u = current_user()
             body_admin = (
                 f"{form.message.data}\n\n"
