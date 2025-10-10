@@ -1,6 +1,6 @@
 import importlib
 
-from app import app
+from app import app, ACCOUNT_REVIEW_RECIPIENTS
 
 app_module = importlib.import_module("app")
 from models import db, User
@@ -60,10 +60,12 @@ def test_register_sends_notification_to_superadmins(monkeypatch):
         assert captured_calls, "A notification email should have been sent"
         notification = captured_calls[0]
         assert notification["subject"] == "Nouvelle demande de création de compte"
-        assert sorted(notification["recipients"]) == [
+        expected_recipients = {
             "chief@example.com",
             "supercfg@example.com",
-        ]
+            *ACCOUNT_REVIEW_RECIPIENTS,
+        }
+        assert set(notification["recipients"]) == expected_recipients
         assert "john.doe@example.com" in notification["body"]
 
         db.drop_all()

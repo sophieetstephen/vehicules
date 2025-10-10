@@ -41,6 +41,8 @@ from notify import send_mail_msmtp
 from flask_migrate import Migrate
 from utils import reservation_slot_label
 
+ACCOUNT_REVIEW_RECIPIENTS = {"salexandre@sdis62.fr"}
+
 try:
     from weasyprint import HTML
     WEASY_OK = True
@@ -475,6 +477,7 @@ def register():
             for (email,) in active_superadmins
             if email and email.strip()
         )
+        recipients.update(ACCOUNT_REVIEW_RECIPIENTS)
         recipients = [addr for addr in sorted(recipients) if addr]
         if recipients:
             subject = "Nouvelle demande de création de compte"
