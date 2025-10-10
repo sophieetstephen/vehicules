@@ -103,6 +103,49 @@ def _coerce_int_ids(values):
         result.append(int_value)
     return result
 
+
+def _selected_notification_recipients():
+    """Return active admin e-mails explicitly selected in notification settings."""
+
+    settings = NotificationSettings.query.first()
+    if not settings or not settings.notify_user_ids:
+        return []
+    notify_ids = _coerce_int_ids(settings.notify_user_ids)
+    if not notify_ids:
+        return []
+    users = (
+        User.query.filter(
+            User.id.in_(notify_ids),
+            User.status == "active",
+        )
+        .with_entities(User.email)
+        .all()
+    )
+    return [email for (email,) in users if email]
+
+
+def admin_notification_recipients(*, fallback_when_empty=True, include_account_review=False):
+    """Return admin notification addresses honouring the settings page.
+
+    ``fallback_when_empty`` controls whether the legacy configuration lists
+    (``SUPERADMIN_EMAILS``/``ADMIN_EMAILS``) should be used when no checkbox is
+    ticked.  ``include_account_review`` injects the hard coded account-review
+    mailbox so that user creation notifications always reach the supervision
+    team even if they are not part of the selectable list.
+    """
+
+    selected = _selected_notification_recipients()
+    extras = ACCOUNT_REVIEW_RECIPIENTS if include_account_review else []
+    if selected:
+        return _normalize_email_candidates(selected, extras)
+    if fallback_when_empty:
+        return _normalize_email_candidates(
+            app.config.get("SUPERADMIN_EMAILS", []) or [],
+            app.config.get("ADMIN_EMAILS", []) or [],
+            extras,
+        )
+    return _normalize_email_candidates(extras)
+
 try:
     from weasyprint import HTML
     WEASY_OK = True
@@ -526,20 +569,24 @@ def register():
             db.session.rollback()
             flash("Adresse e‑mail déjà utilisée", "danger")
             return render_template("register.html", form=form), 200
+        recipients = admin_notification_recipients(
+            fallback_when_empty=True,
+            include_account_review=True,
+        )
         recipients = _normalize_email_candidates(
+            recipients,
             app.config.get("SUPERADMIN_EMAILS", []) or [],
             app.config.get("ADMIN_EMAILS", []) or [],
-            ACCOUNT_REVIEW_RECIPIENTS,
         )
         active_superadmins = (
             User.query.filter_by(role=User.ROLE_SUPERADMIN, status="active")
             .with_entities(User.email)
             .all()
         )
-        recipients.extend(
-            _normalize_email_candidates(email for (email,) in active_superadmins)
+        recipients = _normalize_email_candidates(
+            recipients,
+            (email for (email,) in active_superadmins),
         )
-        recipients = _normalize_email_candidates(recipients)
         if recipients:
             subject = "Nouvelle demande de création de compte"
             applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
@@ -795,18 +842,10 @@ def new_request():
         )
         db.session.add(r)
         db.session.commit()
-        settings = NotificationSettings.query.first()
-        recipients = []
-        if settings and settings.notify_user_ids:
-            notify_ids = _coerce_int_ids(settings.notify_user_ids)
-            if notify_ids:
-                recipients = [
-                    u.email
-                    for u in User.query.filter(
-                        User.id.in_(notify_ids),
-                        User.status == "active",
-                    )
-                ]
+        recipients = admin_notification_recipients(
+            fallback_when_empty=False,
+            include_account_review=False,
+        )
         if not target_user:
             target_user = User.query.get(target_user_id)
         recipients = _normalize_email_candidates(recipients)
@@ -846,18 +885,10 @@ def new_request():
 def contact():
     form = ContactForm()
     if form.validate_on_submit():
-        settings = NotificationSettings.query.first()
-        recipients = []
-        if settings and settings.notify_user_ids:
-            notify_ids = _coerce_int_ids(settings.notify_user_ids)
-            if notify_ids:
-                recipients = [
-                    u.email
-                    for u in User.query.filter(
-                        User.id.in_(notify_ids),
-                        User.status == "active",
-                    )
-                ]
+        recipients = admin_notification_recipients(
+            fallback_when_empty=False,
+            include_account_review=False,
+        )
         recipients = _normalize_email_candidates(recipients)
         if recipients:
             u = current_user()

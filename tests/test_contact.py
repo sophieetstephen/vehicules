@@ -28,6 +28,8 @@ def test_contact_page_renders():
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'
     app.config['TESTING'] = True
     app.config['WTF_CSRF_ENABLED'] = False
+    app.config['SUPERADMIN_EMAILS'] = ['legacy@example.com']
+    app.config['ADMIN_EMAILS'] = ['legacy-admin@example.com']
     with app.app_context():
         db.session.remove()
         db.drop_all()
@@ -80,6 +82,8 @@ def test_contact_sends_emails(monkeypatch):
         rec1_set = set(rec1 if isinstance(rec1, (list, set)) else [rec1])
         rec2_set = set(rec2 if isinstance(rec2, (list, set)) else [rec2])
         assert rec1_set == {admin.email}
+        assert 'legacy@example.com' not in rec1_set
+        assert 'legacy-admin@example.com' not in rec1_set
         assert rec2_set == {user.email}
         assert user.first_name in body_admin
         assert user.last_name in body_admin
