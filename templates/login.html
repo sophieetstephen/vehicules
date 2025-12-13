@@ -1,17 +1,99 @@
-{% extends "base.html" %}
-{% block title %}Connexion – Véhicules{% endblock %}
-{% block content %}
-<div class="card mx-auto max-w-420">
-  <div class="card-body">
-    <h5 class="card-title mb-3">Connexion</h5>
-    <form method="post">
-      {{ form.hidden_tag() }}
-      <div class="mb-3">{{ form.email.label(class="form-label") }} {{ form.email(class="form-control") }}</div>
-      <div class="mb-3">{{ form.password.label(class="form-label") }} {{ form.password(class="form-control") }}</div>
-      {{ form.submit(class="btn btn-primary w-100") }}
-    </form>
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Connexion – Véhicules</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+  <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/litera/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-header">
+      <div class="login-logo">
+        <i class="fa-solid fa-car-side"></i>
+      </div>
+      <h1 class="login-title">Véhicules</h1>
+      <p class="login-subtitle">Gestion de flotte automobile</p>
+    </div>
+
+    <div class="login-body">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          {% for category, message in messages %}
+            <div class="alert alert-{{ category }} mb-3">
+              {% if category == 'success' %}
+                <i class="fa-solid fa-check-circle"></i>
+              {% elif category == 'danger' %}
+                <i class="fa-solid fa-exclamation-circle"></i>
+              {% elif category == 'warning' %}
+                <i class="fa-solid fa-exclamation-triangle"></i>
+              {% else %}
+                <i class="fa-solid fa-info-circle"></i>
+              {% endif %}
+              {{ message }}
+            </div>
+          {% endfor %}
+        {% endif %}
+      {% endwith %}
+
+      <form method="post" action="{{ url_for('login', **request.args) }}">
+        {{ form.csrf_token if form.csrf_token else '' }}
+        {{ form.hidden_tag() if form.hidden_tag else '' }}
+
+        <div class="mb-3">
+          <label class="form-label" for="email">
+            <i class="fa-solid fa-envelope me-1 text-muted"></i>Adresse email
+          </label>
+          {% if form.email %}
+            {{ form.email(class="form-control", type="email", placeholder="vous@exemple.com", required=True, id="email") }}
+          {% else %}
+            <input id="email" name="email" type="email" class="form-control" placeholder="vous@exemple.com" required>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label" for="password">
+            <i class="fa-solid fa-lock me-1 text-muted"></i>Mot de passe
+          </label>
+          {% if form.password %}
+            {{ form.password(class="form-control", type="password", placeholder="••••••••", required=True, id="password") }}
+          {% else %}
+            <input id="password" name="password" type="password" class="form-control" placeholder="••••••••" required>
+          {% endif %}
+        </div>
+
+        <button class="btn btn-primary" type="submit">
+          <i class="fa-solid fa-sign-in-alt me-2"></i>Se connecter
+        </button>
+      </form>
+    </div>
+
+    <div class="login-footer">
+      <span class="text-muted">Pas encore de compte ?</span>
+      <a href="{{ url_for('register') }}">Créer un compte</a>
+    </div>
   </div>
 </div>
-{% endblock %}
-<!-- MARK: LOGIN-TPL -->
-<!-- MARK:LOGIN-HTML -->
+
+<script>
+// Support du mode sombre sur la page de login
+(function() {
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const currentTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+  if (currentTheme === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+  }
+})();
+</script>
+</body>
+</html>
