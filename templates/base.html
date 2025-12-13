@@ -1,62 +1,125 @@
-
 <!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Vehicules{% endblock %}</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
   <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/litera/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
 </head>
 <body>
-<nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
+<nav class="navbar navbar-expand-lg navbar-custom mb-4">
   <div class="container">
-    {% if user %}
-      <a class="navbar-brand" href="{{ url_for('home') }}">
-        <i class="fa-solid fa-house me-1"></i>Accueil
-      </a>
-    {% endif %}
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
-      <span class="navbar-toggler-icon"></span>
-    </button>
+    <a class="navbar-brand-custom" href="{{ url_for('home') if user else url_for('login') }}">
+      <span class="brand-icon">
+        <i class="fa-solid fa-car-side"></i>
+      </span>
+      <span>Véhicules</span>
+    </a>
+
+    <div class="d-flex align-items-center gap-2">
+      <!-- Toggle mode sombre -->
+      <button class="theme-toggle" id="themeToggle" type="button" title="Changer le thème">
+        <i class="fa-solid fa-moon" id="themeIcon"></i>
+      </button>
+
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+    </div>
+
     <div class="collapse navbar-collapse" id="nav">
-      <ul class="navbar-nav me-auto">
-      </ul>
       <ul class="navbar-nav ms-auto align-items-center">
         {% if user %}
-            <li class="nav-item dropdown me-2">
-              <button class="btn btn-outline-light dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown" aria-expanded="false">
-                <span class="user-name text-truncate">{{ user.first_name }} {{ user.last_name }}</span>
-                <span class="badge bg-secondary ms-1">{{ user.role }}</span>
-              </button>
-              <ul class="dropdown-menu dropdown-menu-end">
-                <li>
-                  <a class="dropdown-item d-flex align-items-center" href="{{ url_for('logout') }}">
-                    <i class="fa-solid fa-right-from-bracket me-2"></i>Déconnexion
-                  </a>
-                </li>
-              </ul>
-            </li>
+          <li class="nav-item dropdown">
+            <button class="user-menu-btn dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="user-avatar">{{ user.first_name[0] }}{{ user.last_name[0] }}</span>
+              <span class="user-name">{{ user.first_name }} {{ user.last_name }}</span>
+              <span class="role-badge">{{ user.role }}</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li>
+                <a class="dropdown-item" href="{{ url_for('logout') }}">
+                  <i class="fa-solid fa-right-from-bracket"></i>Déconnexion
+                </a>
+              </li>
+            </ul>
+          </li>
         {% else %}
-          <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('login') }}">Connexion</a></li>
+          <li class="nav-item">
+            <a class="nav-link text-light" href="{{ url_for('login') }}">
+              <i class="fa-solid fa-sign-in-alt me-1"></i>Connexion
+            </a>
+          </li>
         {% endif %}
       </ul>
     </div>
   </div>
 </nav>
-<div class="container">
+
+<div class="container fade-in">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
       {% for category, message in messages %}
-        <div class="alert alert-{{ category }}">{{ message }}</div>
+        <div class="alert alert-{{ category }} mb-3">
+          {% if category == 'success' %}
+            <i class="fa-solid fa-check-circle"></i>
+          {% elif category == 'danger' %}
+            <i class="fa-solid fa-exclamation-circle"></i>
+          {% elif category == 'warning' %}
+            <i class="fa-solid fa-exclamation-triangle"></i>
+          {% else %}
+            <i class="fa-solid fa-info-circle"></i>
+          {% endif %}
+          {{ message }}
+        </div>
       {% endfor %}
     {% endif %}
   {% endwith %}
   {% block content %}{% endblock %}
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Script pour le mode sombre -->
+<script>
+(function() {
+  const themeToggle = document.getElementById('themeToggle');
+  const themeIcon = document.getElementById('themeIcon');
+  const html = document.documentElement;
+
+  // Charger le thème sauvegardé ou utiliser la préférence système
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const currentTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+  if (currentTheme === 'dark') {
+    html.setAttribute('data-theme', 'dark');
+    themeIcon.classList.replace('fa-moon', 'fa-sun');
+  }
+
+  themeToggle.addEventListener('click', function() {
+    const isDark = html.getAttribute('data-theme') === 'dark';
+
+    if (isDark) {
+      html.removeAttribute('data-theme');
+      themeIcon.classList.replace('fa-sun', 'fa-moon');
+      localStorage.setItem('theme', 'light');
+    } else {
+      html.setAttribute('data-theme', 'dark');
+      themeIcon.classList.replace('fa-moon', 'fa-sun');
+      localStorage.setItem('theme', 'dark');
+    }
+  });
+})();
+</script>
+
 {% if user %}
 <script>
 (function () {
@@ -79,6 +142,7 @@
 })();
 </script>
 {% endif %}
+
 <script>
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");

@@ -562,7 +562,7 @@ def login():
                 request.args.get("next") or url_for("home")
             )
         flash("Identifiants invalides", "danger")
-    return render_template("login_plain.html", form=form), 200
+    return render_template("login.html", form=form), 200
 
 
 @app.route("/logout")

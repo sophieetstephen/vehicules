@@ -1,42 +1,59 @@
 {% extends "base.html" %}
-{% block title %}Superadmin – Accueil{% endblock %}
+{% block title %}Super Administration – Véhicules{% endblock %}
 {% block content %}
-<h1 class="h4">Accueil administration</h1>
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-shield-halved page-title-icon"></i>
+    Super Administration
+  </h1>
+</div>
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('admin_users') }}">
-      <i class="fa-solid fa-users fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('admin_users') }}">
+      <i class="fa-solid fa-users dashboard-icon icon-users"></i>
       <h5 class="card-title">Gestion des utilisateurs</h5>
+      <p class="text-muted small mb-0">Gérer les comptes utilisateurs</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('admin_reservations') }}">
-      <i class="fa-solid fa-calendar-check fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('admin_reservations') }}">
+      <i class="fa-solid fa-calendar-check dashboard-icon icon-reservation"></i>
       <h5 class="card-title">Gestion des réservations</h5>
+      <p class="text-muted small mb-0">Approuver et gérer les demandes</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('admin_leaves') }}">
-      <i class="fa-solid fa-plane fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('admin_leaves') }}">
+      <i class="fa-solid fa-plane-departure dashboard-icon icon-leaves"></i>
       <h5 class="card-title">Gestion des congés</h5>
+      <p class="text-muted small mb-0">Gérer les absences du personnel</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('admin_vehicles') }}">
-      <i class="fa-solid fa-car-side fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('admin_vehicles') }}">
+      <i class="fa-solid fa-car-side dashboard-icon icon-car"></i>
       <h5 class="card-title">Gestion du parc</h5>
+      <p class="text-muted small mb-0">Gérer les véhicules</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('calendar_month') }}">
-      <i class="fa-solid fa-calendar fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('calendar_month') }}">
+      <i class="fa-solid fa-calendar-days dashboard-icon icon-calendar"></i>
       <h5 class="card-title">Planning mensuel</h5>
+      <p class="text-muted small mb-0">Vue d'ensemble des réservations</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('new_request') }}">
-      <i class="fa-solid fa-calendar-plus fa-2x mb-2"></i>
-      <h5 class="card-title">Demande de réservation</h5>
+    <a class="dashboard-card" href="{{ url_for('new_request') }}">
+      <i class="fa-solid fa-calendar-plus dashboard-icon icon-reservation"></i>
+      <h5 class="card-title">Nouvelle réservation</h5>
+      <p class="text-muted small mb-0">Créer une réservation</p>
     </a>
   </div>
 </div>
