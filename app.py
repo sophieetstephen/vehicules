@@ -987,7 +987,7 @@ def admin_user_edit(user_id):
     )
 
 
-@app.route("/admin/promote/<int:user_id>")
+@app.route("/admin/promote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_promote(user_id):
     target = User.query.get_or_404(user_id)
@@ -997,7 +997,7 @@ def admin_promote(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/demote/<int:user_id>")
+@app.route("/admin/demote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_demote(user_id):
     target = User.query.get_or_404(user_id)
@@ -1007,7 +1007,7 @@ def admin_demote(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/activate/<int:user_id>")
+@app.route("/admin/activate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_activate(user_id):
     target = User.query.get_or_404(user_id)
@@ -1030,7 +1030,7 @@ def admin_activate(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/deactivate/<int:user_id>")
+@app.route("/admin/deactivate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_deactivate(user_id):
     target = User.query.get_or_404(user_id)
@@ -1058,7 +1058,7 @@ def admin_reset_password(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/delete/<int:user_id>")
+@app.route("/admin/delete/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_user_delete(user_id):
     target = User.query.get_or_404(user_id)
@@ -1120,7 +1120,7 @@ def admin_vehicle_edit(vehicle_id):
     )
 
 
-@app.route("/admin/vehicles/<int:vehicle_id>/delete")
+@app.route("/admin/vehicles/<int:vehicle_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_delete(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)

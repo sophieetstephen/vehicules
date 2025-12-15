@@ -18,7 +18,10 @@
           <td>{{ v.category or "" }}</td>
           <td class="text-end">
             <a class="btn btn-sm btn-secondary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">Modifier</a>
-            <a class="btn btn-sm btn-danger" href="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}">Supprimer</a>
+            <form method="post" action="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}" class="d-inline" onsubmit="return confirm('Supprimer ce véhicule ?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-danger" type="submit">Supprimer</button>
+            </form>
           </td>
         </tr>
         {% endfor %}

@@ -26,9 +26,15 @@
         <td class="d-flex gap-2">
           <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
           {% if (u.status or '') == 'active' %}
-            <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_deactivate', user_id=u.id) }}">Désactiver</a>
+            <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-warning" type="submit">Désactiver</button>
+            </form>
           {% else %}
-            <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
+            <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-success" type="submit">Activer</button>
+            </form>
           {% endif %}
           {% if current_user and current_user.role==ROLE_SUPERADMIN %}
             <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
@@ -38,11 +44,20 @@
           {% endif %}
           {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
             {% if u.role==ROLE_ADMIN %}
-              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_demote', user_id=u.id) }}">Rétrograder</a>
+              <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Rétrograder</button>
+              </form>
             {% else %}
-              <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_promote', user_id=u.id) }}">Promouvoir admin</a>
+              <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-primary" type="submit">Promouvoir admin</button>
+              </form>
             {% endif %}
-            <a class="btn btn-sm btn-outline-danger" href="{{ url_for('admin_user_delete', user_id=u.id) }}" onclick="return confirm('Confirmer la suppression ?');">Supprimer</a>
+            <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+            </form>
           {% endif %}
         </td>
       </tr>
