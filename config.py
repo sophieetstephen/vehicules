@@ -29,6 +29,7 @@ def _env_bool(name: str, default: bool = False) -> bool:
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY","change-me")
+    WTF_CSRF_ENABLED = True
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", "sqlite:///instance/vehicules.db"
     )

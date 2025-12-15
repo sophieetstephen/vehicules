@@ -22,6 +22,7 @@
         <td class="text-end">
           <a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">Gérer</a>
           <form method="post" action="{{ url_for('manage_request', rid=r.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="action" value="delete">
             <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer cette réservation ?');">Supprimer</button>
           </form>

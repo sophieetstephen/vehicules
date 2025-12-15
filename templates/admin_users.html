@@ -32,6 +32,7 @@
           {% endif %}
           {% if current_user and current_user.role==ROLE_SUPERADMIN %}
             <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button class="btn btn-sm btn-outline-secondary" type="submit">Réinitialiser mot de passe</button>
             </form>
           {% endif %}

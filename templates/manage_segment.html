@@ -12,6 +12,7 @@
 
 <h2 class="h6">Disponibilité des véhicules</h2>
 <form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="table-responsive">
     <table class="table table-bordered align-middle">
       <thead>

@@ -198,7 +198,7 @@ try:
 except Exception:
     class Config:
         SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret")
-        WTF_CSRF_CHECK_DEFAULT = False
+        WTF_CSRF_ENABLED = True
 
 app = Flask(__name__)
 app.config.from_object(Config)
