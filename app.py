@@ -40,6 +40,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 from utils import reservation_slot_label
 
 ACCOUNT_REVIEW_RECIPIENTS = {"salexandre@sdis62.fr"}
@@ -210,6 +211,7 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+csrf = CSRFProtect(app)
 
 _storage_root = app.instance_path
 try:
