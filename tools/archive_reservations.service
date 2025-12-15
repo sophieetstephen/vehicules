@@ -1,0 +1,7 @@
+[Unit]
+Description=Archivage des anciennes reservations Vehicules
+
+[Service]
+Type=oneshot
+WorkingDirectory=/workspace/vehicules
+ExecStart=/workspace/vehicules/venv/bin/python tools/archive_reservations.py --days 7
