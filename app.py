@@ -196,8 +196,16 @@ for _p in ("/opt/vehicules", _here):
 try:
     from config import Config
 except Exception:
+    def _fallback_secret_key():
+        key = os.environ.get("SECRET_KEY")
+        if key:
+            return key
+        if os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG"):
+            return "dev-secret-insecure"
+        raise RuntimeError("SECRET_KEY must be set in production")
+
     class Config:
-        SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret")
+        SECRET_KEY = _fallback_secret_key()
         WTF_CSRF_ENABLED = True
 
 app = Flask(__name__)

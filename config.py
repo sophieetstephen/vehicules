@@ -27,8 +27,22 @@ def _env_bool(name: str, default: bool = False) -> bool:
     return normalized in {"1", "true", "t", "yes", "y", "on"}
 
 
+def _get_secret_key() -> str:
+    """Return SECRET_KEY from environment, or raise in production."""
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    # Allow insecure default only in development
+    if os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG"):
+        return "dev-secret-insecure"
+    raise RuntimeError(
+        "SECRET_KEY must be set in production. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+
+
 class Config:
-    SECRET_KEY = os.environ.get("SECRET_KEY","change-me")
+    SECRET_KEY = _get_secret_key()
     WTF_CSRF_ENABLED = True
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         "DATABASE_URL", "sqlite:///instance/vehicules.db"
