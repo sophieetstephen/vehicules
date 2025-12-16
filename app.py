@@ -472,6 +472,23 @@ def _fmt_dt(v):
     return v.strftime("%d/%m/%Y %H:%M") if v else ""
 
 
+# French date formatter
+JOURS_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+MOIS_FR = ["", "janvier", "février", "mars", "avril", "mai", "juin",
+           "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
+
+@app.template_filter("date_fr")
+def _date_fr(v, fmt="full"):
+    """Format date in French. fmt: 'full' (Lundi 16 décembre 2024) or 'short' (16/12/2024)"""
+    if not v:
+        return ""
+    if fmt == "short":
+        return v.strftime("%d/%m/%Y")
+    jour = JOURS_FR[v.weekday()]
+    return f"{jour} {v.day} {MOIS_FR[v.month]} {v.year}"
+
+
 # --- Santé
 @app.route("/__ping__", methods=["GET"])
 def __ping__():

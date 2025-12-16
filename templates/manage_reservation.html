@@ -2,6 +2,21 @@
 {% block title %}Gérer la réservation – Véhicules{% endblock %}
 {% block content %}
 
+{# Déterminer la date et le véhicule actuel selon le contexte #}
+{% if is_segment %}
+  {% set display_date = segment.start_at %}
+  {% set current_vehicle = segment.vehicle %}
+  {% set current_vehicle_id = segment.vehicle_id %}
+{% elif day %}
+  {% set display_date = day %}
+  {% set current_vehicle = reservation.vehicle %}
+  {% set current_vehicle_id = reservation.vehicle_id %}
+{% else %}
+  {% set display_date = reservation.start_at %}
+  {% set current_vehicle = reservation.vehicle %}
+  {% set current_vehicle_id = reservation.vehicle_id %}
+{% endif %}
+
 <div class="reservation-manager">
   <!-- En-tête avec bouton retour -->
   <div class="reservation-header">
@@ -34,75 +49,45 @@
 
     <!-- Informations de la réservation -->
     <div class="reservation-details">
-      {% if is_segment %}
-      <!-- Mode segment -->
       <div class="detail-row">
         <div class="detail-icon">
           <i class="fa-solid fa-calendar-day"></i>
         </div>
         <div class="detail-content">
           <span class="detail-label">Date</span>
-          <span class="detail-value">{{ segment.start_at.strftime('%A %d %B %Y') | capitalize }}</span>
+          <span class="detail-value">{{ display_date | date_fr }}</span>
         </div>
       </div>
-      <div class="detail-row">
-        <div class="detail-icon">
-          <i class="fa-solid fa-clock"></i>
-        </div>
-        <div class="detail-content">
-          <span class="detail-label">Créneau</span>
-          <span class="detail-value">{{ slot_label(segment, segment.start_at) }}</span>
-        </div>
-      </div>
-      {% else %}
-      <!-- Mode réservation -->
-      <div class="detail-row">
-        <div class="detail-icon">
-          <i class="fa-solid fa-calendar-day"></i>
-        </div>
-        <div class="detail-content">
-          <span class="detail-label">{% if day %}Date{% else %}Période{% endif %}</span>
-          {% if day %}
-            <span class="detail-value">{{ day.strftime('%A %d %B %Y') | capitalize }}</span>
-          {% elif reservation.start_at.date() == reservation.end_at.date() %}
-            <span class="detail-value">{{ reservation.start_at.strftime('%A %d %B %Y') | capitalize }}</span>
-          {% else %}
-            <span class="detail-value">
-              Du {{ reservation.start_at.strftime('%d/%m/%Y') }} au {{ reservation.end_at.strftime('%d/%m/%Y') }}
-            </span>
-          {% endif %}
-        </div>
-      </div>
-      <div class="detail-row">
-        <div class="detail-icon">
-          <i class="fa-solid fa-clock"></i>
-        </div>
-        <div class="detail-content">
-          <span class="detail-label">Créneau</span>
-          <span class="detail-value">{{ slot_label(reservation, day or reservation.start_at) }}</span>
-        </div>
-      </div>
-      {% endif %}
 
-      <!-- Véhicule actuel -->
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Créneau</span>
+          <span class="detail-value">
+            {% if is_segment %}
+              {{ slot_label(segment, segment.start_at) }}
+            {% else %}
+              {{ slot_label(reservation, display_date) }}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
       <div class="detail-row">
         <div class="detail-icon">
           <i class="fa-solid fa-car"></i>
         </div>
         <div class="detail-content">
-          <span class="detail-label">Véhicule</span>
-          {% if is_segment and segment.vehicle %}
-            <span class="detail-value vehicle-badge">
-              <strong>{{ segment.vehicle.code }}</strong>
-              {% if segment.vehicle.label %} — {{ segment.vehicle.label }}{% endif %}
-            </span>
-          {% elif reservation.vehicle %}
-            <span class="detail-value vehicle-badge">
-              <strong>{{ reservation.vehicle.code }}</strong>
-              {% if reservation.vehicle.label %} — {{ reservation.vehicle.label }}{% endif %}
+          <span class="detail-label">Véhicule actuel</span>
+          {% if current_vehicle %}
+            <span class="detail-value vehicle-current">
+              <strong>{{ current_vehicle.code }}</strong>
+              {% if current_vehicle.label %} — {{ current_vehicle.label }}{% endif %}
             </span>
           {% else %}
-            <span class="detail-value text-muted">Non attribué</span>
+            <span class="detail-value text-muted"><i class="fa-solid fa-question-circle"></i> Non attribué</span>
           {% endif %}
         </div>
       </div>
@@ -147,8 +132,8 @@
     <!-- Section changement de véhicule -->
     <div class="vehicle-section">
       <h2 class="section-title">
-        <i class="fa-solid fa-exchange-alt"></i>
-        {% if is_segment %}Modifier le véhicule{% else %}Attribuer un véhicule{% endif %}
+        <i class="fa-solid fa-car-side"></i>
+        Choisir un véhicule
       </h2>
 
       <form method="post" class="vehicle-form">
@@ -156,10 +141,10 @@
 
         <div class="vehicle-grid">
           {% for v, free in availability %}
-          <label class="vehicle-option {% if not free %}vehicle-unavailable{% endif %} {% if (is_segment and v.id == segment.vehicle_id) or (not is_segment and reservation.vehicle_id and v.id == reservation.vehicle_id) %}vehicle-selected{% endif %}">
+          <label class="vehicle-option {% if not free %}vehicle-unavailable{% endif %} {% if v.id == current_vehicle_id %}vehicle-selected{% endif %}">
             <input type="radio" name="vehicle_id" value="{{ v.id }}"
                    {% if not free %}disabled{% endif %}
-                   {% if (is_segment and v.id == segment.vehicle_id) or (not is_segment and reservation.vehicle_id and v.id == reservation.vehicle_id) %}checked{% endif %}>
+                   {% if v.id == current_vehicle_id %}checked{% endif %}>
             <div class="vehicle-option-content">
               <div class="vehicle-code">{{ v.code }}</div>
               <div class="vehicle-label">{{ v.label or '' }}</div>
@@ -167,7 +152,7 @@
                 {% if free %}
                   <span class="status-available"><i class="fa-solid fa-check"></i> Disponible</span>
                 {% else %}
-                  <span class="status-unavailable"><i class="fa-solid fa-times"></i> Indisponible</span>
+                  <span class="status-unavailable"><i class="fa-solid fa-times"></i> Occupé</span>
                 {% endif %}
               </div>
             </div>
@@ -180,48 +165,44 @@
           {% endfor %}
         </div>
 
-        <!-- Actions -->
+        <!-- Actions unifiées -->
         <div class="action-buttons">
+          {# Déterminer les actions selon le contexte #}
           {% if is_segment %}
-            <button type="submit" name="action" value="update" class="btn btn-primary btn-lg">
+            {% set save_action = "update" %}
+            {% set delete_action = "delete" %}
+          {% elif day %}
+            {% set save_action = "segment_day" %}
+            {% set delete_action = "delete_day" %}
+          {% else %}
+            {% set save_action = "approve" %}
+            {% set delete_action = "delete" if reservation.status != 'pending' else "reject" %}
+          {% endif %}
+
+          {# Bouton principal : Enregistrer/Approuver #}
+          {% if reservation.status == 'pending' and not is_segment and not day %}
+            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-success btn-action">
+              <i class="fa-solid fa-check"></i>
+              Approuver
+            </button>
+          {% else %}
+            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-primary btn-action">
               <i class="fa-solid fa-save"></i>
               Enregistrer
             </button>
-            <button type="submit" name="action" value="delete" class="btn btn-outline-danger"
-                    onclick="return confirm('Supprimer ce segment ?');">
-              <i class="fa-solid fa-trash"></i>
-              Supprimer
+          {% endif %}
+
+          {# Bouton secondaire : Supprimer/Refuser #}
+          {% if reservation.status == 'pending' and not is_segment and not day %}
+            <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-warning btn-action-secondary">
+              <i class="fa-solid fa-ban"></i>
+              Refuser
             </button>
           {% else %}
-            {% if reservation.status == 'pending' %}
-              <button type="submit" name="action" value="approve" class="btn btn-success btn-lg">
-                <i class="fa-solid fa-check"></i>
-                Approuver
-              </button>
-              <button type="submit" name="action" value="reject" class="btn btn-outline-warning">
-                <i class="fa-solid fa-ban"></i>
-                Refuser
-              </button>
-            {% elif day %}
-              <button type="submit" name="action" value="segment_day" class="btn btn-primary btn-lg">
-                <i class="fa-solid fa-save"></i>
-                Attribuer ce véhicule
-              </button>
-              <button type="submit" name="action" value="delete_day" class="btn btn-outline-danger"
-                      onclick="return confirm('Supprimer cette journée de la réservation ?');">
-                <i class="fa-solid fa-calendar-minus"></i>
-                Supprimer cette journée
-              </button>
-            {% else %}
-              <button type="submit" name="action" value="approve" class="btn btn-primary btn-lg">
-                <i class="fa-solid fa-save"></i>
-                Modifier le véhicule
-              </button>
-            {% endif %}
-            <button type="submit" name="action" value="delete" class="btn btn-outline-danger"
-                    onclick="return confirm('Supprimer définitivement cette réservation ?');">
+            <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-danger btn-action-secondary"
+                    onclick="return confirm('Supprimer cette réservation ?');">
               <i class="fa-solid fa-trash"></i>
-              Supprimer la réservation
+              Supprimer
             </button>
           {% endif %}
         </div>
@@ -236,7 +217,7 @@
    ============================================ */
 
 .reservation-manager {
-  max-width: 700px;
+  max-width: 600px;
   margin: 0 auto;
   padding-bottom: var(--spacing-xl);
 }
@@ -278,15 +259,15 @@
 }
 
 .user-avatar-large {
-  width: 64px;
-  height: 64px;
+  width: 56px;
+  height: 56px;
   background: var(--color-primary);
   border-radius: var(--radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   color: white;
   flex-shrink: 0;
 }
@@ -297,7 +278,7 @@
 }
 
 .user-name-large {
-  font-size: 1.5rem;
+  font-size: 1.35rem;
   font-weight: 700;
   margin: 0 0 var(--spacing-xs);
   white-space: nowrap;
@@ -311,26 +292,15 @@
   gap: var(--spacing-xs);
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-full);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
 }
 
-.status-approved {
-  background: rgba(22, 163, 74, 0.2);
-  color: #86efac;
-}
+.status-approved { background: rgba(22, 163, 74, 0.2); color: #86efac; }
+.status-pending { background: rgba(217, 119, 6, 0.2); color: #fcd34d; }
+.status-rejected { background: rgba(220, 38, 38, 0.2); color: #fca5a5; }
 
-.status-pending {
-  background: rgba(217, 119, 6, 0.2);
-  color: #fcd34d;
-}
-
-.status-rejected {
-  background: rgba(220, 38, 38, 0.2);
-  color: #fca5a5;
-}
-
-/* Détails de la réservation */
+/* Détails */
 .reservation-details {
   padding: var(--spacing-lg) var(--spacing-xl);
   border-bottom: 1px solid var(--color-border);
@@ -348,8 +318,8 @@
 }
 
 .detail-icon {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   background: var(--color-primary-light);
   border-radius: var(--radius-md);
   display: flex;
@@ -357,6 +327,7 @@
   justify-content: center;
   color: var(--color-primary);
   flex-shrink: 0;
+  font-size: 0.9rem;
 }
 
 .detail-content {
@@ -366,8 +337,8 @@
 
 .detail-label {
   display: block;
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.7rem;
+  font-weight: 600;
   color: var(--color-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -376,19 +347,19 @@
 
 .detail-value {
   display: block;
-  font-size: 1rem;
+  font-size: 0.95rem;
   color: var(--color-text);
   font-weight: 500;
 }
 
-.vehicle-badge {
+.vehicle-current {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
+  padding: 2px var(--spacing-sm);
   background: var(--color-success-light);
   color: var(--color-success);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
 }
 
 /* Section véhicules */
@@ -397,10 +368,10 @@
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   color: var(--color-text);
-  margin: 0 0 var(--spacing-lg);
+  margin: 0 0 var(--spacing-md);
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
@@ -412,9 +383,9 @@
 
 .vehicle-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: var(--spacing-md);
-  margin-bottom: var(--spacing-xl);
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
 }
 
 .vehicle-option {
@@ -432,7 +403,7 @@
   padding: var(--spacing-md);
   background: var(--color-background-alt);
   border: 2px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   text-align: center;
   transition: all var(--transition-fast);
 }
@@ -446,7 +417,7 @@
 .vehicle-option.vehicle-selected .vehicle-option-content {
   border-color: var(--color-primary);
   background: var(--color-primary-light);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
 }
 
 .vehicle-unavailable {
@@ -455,92 +426,88 @@
 
 .vehicle-unavailable .vehicle-option-content {
   opacity: 0.5;
-  background: var(--color-background-alt);
 }
 
 .vehicle-code {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 700;
   color: var(--color-text);
-  margin-bottom: var(--spacing-xs);
+  margin-bottom: 2px;
 }
 
 .vehicle-label {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: var(--color-text-muted);
-  margin-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-xs);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .vehicle-status {
-  font-size: 0.75rem;
-  font-weight: 500;
+  font-size: 0.65rem;
+  font-weight: 600;
 }
 
-.status-available {
-  color: var(--color-success);
-}
+.status-available { color: var(--color-success); }
+.status-unavailable { color: var(--color-danger); }
 
-.status-unavailable {
-  color: var(--color-danger);
-}
-
-.empty-vehicles {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: var(--spacing-xl);
-  color: var(--color-text-muted);
-}
-
-.empty-vehicles i {
-  font-size: 2rem;
-  margin-bottom: var(--spacing-md);
-  opacity: 0.5;
-}
-
-/* Boutons d'action */
+/* Boutons */
 .action-buttons {
   display: flex;
-  flex-wrap: wrap;
   gap: var(--spacing-md);
   padding-top: var(--spacing-lg);
   border-top: 1px solid var(--color-border);
 }
 
-.action-buttons .btn {
+.btn-action {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-weight: 600;
+}
+
+.btn-action-secondary {
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-sm);
 }
 
-.action-buttons .btn-lg {
-  flex: 1;
-  justify-content: center;
-  min-width: 200px;
-}
-
 /* Responsive */
 @media (max-width: 576px) {
   .reservation-user {
-    flex-direction: column;
-    text-align: center;
+    padding: var(--spacing-lg);
+  }
+
+  .user-avatar-large {
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
   }
 
   .user-name-large {
-    font-size: 1.25rem;
+    font-size: 1.15rem;
+  }
+
+  .reservation-details,
+  .vehicle-section {
+    padding: var(--spacing-lg);
   }
 
   .vehicle-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 
   .action-buttons {
     flex-direction: column;
   }
 
-  .action-buttons .btn {
+  .btn-action,
+  .btn-action-secondary {
     width: 100%;
     justify-content: center;
   }
