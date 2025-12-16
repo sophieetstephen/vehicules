@@ -62,13 +62,13 @@
           {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
             {% set cell_has_res = true %}
             {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
+              <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-success">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
               {% if s.reservation.purpose %}
                 <br>{{ s.reservation.purpose }}
               {% endif %}
               </a>
             {% else %}
-              <span class="badge bg-primary">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
+              <span class="badge bg-success">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
               {% if s.reservation.purpose %}
                 <br>{{ s.reservation.purpose }}
               {% endif %}
@@ -85,7 +85,6 @@
   </tbody>
 </table>
 </div>
-<p class="text-muted">Légende : <span class="badge bg-success">Nom du réservant (Matin/Après-midi/Journée)</span> = Réservé (approuvé)</p>
 {% if user and user.role in ['admin', 'superadmin'] %}
   <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month', y=start.year, m=start.month) }}">Exporter PDF du mois</a>
 {% endif %}
