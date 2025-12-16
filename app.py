@@ -1512,13 +1512,15 @@ def manage_request(rid):
     avail = vehicles_availability(day_start, day_end)
     user = current_user()
     return render_template(
-        "manage_request.html",
-        r=r,
+        "manage_reservation.html",
+        reservation=r,
         availability=avail,
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
         day=day,
+        is_segment=False,
+        segment=None,
     )
 
 
@@ -1565,12 +1567,15 @@ def manage_segment(sid):
     avail = vehicles_availability(seg.start_at, seg.end_at)
     user = current_user()
     return render_template(
-        "manage_segment.html",
-        seg=seg,
+        "manage_reservation.html",
+        reservation=r,
         availability=avail,
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
+        day=None,
+        is_segment=True,
+        segment=seg,
     )
 
 
