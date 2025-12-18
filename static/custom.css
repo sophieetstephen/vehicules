@@ -668,6 +668,18 @@ body {
   border-radius: var(--radius-full);
 }
 
+/* Amélioration du contraste des badges de statut */
+.badge.bg-warning,
+.table-warning .badge.bg-warning {
+  background-color: #b45309 !important;
+  color: white !important;
+}
+
+.badge.bg-secondary {
+  background-color: #475569 !important;
+  color: white !important;
+}
+
 /* Dropdown amélioré */
 .dropdown-menu {
   border: 1px solid var(--color-border);

@@ -1,7 +1,7 @@
-const CACHE_NAME = 'vehicules-cache-v1';
+const CACHE_NAME = 'vehicules-cache-v2';
 const URLS_TO_CACHE = [
   '/',
-  '/static/styles.css'
+  '/static/custom.css'
 ];
 
 self.addEventListener('install', event => {
