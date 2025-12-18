@@ -12,10 +12,10 @@
 - **Solution** : Ajouter un bouton d'annulation sur la page "Mes Réservations"
 - **Impact** : Réduit la charge de travail admin
 
-### 3. Notifications email (approbation/refus)
-- **Problème** : L'utilisateur n'est pas notifié quand sa demande est approuvée/refusée/modifiée
-- **Solution** : Envoyer un email lors de l'approbation, du refus ou de la modification
-- **Impact** : Les utilisateurs sont informés en temps réel
+### ~~3. Notifications email (approbation/refus)~~ ✅ FAIT
+- ~~**Problème** : L'utilisateur n'est pas notifié quand sa demande est approuvée/refusée/modifiée~~
+- ~~**Solution** : Envoyer un email lors de l'approbation, du refus ou de la modification~~
+- Emails unifiés : "Véhicule attribué", "Demande refusée", "Réservation supprimée"
 
 ---
 
