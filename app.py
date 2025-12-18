@@ -1358,12 +1358,12 @@ def manage_request(rid):
                     if recipients:
                         try:
                             send_mail_msmtp(
-                                "Réservation validée",
+                                "Véhicule attribué",
                                 (
-                                    f"Le segment du {existing.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                    f"{existing.end_at.strftime('%d/%m/%Y %H:%M')} a été mis à jour.\n"
-                                    f"Ancien véhicule : {old_vehicle.label if old_vehicle else 'N/A'}.\n"
-                                    f"Nouveau véhicule : {new_vehicle.label}."
+                                    f"Véhicule attribué pour votre réservation :\n\n"
+                                    f"Période : du {existing.start_at.strftime('%d/%m/%Y')} au {existing.end_at.strftime('%d/%m/%Y')}\n"
+                                    f"Véhicule : {new_vehicle.code}"
+                                    + (f" ({new_vehicle.label})" if new_vehicle.label else "")
                                 ),
                                 recipients,
                             )
@@ -1410,10 +1410,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Un segment du {day_start.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{day_end.strftime('%d/%m/%Y %H:%M')} vous a été attribué avec le véhicule {vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {day_start.strftime('%d/%m/%Y')} au {day_end.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {vehicle.code}"
+                                + (f" ({vehicle.label})" if vehicle.label else "")
                             ),
                             recipients,
                         )
@@ -1471,11 +1473,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Votre réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été validée.\n"
-                                f"Véhicule attribué : {v.code}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {r.start_at.strftime('%d/%m/%Y')} au {r.end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {v.code}"
+                                + (f" ({v.label})" if v.label else "")
                             ),
                             recipients,
                         )
@@ -1505,10 +1508,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Un segment du {start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{end_at.strftime('%d/%m/%Y %H:%M')} a été attribué au véhicule {vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {start_at.strftime('%d/%m/%Y')} au {end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {vehicle.code}"
+                                + (f" ({vehicle.label})" if vehicle.label else "")
                             ),
                             recipients,
                         )
@@ -1595,12 +1600,12 @@ def manage_segment(sid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Modification de votre réservation",
+                            "Véhicule attribué",
                             (
-                                f"Le segment du {seg.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{seg.end_at.strftime('%d/%m/%Y %H:%M')} a été mis à jour.\n"
-                                f"Ancien véhicule : {old_vehicle.label if old_vehicle else 'N/A'}.\n"
-                                f"Nouveau véhicule : {new_vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {seg.start_at.strftime('%d/%m/%Y')} au {seg.end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {new_vehicle.code}"
+                                + (f" ({new_vehicle.label})" if new_vehicle.label else "")
                             ),
                             recipients,
                         )
