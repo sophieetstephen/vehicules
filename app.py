@@ -1519,11 +1519,43 @@ def manage_request(rid):
         elif action == "reject":
             r.status = "rejected"
             db.session.commit()
+            recipients = reservation_notification_recipients(r)
+            if recipients:
+                try:
+                    send_mail_msmtp(
+                        "Demande de réservation refusée",
+                        (
+                            f"Votre demande de réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
+                            f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été refusée.\n"
+                            "Veuillez contacter l'administrateur pour plus d'informations."
+                        ),
+                        recipients,
+                    )
+                except Exception:
+                    app.logger.exception("Erreur lors de l'envoi du mail")
             flash("Demande refusée.", "warning")
             return redirect(url_for("admin_reservations"))
         elif action == "delete":
+            # Capturer les infos avant suppression
+            start_str = r.start_at.strftime('%d/%m/%Y %H:%M')
+            end_str = r.end_at.strftime('%d/%m/%Y %H:%M')
+            vehicle_info = r.vehicle.code if r.vehicle else "Non attribué"
+            recipients = reservation_notification_recipients(r)
             db.session.delete(r)
             db.session.commit()
+            if recipients:
+                try:
+                    send_mail_msmtp(
+                        "Réservation supprimée",
+                        (
+                            f"Votre réservation du {start_str} au {end_str} "
+                            f"(véhicule : {vehicle_info}) a été supprimée par l'administrateur.\n"
+                            "Veuillez contacter l'administrateur pour plus d'informations."
+                        ),
+                        recipients,
+                    )
+                except Exception:
+                    app.logger.exception("Erreur lors de l'envoi du mail")
             flash("Réservation supprimée.", "info")
             return redirect(url_for("admin_reservations"))
     avail = vehicles_availability(day_start, day_end)
