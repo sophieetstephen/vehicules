@@ -2,36 +2,236 @@
 {% extends "base.html" %}
 {% block title %}Administration – Réservations{% endblock %}
 {% block content %}
-<h1 class="h4">Réservations (admin)</h1>
-<div class="table-responsive">
-  <table class="table table-striped">
-    <thead><tr><th>ID</th><th>Véhicule</th><th>Début</th><th>Fin</th><th>Demandeur</th><th>Statut</th><th></th></tr></thead>
-    <tbody>
-    {% for r in reservations %}
-      <tr class="{% if r.status == 'pending' %}table-warning{% endif %}">
-        <td>{{ r.id }}</td>
-        <td>{{ r.vehicle.code if r.vehicle else "A AFFECTER" }}</td>
-        <td>{{ r.start_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.start_at) }}</td>
-        <td>{% if r.start_at.date() != r.end_at.date() %}{{ r.end_at.strftime('%d/%m/%Y') }} {{ slot_label(r, r.end_at) }}{% endif %}</td>
-        <td>{{ r.user.name }}</td>
-        <td>
-          {% if r.status=='approved' %}<span class="badge bg-success">approuvée</span>
-          {% elif r.status=='rejected' %}<span class="badge bg-secondary">refusée</span>
-          {% else %}<span class="badge bg-warning text-dark">en attente</span>{% endif %}
-        </td>
-        <td class="text-end">
-          <a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">Gérer</a>
-          <form method="post" action="{{ url_for('manage_request', rid=r.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="action" value="delete">
-            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer cette réservation ?');">Supprimer</button>
-          </form>
-        </td>
-      </tr>
-    {% else %}
-      <tr><td colspan="7">Aucune réservation.</td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
+
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-calendar-check page-title-icon"></i>
+    Réservations
+  </h1>
 </div>
+
+<!-- ========== VUE DESKTOP (tableau) ========== -->
+<div class="reservations-desktop">
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Véhicule</th>
+          <th>Période</th>
+          <th>Demandeur</th>
+          <th>Statut</th>
+          <th class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in reservations %}
+        <tr class="{% if r.status == 'pending' %}table-warning{% endif %}">
+          <td>
+            <strong>{{ r.vehicle.code if r.vehicle else "—" }}</strong>
+          </td>
+          <td>
+            {{ r.start_at.strftime('%d/%m/%Y') }}
+            {% if r.start_at.date() != r.end_at.date() %}
+              → {{ r.end_at.strftime('%d/%m/%Y') }}
+            {% endif %}
+            <br><small class="text-muted">{{ slot_label(r, r.start_at) }}</small>
+          </td>
+          <td>{{ r.user.first_name }} {{ r.user.last_name }}</td>
+          <td>
+            {% if r.status=='approved' %}
+              <span class="badge bg-success">Approuvée</span>
+            {% elif r.status=='rejected' %}
+              <span class="badge bg-secondary">Refusée</span>
+            {% else %}
+              <span class="badge bg-warning">En attente</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">
+              <i class="fa-solid fa-pen-to-square"></i> Gérer
+            </a>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Aucune réservation.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ========== VUE MOBILE (cartes) ========== -->
+<div class="reservations-mobile">
+  {% for r in reservations %}
+  <div class="reservation-card-mobile {% if r.status == 'pending' %}reservation-pending{% endif %}">
+    <div class="reservation-card-header">
+      <div class="reservation-vehicle">
+        {{ r.vehicle.code if r.vehicle else "—" }}
+      </div>
+      <div class="reservation-status-mobile">
+        {% if r.status=='approved' %}
+          <span class="badge bg-success">Approuvée</span>
+        {% elif r.status=='rejected' %}
+          <span class="badge bg-secondary">Refusée</span>
+        {% else %}
+          <span class="badge bg-warning">En attente</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="reservation-card-body">
+      <div class="reservation-user-mobile">
+        <i class="fa-solid fa-user"></i>
+        {{ r.user.first_name }} {{ r.user.last_name }}
+      </div>
+      <div class="reservation-dates-mobile">
+        <i class="fa-solid fa-calendar"></i>
+        {{ r.start_at.strftime('%d/%m/%Y') }}
+        {% if r.start_at.date() != r.end_at.date() %}
+          → {{ r.end_at.strftime('%d/%m/%Y') }}
+        {% endif %}
+        <span class="reservation-slot">{{ slot_label(r, r.start_at) }}</span>
+      </div>
+      {% if r.purpose %}
+      <div class="reservation-purpose-mobile">
+        <i class="fa-solid fa-file-lines"></i>
+        {{ r.purpose }}
+      </div>
+      {% endif %}
+    </div>
+
+    <div class="reservation-card-actions">
+      <a href="{{ url_for('manage_request', rid=r.id) }}" class="btn btn-primary btn-action-mobile">
+        <i class="fa-solid fa-pen-to-square"></i>
+        Gérer
+      </a>
+    </div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon"><i class="fa-solid fa-calendar-check"></i></div>
+    <div class="empty-state-title">Aucune réservation</div>
+    <div class="empty-state-text">Toutes les réservations ont été traitées</div>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+/* ========== Vue Desktop ========== */
+.reservations-desktop {
+  display: block;
+}
+
+.reservations-mobile {
+  display: none;
+}
+
+/* ========== Vue Mobile ========== */
+@media (max-width: 768px) {
+  .reservations-desktop {
+    display: none;
+  }
+
+  .reservations-mobile {
+    display: block;
+  }
+}
+
+/* ========== Carte réservation mobile ========== */
+.reservation-card-mobile {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+}
+
+.reservation-card-mobile.reservation-pending {
+  border-left: 4px solid var(--color-warning);
+}
+
+.reservation-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: var(--color-background-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.reservation-vehicle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.reservation-card-body {
+  padding: var(--spacing-md);
+}
+
+.reservation-user-mobile,
+.reservation-dates-mobile,
+.reservation-purpose-mobile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.reservation-user-mobile i,
+.reservation-dates-mobile i,
+.reservation-purpose-mobile i {
+  color: var(--color-text-muted);
+  width: 16px;
+  text-align: center;
+}
+
+.reservation-user-mobile {
+  font-weight: 600;
+}
+
+.reservation-slot {
+  margin-left: var(--spacing-xs);
+  padding: 2px 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.reservation-purpose-mobile {
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-bottom: 0;
+}
+
+.reservation-card-actions {
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.btn-action-mobile {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  font-weight: 600;
+}
+
+/* ========== Mode sombre ========== */
+[data-theme="dark"] .reservation-card-mobile {
+  background: var(--color-background-alt);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .reservation-card-header {
+  background: var(--color-background);
+}
+</style>
+
 {% endblock %}
