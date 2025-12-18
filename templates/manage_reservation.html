@@ -499,7 +499,24 @@
   }
 
   .vehicle-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-md);
+  }
+
+  .vehicle-option-content {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .vehicle-code {
+    font-size: 1.2rem;
+  }
+
+  .vehicle-label {
+    font-size: 0.75rem;
+  }
+
+  .vehicle-status {
+    font-size: 0.7rem;
   }
 
   .action-buttons {
@@ -510,6 +527,7 @@
   .btn-action-secondary {
     width: 100%;
     justify-content: center;
+    padding: var(--spacing-md);
   }
 }
 </style>
