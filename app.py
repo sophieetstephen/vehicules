@@ -1278,6 +1278,7 @@ def admin_reservations():
         Reservation.query.filter(Reservation.archived_at.is_(None))
         .order_by(
             case((Reservation.status == "pending", 0), else_=1),
+            case((Reservation.status == "pending", Reservation.created_at), else_=None).asc(),
             Reservation.start_at.desc(),
         )
         .limit(200)
