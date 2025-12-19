@@ -40,7 +40,7 @@
 
 ---
 
-## Corrections effectuées (18/12/2024)
+## Corrections effectuées (18-19/12/2024)
 
 - [x] Template inscription : aligné "8 caractères" avec le code
 - [x] Service worker : corrigé styles.css → custom.css
@@ -56,6 +56,12 @@
 - [x] Sécurité CSRF activée
 - [x] SECRET_KEY obligatoire en production
 - [x] Routes destructives en POST
+- [x] Vue mobile admin_reservations : cartes au lieu du tableau
+- [x] Vue mobile admin_users : cartes avec avatar et actions groupées
+- [x] Vue mobile admin_vehicles : cartes avec code et libellé
+- [x] Vue mobile manage_reservation : grille véhicules 2 colonnes
+- [x] Navbar mobile : menu utilisateur toujours visible
+- [x] Navbar mobile : bouton thème avec contraste amélioré
 
 ---
 
