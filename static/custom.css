@@ -205,6 +205,11 @@ body {
   color: white;
 }
 
+/* Forcer la flèche du dropdown à être blanche */
+.user-menu-btn.dropdown-toggle::after {
+  border-top-color: white;
+}
+
 .user-avatar {
   width: 32px;
   height: 32px;
@@ -239,7 +244,7 @@ body {
 
 /* Toggle mode sombre */
 .theme-toggle {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-full);
   width: 40px;
@@ -247,7 +252,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--navbar-text);
+  color: white;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
