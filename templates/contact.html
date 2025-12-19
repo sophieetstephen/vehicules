@@ -1,13 +1,29 @@
 {% extends "base.html" %}
 {% block title %}Contact – Véhicules{% endblock %}
 {% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-envelope page-title-icon"></i>
+    Contact
+  </h1>
+</div>
+
 <div class="card">
   <div class="card-body">
-    <h1 class="h4">Contact</h1>
     <form method="post">
       {{ form.hidden_tag() }}
-      <div class="mb-3">{{ form.message.label(class="form-label") }} {{ form.message(class="form-control", rows=3) }}</div>
-      {{ form.submit(class="btn btn-success") }}
+      <div class="mb-3">
+        {{ form.subject.label(class="form-label") }}
+        {{ form.subject(class="form-select") }}
+      </div>
+      <div class="mb-3">
+        {{ form.message.label(class="form-label") }}
+        {{ form.message(class="form-control", rows=4, placeholder="Décrivez votre demande...") }}
+      </div>
+      <button type="submit" class="btn btn-success">
+        <i class="fa-solid fa-paper-plane me-1"></i>Envoyer
+      </button>
     </form>
   </div>
 </div>

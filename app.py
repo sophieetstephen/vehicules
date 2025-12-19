@@ -935,15 +935,25 @@ def contact():
         recipients = _normalize_email_candidates(recipients)
         if recipients:
             u = current_user()
+            # Libellé de l'objet pour l'email
+            subject_labels = {
+                "question": "Question générale",
+                "annulation": "Annuler une réservation",
+                "probleme": "Signaler un problème",
+                "autre": "Autre",
+            }
+            subject_label = subject_labels.get(form.subject.data, "Contact")
             body_admin = (
+                f"Objet : {subject_label}\n\n"
                 f"{form.message.data}\n\n"
+                f"---\n"
                 f"Nom : {u.last_name}\n"
                 f"Prénom : {u.first_name}\n"
                 f"Email : {u.email}"
             )
             try:
                 send_mail_msmtp(
-                    "Message de contact",
+                    f"Contact : {subject_label}",
                     body_admin,
                     recipients,
                 )
