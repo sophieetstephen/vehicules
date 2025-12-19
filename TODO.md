@@ -17,18 +17,18 @@
 
 ---
 
-## Améliorations optionnelles
+## Améliorations optionnelles (non prioritaires)
 
 ### Filtres dans les listes admin
 - Filtrer les réservations par date, véhicule, statut
 - Filtrer les utilisateurs par rôle, statut
+- *À implémenter si le volume augmente*
 
-### Journal d'audit
-- Qui a approuvé quoi et quand
-- Historique des modifications
+### ~~Journal d'audit~~ ❌ NON NÉCESSAIRE
+- Un seul admin principal, pas de besoin de traçabilité
 
-### Approbation en lot
-- Approuver plusieurs demandes d'un coup
+### ~~Approbation en lot~~ ❌ NON NÉCESSAIRE
+- Volume de réservations limité
 
 ---
 
