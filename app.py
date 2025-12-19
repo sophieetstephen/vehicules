@@ -694,6 +694,10 @@ def new_request():
     else:
         form.user_lookup.validators = []
         form.user_id.validators = []
+        # Pré-remplir nom et prénom pour les utilisateurs standards
+        if request.method == "GET":
+            form.first_name.data = u.first_name or ""
+            form.last_name.data = u.last_name or ""
     if form.validate_on_submit():
         target_user = u
         target_user_id = u.id
