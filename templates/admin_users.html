@@ -1,68 +1,319 @@
-{% extends "base.html" %}{% block title %}Administration – Utilisateurs{% endblock %}{% block content %}
-<h4 class="mb-3">Utilisateurs</h4>
-<form method="get" action="{{ url_for('admin_users') }}" class="mb-3">
-  <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" />
-  <button type="submit" class="btn btn-primary">Chercher</button>
+{% extends "base.html" %}
+{% block title %}Administration – Utilisateurs{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-users page-title-icon"></i>
+    Utilisateurs
+  </h1>
+</div>
+
+<!-- Formulaire de recherche -->
+<form method="get" action="{{ url_for('admin_users') }}" class="search-form mb-4">
+  <div class="search-input-wrapper">
+    <i class="fa-solid fa-search search-icon"></i>
+    <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control search-input" placeholder="Rechercher un utilisateur...">
+  </div>
+  <button type="submit" class="btn btn-primary">
+    <i class="fa-solid fa-search d-sm-none"></i>
+    <span class="d-none d-sm-inline">Chercher</span>
+  </button>
 </form>
-<p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
-<div class="table-responsive">
-  <table class="table table-striped align-middle">
-    <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
-    <tbody>
-    {% for u in users %}
-      <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
-        <td>{{u.id}}</td>
-        <td>{{u.first_name or ""}}</td>
-        <td>{{u.last_name or ""}}</td>
-        <td>{{u.email}}</td>
-        <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
-        <td>
-          {% if (u.status or '') == 'pending' %}
-            <span class="badge bg-warning">En attente</span>
-          {% else %}
-            <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
-          {% endif %}
-        </td>
-        <td class="d-flex gap-2">
-          <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
-          {% if (u.status or '') == 'active' %}
-            <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-warning" type="submit">Désactiver</button>
-            </form>
-          {% else %}
-            <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-success" type="submit">Activer</button>
-            </form>
-          {% endif %}
-          {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-            <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-secondary" type="submit">Réinitialiser mot de passe</button>
-            </form>
-          {% endif %}
-          {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
-            {% if u.role==ROLE_ADMIN %}
-              <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
+
+<!-- ========== VUE DESKTOP (tableau) ========== -->
+<div class="users-desktop">
+  <p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
+  <div class="table-responsive">
+    <table class="table table-striped align-middle">
+      <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for u in users %}
+        <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
+          <td>{{u.id}}</td>
+          <td>{{u.first_name or ""}}</td>
+          <td>{{u.last_name or ""}}</td>
+          <td>{{u.email}}</td>
+          <td><span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{u.role or 'user'}}</span></td>
+          <td>
+            {% if (u.status or '') == 'pending' %}
+              <span class="badge bg-warning">En attente</span>
+            {% else %}
+              <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
+            {% endif %}
+          </td>
+          <td class="d-flex gap-2 flex-wrap">
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
+            {% if (u.status or '') == 'active' %}
+              <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-primary" type="submit">Rétrograder</button>
+                <button class="btn btn-sm btn-outline-warning" type="submit">Désactiver</button>
               </form>
             {% else %}
-              <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
+              <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-primary" type="submit">Promouvoir admin</button>
+                <button class="btn btn-sm btn-outline-success" type="submit">Activer</button>
               </form>
             {% endif %}
-            <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
-            </form>
-          {% endif %}
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+            {% if current_user and current_user.role==ROLE_SUPERADMIN %}
+              <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Réinit. MDP</button>
+              </form>
+            {% endif %}
+            {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
+              {% if u.role==ROLE_ADMIN %}
+                <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-primary" type="submit">Rétrograder</button>
+                </form>
+              {% else %}
+                <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-sm btn-outline-primary" type="submit">Promouvoir</button>
+                </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
+
+<!-- ========== VUE MOBILE (cartes) ========== -->
+<div class="users-mobile">
+  {% for u in users %}
+  <div class="user-card-mobile {% if (u.status or '') == 'pending' %}user-pending{% endif %}">
+    <div class="user-card-header">
+      <div class="user-avatar-mobile">
+        {{ (u.first_name or 'U')[0] }}{{ (u.last_name or '')[0] }}
+      </div>
+      <div class="user-info-mobile">
+        <div class="user-name-mobile">{{ u.first_name or "" }} {{ u.last_name or "" }}</div>
+        <div class="user-email-mobile">{{ u.email }}</div>
+      </div>
+    </div>
+
+    <div class="user-card-badges">
+      <span class="badge bg-{{ 'primary' if u.role==ROLE_ADMIN else 'secondary' }}">{{ u.role or 'user' }}</span>
+      {% if (u.status or '') == 'pending' %}
+        <span class="badge bg-warning">En attente</span>
+      {% else %}
+        <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{ u.status or 'n/a' }}</span>
+      {% endif %}
+    </div>
+
+    <div class="user-card-actions">
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">
+        <i class="fa-solid fa-pen"></i> Modifier
+      </a>
+      {% if (u.status or '') == 'active' %}
+        <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-warning" type="submit">
+            <i class="fa-solid fa-ban"></i> Désactiver
+          </button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-success" type="submit">
+            <i class="fa-solid fa-check"></i> Activer
+          </button>
+        </form>
+      {% endif %}
+    </div>
+
+    {% if current_user and current_user.role==ROLE_SUPERADMIN %}
+    <div class="user-card-actions-admin">
+      <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-outline-secondary" type="submit">
+          <i class="fa-solid fa-key"></i> Réinit. MDP
+        </button>
+      </form>
+      {% if u.role!=ROLE_SUPERADMIN %}
+        {% if u.role==ROLE_ADMIN %}
+          <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-primary" type="submit">
+              <i class="fa-solid fa-arrow-down"></i> Rétrograder
+            </button>
+          </form>
+        {% else %}
+          <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="btn btn-sm btn-outline-primary" type="submit">
+              <i class="fa-solid fa-arrow-up"></i> Promouvoir
+            </button>
+          </form>
+        {% endif %}
+        <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-danger" type="submit">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </form>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon"><i class="fa-solid fa-users"></i></div>
+    <div class="empty-state-title">Aucun utilisateur</div>
+    <div class="empty-state-text">Aucun utilisateur trouvé</div>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+/* ========== Formulaire de recherche ========== */
+.search-form {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.search-input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+}
+
+.search-input {
+  padding-left: 2.5rem;
+}
+
+/* ========== Vue Desktop ========== */
+.users-desktop {
+  display: block;
+}
+
+.users-mobile {
+  display: none;
+}
+
+/* ========== Vue Mobile ========== */
+@media (max-width: 768px) {
+  .users-desktop {
+    display: none;
+  }
+
+  .users-mobile {
+    display: block;
+  }
+}
+
+/* ========== Carte utilisateur mobile ========== */
+.user-card-mobile {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+}
+
+.user-card-mobile.user-pending {
+  border-left: 4px solid var(--color-warning);
+}
+
+.user-card-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--color-background-alt);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-avatar-mobile {
+  width: 44px;
+  height: 44px;
+  background: var(--color-primary);
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-info-mobile {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name-mobile {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.user-email-mobile {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-badges {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.user-card-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  flex-wrap: wrap;
+}
+
+.user-card-actions .btn {
+  flex: 1;
+  min-width: 100px;
+}
+
+.user-card-actions-admin {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-md) var(--spacing-md);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--spacing-md);
+}
+
+.user-card-actions-admin .btn {
+  font-size: 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+}
+
+/* ========== Mode sombre ========== */
+[data-theme="dark"] .user-card-mobile {
+  background: var(--color-background-alt);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .user-card-header {
+  background: var(--color-background);
+}
+</style>
+
 {% endblock %}

@@ -1,11 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Administration – Véhicules{% endblock %}
 {% block content %}
-<div class="container">
-  <h2>Véhicules CSP</h2>
-  <div class="mb-3">
-    <a class="btn btn-primary" href="{{ url_for('admin_vehicle_new') }}">Nouveau véhicule</a>
-  </div>
+
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-car-side page-title-icon"></i>
+    Véhicules
+  </h1>
+</div>
+
+<div class="mb-3">
+  <a class="btn btn-primary" href="{{ url_for('admin_vehicle_new') }}">
+    <i class="fa-solid fa-plus me-1"></i>Nouveau véhicule
+  </a>
+</div>
+
+<!-- ========== VUE DESKTOP (tableau) ========== -->
+<div class="vehicles-desktop">
   {% if vehicles %}
   <div class="table-responsive">
     <table class="table table-striped">
@@ -13,7 +24,7 @@
       <tbody>
         {% for v in vehicles %}
         <tr>
-          <td>{{ v.code }}</td>
+          <td><strong>{{ v.code }}</strong></td>
           <td>{{ v.label }}</td>
           <td>{{ v.category or "" }}</td>
           <td class="text-end">
@@ -29,7 +40,115 @@
     </table>
   </div>
   {% else %}
-    <p>Aucun véhicule.</p>
+  <div class="empty-state">
+    <div class="empty-state-icon"><i class="fa-solid fa-car-side"></i></div>
+    <div class="empty-state-title">Aucun véhicule</div>
+    <div class="empty-state-text">Ajoutez votre premier véhicule</div>
+  </div>
   {% endif %}
 </div>
+
+<!-- ========== VUE MOBILE (cartes) ========== -->
+<div class="vehicles-mobile">
+  {% if vehicles %}
+    {% for v in vehicles %}
+    <div class="vehicle-card-mobile">
+      <div class="vehicle-card-header">
+        <div class="vehicle-code-mobile">{{ v.code }}</div>
+        {% if v.category %}
+          <span class="badge bg-secondary">{{ v.category }}</span>
+        {% endif %}
+      </div>
+      {% if v.label %}
+      <div class="vehicle-label-mobile">{{ v.label }}</div>
+      {% endif %}
+      <div class="vehicle-card-actions">
+        <a class="btn btn-sm btn-secondary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">
+          <i class="fa-solid fa-pen"></i> Modifier
+        </a>
+        <form method="post" action="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}" class="d-inline" onsubmit="return confirm('Supprimer ce véhicule ?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-danger" type="submit">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-state-icon"><i class="fa-solid fa-car-side"></i></div>
+    <div class="empty-state-title">Aucun véhicule</div>
+    <div class="empty-state-text">Ajoutez votre premier véhicule</div>
+  </div>
+  {% endif %}
+</div>
+
+<style>
+/* ========== Vue Desktop ========== */
+.vehicles-desktop {
+  display: block;
+}
+
+.vehicles-mobile {
+  display: none;
+}
+
+/* ========== Vue Mobile ========== */
+@media (max-width: 768px) {
+  .vehicles-desktop {
+    display: none;
+  }
+
+  .vehicles-mobile {
+    display: block;
+  }
+}
+
+/* ========== Carte véhicule mobile ========== */
+.vehicle-card-mobile {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+}
+
+.vehicle-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xs);
+}
+
+.vehicle-code-mobile {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+.vehicle-label-mobile {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.vehicle-card-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+}
+
+.vehicle-card-actions .btn:first-child {
+  flex: 1;
+}
+
+/* ========== Mode sombre ========== */
+[data-theme="dark"] .vehicle-card-mobile {
+  background: var(--color-background-alt);
+  border-color: var(--color-border);
+}
+</style>
+
 {% endblock %}
