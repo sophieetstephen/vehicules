@@ -1,42 +1,34 @@
 # Axes d'amélioration - Application Vehicules
 
-## Prioritaires
+## Prioritaires - Résolus
 
-### 1. Page "Mes Réservations" pour les utilisateurs
-- **Problème** : Les utilisateurs n'ont aucun moyen de voir le statut de leurs demandes (approuvée/en attente/refusée)
-- **Solution** : Créer une page `/my-reservations` accessible depuis le dashboard
-- **Impact** : Réduit les questions aux admins, améliore l'expérience utilisateur
+### ~~1. Page "Mes Réservations"~~ ✅ NON NÉCESSAIRE
+- Les notifications email informent l'utilisateur du statut de ses demandes
 
-### 2. Bouton "Annuler ma demande"
-- **Problème** : Un utilisateur ne peut pas annuler sa propre réservation s'il s'est trompé
-- **Solution** : Ajouter un bouton d'annulation sur la page "Mes Réservations"
-- **Impact** : Réduit la charge de travail admin
+### ~~2. Annuler une demande~~ ✅ VIA CONTACT
+- Option "Annuler une réservation" dans le formulaire de contact
 
-### ~~3. Notifications email (approbation/refus)~~ ✅ FAIT
-- ~~**Problème** : L'utilisateur n'est pas notifié quand sa demande est approuvée/refusée/modifiée~~
-- ~~**Solution** : Envoyer un email lors de l'approbation, du refus ou de la modification~~
+### ~~3. Notifications email~~ ✅ FAIT
 - Emails unifiés : "Véhicule attribué", "Demande refusée", "Réservation supprimée"
+
+### ~~4. Changer mot de passe~~ ✅ VIA CONTACT
+- Option "Changer mon mot de passe" dans le formulaire de contact
+- Le superadmin réinitialise via gestion utilisateurs
 
 ---
 
-## Moyennes
+## Améliorations optionnelles
 
-### 4. Filtres dans les listes admin
+### Filtres dans les listes admin
 - Filtrer les réservations par date, véhicule, statut
 - Filtrer les utilisateurs par rôle, statut
-- Recherche dans les véhicules
 
-### 5. Profil utilisateur
-- Permettre à l'utilisateur de changer son mot de passe
-- Modifier son nom/prénom
-
-### 6. Journal d'audit
+### Journal d'audit
 - Qui a approuvé quoi et quand
 - Historique des modifications
 
-### 7. Approbation en lot
+### Approbation en lot
 - Approuver plusieurs demandes d'un coup
-- Bulk delete des anciennes demandes
 
 ---
 
@@ -62,6 +54,8 @@
 - [x] Vue mobile manage_reservation : grille véhicules 2 colonnes
 - [x] Navbar mobile : menu utilisateur toujours visible
 - [x] Navbar mobile : bouton thème avec contraste amélioré
+- [x] Formulaire contact : menu objet (annulation, mot de passe, etc.)
+- [x] Formulaire réservation : pré-remplissage nom/prénom
 
 ---
 
