@@ -131,6 +131,7 @@ class ContactForm(FlaskForm):
         choices=[
             ("question", "Question générale"),
             ("annulation", "Annuler une réservation"),
+            ("mot_de_passe", "Changer mon mot de passe"),
             ("probleme", "Signaler un problème"),
             ("autre", "Autre"),
         ],
