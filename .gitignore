@@ -40,3 +40,4 @@ flask.pid
 backup/
 schema_*.sql
 vehicules.db.old_*
+CLAUDE.md
