@@ -61,13 +61,23 @@ La page d'accueil de chaque rôle affiche :
 
 ## Lancer les tests
 
+Sur un poste de développement :
+
 ```bash
-pip install -r requirements.txt pytest
+pip install -r requirements.txt
 python -m pytest -q
 ```
 
+Sur le Raspberry, dans le conteneur Docker (après `docker compose build`) :
+
+```bash
+cd /opt/vehicules/app
+docker compose run --rm vehicules python -m pytest -q
+```
+
 `tests/conftest.py` fournit la `SECRET_KEY` et un serveur mail factice :
-aucune variable d'environnement n'est nécessaire. La suite doit passer
+aucune variable d'environnement n'est nécessaire, et les tests utilisent une
+base en mémoire sans toucher à `instance/vehicules.db`. La suite doit passer
 intégralement ; c'est le filet de sécurité avant chaque mise à jour.
 
 ## Installation sur téléphone (PWA)
