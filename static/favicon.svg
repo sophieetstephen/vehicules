@@ -1,23 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <defs>
     <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#2563eb"/>
-      <stop offset="100%" style="stop-color:#1e40af"/>
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
     </linearGradient>
   </defs>
-  <!-- Background -->
+  <!-- Fond bleu nuit -->
   <rect width="64" height="64" rx="12" fill="url(#grad)"/>
-  <!-- Car body -->
-  <path d="M12 38 L16 28 L24 24 L40 24 L48 28 L52 38 L52 44 L12 44 Z" fill="white" opacity="0.95"/>
-  <!-- Windows -->
-  <path d="M18 36 L20 30 L26 28 L26 36 Z" fill="#2563eb" opacity="0.6"/>
-  <path d="M28 36 L28 28 L36 28 L38 30 L38 36 Z" fill="#2563eb" opacity="0.6"/>
-  <!-- Wheels -->
-  <circle cx="20" cy="44" r="6" fill="#1e293b"/>
-  <circle cx="20" cy="44" r="3" fill="#64748b"/>
-  <circle cx="44" cy="44" r="6" fill="#1e293b"/>
-  <circle cx="44" cy="44" r="3" fill="#64748b"/>
-  <!-- Headlights -->
+  <!-- Halo et gyrophare bleu -->
+  <ellipse cx="32" cy="20" rx="7" ry="6" fill="#93c5fd" opacity="0.45"/>
+  <rect x="28" y="18" width="8" height="6" rx="1.5" fill="#3b82f6"/>
+  <rect x="30" y="19" width="4" height="2" rx="1" fill="#dbeafe"/>
+  <!-- Carrosserie rouge -->
+  <path d="M12 38 L16 28 L24 24 L40 24 L48 28 L52 38 L52 44 L12 44 Z" fill="#dc2626"/>
+  <rect x="12" y="40" width="40" height="4" fill="#b91c1c"/>
+  <!-- Vitres -->
+  <path d="M18 36 L20 30 L26 28 L26 36 Z" fill="#e0f2fe" opacity="0.92"/>
+  <path d="M28 36 L28 28 L36 28 L38 30 L38 36 Z" fill="#e0f2fe" opacity="0.92"/>
+  <!-- Roues -->
+  <circle cx="20" cy="44" r="6" fill="#0f172a"/>
+  <circle cx="20" cy="44" r="3" fill="#94a3b8"/>
+  <circle cx="44" cy="44" r="6" fill="#0f172a"/>
+  <circle cx="44" cy="44" r="3" fill="#94a3b8"/>
+  <!-- Feux -->
   <rect x="48" y="32" width="4" height="4" rx="1" fill="#fbbf24"/>
   <rect x="12" y="32" width="4" height="4" rx="1" fill="#fbbf24"/>
 </svg>
