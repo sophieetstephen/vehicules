@@ -17,7 +17,7 @@
     <div class="card">
       <div class="card-body">
         <h2 class="h5 mb-3">Déclarer une indisponibilité</h2>
-        <p class="text-muted small">
+        <p class="text-muted small unav-help">
           Pendant cette période, le véhicule ne pourra plus être attribué à une
           réservation et apparaîtra « Indisponible » sur l'accueil et le planning.
         </p>
@@ -33,6 +33,7 @@
               {{ form.end_date.label(class="form-label") }}
               {{ form.end_date(class="form-control" + (" is-invalid" if form.end_date.errors else "")) }}
               {% for e in form.end_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+              <div class="form-text">Laisser vide : jusqu'à nouvel ordre.</div>
             </div>
           </div>
           <div class="mb-3">

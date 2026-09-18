@@ -117,7 +117,7 @@ class UnavailabilityForm(FlaskForm):
 
     start_date = DateField("Du", format="%Y-%m-%d", validators=[DataRequired()])
     end_date = DateField(
-        "Au (inclus, vide = jusqu'à nouvel ordre)",
+        "Au (inclus)",
         format="%Y-%m-%d",
         validators=[Optional()],
         render_kw={"required": False},
