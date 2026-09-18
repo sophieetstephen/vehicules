@@ -40,6 +40,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
 from notify import send_mail_msmtp
 from flask_migrate import Migrate
+from flask_wtf.csrf import CSRFProtect
 from utils import reservation_slot_label
 
 ACCOUNT_REVIEW_RECIPIENTS = {"salexandre@sdis62.fr"}
@@ -196,12 +197,21 @@ for _p in ("/opt/vehicules", _here):
 try:
     from config import Config
 except Exception:
+    def _fallback_secret_key():
+        key = os.environ.get("SECRET_KEY")
+        if key:
+            return key
+        if os.environ.get("FLASK_ENV") == "development" or os.environ.get("FLASK_DEBUG"):
+            return "dev-secret-insecure"
+        raise RuntimeError("SECRET_KEY must be set in production")
+
     class Config:
-        SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret")
-        WTF_CSRF_CHECK_DEFAULT = False
+        SECRET_KEY = _fallback_secret_key()
+        WTF_CSRF_ENABLED = True
 
 app = Flask(__name__)
 app.config.from_object(Config)
+csrf = CSRFProtect(app)
 
 _storage_root = app.instance_path
 try:
@@ -512,6 +522,23 @@ def _fmt_dt(v):
     return v.strftime("%d/%m/%Y %H:%M") if v else ""
 
 
+# French date formatter
+JOURS_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+MOIS_FR = ["", "janvier", "février", "mars", "avril", "mai", "juin",
+           "juillet", "août", "septembre", "octobre", "novembre", "décembre"]
+
+
+@app.template_filter("date_fr")
+def _date_fr(v, fmt="full"):
+    """Format date in French. fmt: 'full' (Lundi 16 décembre 2024) or 'short' (16/12/2024)"""
+    if not v:
+        return ""
+    if fmt == "short":
+        return v.strftime("%d/%m/%Y")
+    jour = JOURS_FR[v.weekday()]
+    return f"{jour} {v.day} {MOIS_FR[v.month]} {v.year}"
+
+
 # --- Santé
 @app.route("/__ping__", methods=["GET"])
 def __ping__():
@@ -626,7 +653,7 @@ def login():
                 _safe_next_url(request.args.get("next")) or url_for("home")
             )
         flash("Identifiants invalides", "danger")
-    return render_template("login_plain.html", form=form), 200
+    return render_template("login.html", form=form), 200
 
 
 @app.route("/logout")
@@ -692,6 +719,10 @@ def new_request():
     else:
         form.user_lookup.validators = []
         form.user_id.validators = []
+        # Pré-remplir nom et prénom pour les utilisateurs standards
+        if request.method == "GET":
+            form.first_name.data = u.first_name or ""
+            form.last_name.data = u.last_name or ""
     if form.validate_on_submit():
         target_user = u
         target_user_id = u.id
@@ -933,15 +964,26 @@ def contact():
         recipients = _normalize_email_candidates(recipients)
         if recipients:
             u = current_user()
+            # Libellé de l'objet pour l'email
+            subject_labels = {
+                "question": "Question générale",
+                "annulation": "Annuler une réservation",
+                "mot_de_passe": "Changer mon mot de passe",
+                "probleme": "Signaler un problème",
+                "autre": "Autre",
+            }
+            subject_label = subject_labels.get(form.subject.data, "Contact")
             body_admin = (
+                f"Objet : {subject_label}\n\n"
                 f"{form.message.data}\n\n"
+                f"---\n"
                 f"Nom : {u.last_name}\n"
                 f"Prénom : {u.first_name}\n"
                 f"Email : {u.email}"
             )
             try:
                 send_mail_msmtp(
-                    "Message de contact",
+                    f"Contact : {subject_label}",
                     body_admin,
                     recipients,
                 )
@@ -1066,7 +1108,7 @@ def admin_user_edit(user_id):
     )
 
 
-@app.route("/admin/promote/<int:user_id>")
+@app.route("/admin/promote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_promote(user_id):
     target = User.query.get_or_404(user_id)
@@ -1076,7 +1118,7 @@ def admin_promote(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/demote/<int:user_id>")
+@app.route("/admin/demote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_demote(user_id):
     target = User.query.get_or_404(user_id)
@@ -1086,7 +1128,7 @@ def admin_demote(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/activate/<int:user_id>")
+@app.route("/admin/activate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_activate(user_id):
     target = User.query.get_or_404(user_id)
@@ -1109,7 +1151,7 @@ def admin_activate(user_id):
     return redirect(url_for("admin_users"))
 
 
-@app.route("/admin/deactivate/<int:user_id>")
+@app.route("/admin/deactivate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_deactivate(user_id):
     target = User.query.get_or_404(user_id)
@@ -1146,7 +1188,7 @@ def admin_reset_password(user_id):
     return redirect(url_for("admin_user_credentials"))
 
 
-@app.route("/admin/delete/<int:user_id>")
+@app.route("/admin/delete/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_user_delete(user_id):
     target = User.query.get_or_404(user_id)
@@ -1208,7 +1250,7 @@ def admin_vehicle_edit(vehicle_id):
     )
 
 
-@app.route("/admin/vehicles/<int:vehicle_id>/delete")
+@app.route("/admin/vehicles/<int:vehicle_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_delete(vehicle_id):
     vehicle = Vehicle.query.get_or_404(vehicle_id)
@@ -1332,6 +1374,7 @@ def admin_reservations():
         Reservation.query.filter(Reservation.archived_at.is_(None))
         .order_by(
             case((Reservation.status == "pending", 0), else_=1),
+            case((Reservation.status == "pending", Reservation.created_at), else_=None).asc(),
             Reservation.start_at.desc(),
         )
         .limit(200)
@@ -1427,12 +1470,12 @@ def manage_request(rid):
                     if recipients:
                         try:
                             send_mail_msmtp(
-                                "Réservation validée",
+                                "Véhicule attribué",
                                 (
-                                    f"Le segment du {existing.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                    f"{existing.end_at.strftime('%d/%m/%Y %H:%M')} a été mis à jour.\n"
-                                    f"Ancien véhicule : {old_vehicle.label if old_vehicle else 'N/A'}.\n"
-                                    f"Nouveau véhicule : {new_vehicle.label}."
+                                    f"Véhicule attribué pour votre réservation :\n\n"
+                                    f"Période : du {existing.start_at.strftime('%d/%m/%Y')} au {existing.end_at.strftime('%d/%m/%Y')}\n"
+                                    f"Véhicule : {new_vehicle.code}"
+                                    + (f" ({new_vehicle.label})" if new_vehicle.label else "")
                                 ),
                                 recipients,
                             )
@@ -1479,10 +1522,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Un segment du {day_start.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{day_end.strftime('%d/%m/%Y %H:%M')} vous a été attribué avec le véhicule {vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {day_start.strftime('%d/%m/%Y')} au {day_end.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {vehicle.code}"
+                                + (f" ({vehicle.label})" if vehicle.label else "")
                             ),
                             recipients,
                         )
@@ -1540,11 +1585,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Votre réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été validée.\n"
-                                f"Véhicule attribué : {v.code}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {r.start_at.strftime('%d/%m/%Y')} au {r.end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {v.code}"
+                                + (f" ({v.label})" if v.label else "")
                             ),
                             recipients,
                         )
@@ -1574,10 +1620,12 @@ def manage_request(rid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Réservation validée",
+                            "Véhicule attribué",
                             (
-                                f"Un segment du {start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{end_at.strftime('%d/%m/%Y %H:%M')} a été attribué au véhicule {vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {start_at.strftime('%d/%m/%Y')} au {end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {vehicle.code}"
+                                + (f" ({vehicle.label})" if vehicle.label else "")
                             ),
                             recipients,
                         )
@@ -1588,23 +1636,57 @@ def manage_request(rid):
         elif action == "reject":
             r.status = "rejected"
             db.session.commit()
+            recipients = reservation_notification_recipients(r)
+            if recipients:
+                try:
+                    send_mail_msmtp(
+                        "Demande de réservation refusée",
+                        (
+                            f"Votre demande de réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
+                            f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été refusée.\n"
+                            "Veuillez contacter l'administrateur pour plus d'informations."
+                        ),
+                        recipients,
+                    )
+                except Exception:
+                    app.logger.exception("Erreur lors de l'envoi du mail")
             flash("Demande refusée.", "warning")
             return redirect(url_for("admin_reservations"))
         elif action == "delete":
+            # Capturer les infos avant suppression
+            start_str = r.start_at.strftime('%d/%m/%Y %H:%M')
+            end_str = r.end_at.strftime('%d/%m/%Y %H:%M')
+            vehicle_info = r.vehicle.code if r.vehicle else "Non attribué"
+            recipients = reservation_notification_recipients(r)
             db.session.delete(r)
             db.session.commit()
+            if recipients:
+                try:
+                    send_mail_msmtp(
+                        "Réservation supprimée",
+                        (
+                            f"Votre réservation du {start_str} au {end_str} "
+                            f"(véhicule : {vehicle_info}) a été supprimée par l'administrateur.\n"
+                            "Veuillez contacter l'administrateur pour plus d'informations."
+                        ),
+                        recipients,
+                    )
+                except Exception:
+                    app.logger.exception("Erreur lors de l'envoi du mail")
             flash("Réservation supprimée.", "info")
             return redirect(url_for("admin_reservations"))
     avail = vehicles_availability(day_start, day_end)
     user = current_user()
     return render_template(
-        "manage_request.html",
-        r=r,
+        "manage_reservation.html",
+        reservation=r,
         availability=avail,
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
         day=day,
+        is_segment=False,
+        segment=None,
     )
 
 
@@ -1630,12 +1712,12 @@ def manage_segment(sid):
                 if recipients:
                     try:
                         send_mail_msmtp(
-                            "Modification de votre réservation",
+                            "Véhicule attribué",
                             (
-                                f"Le segment du {seg.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                                f"{seg.end_at.strftime('%d/%m/%Y %H:%M')} a été mis à jour.\n"
-                                f"Ancien véhicule : {old_vehicle.label if old_vehicle else 'N/A'}.\n"
-                                f"Nouveau véhicule : {new_vehicle.label}."
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {seg.start_at.strftime('%d/%m/%Y')} au {seg.end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {new_vehicle.code}"
+                                + (f" ({new_vehicle.label})" if new_vehicle.label else "")
                             ),
                             recipients,
                         )
@@ -1651,12 +1733,15 @@ def manage_segment(sid):
     avail = vehicles_availability(seg.start_at, seg.end_at)
     user = current_user()
     return render_template(
-        "manage_segment.html",
-        seg=seg,
+        "manage_reservation.html",
+        reservation=r,
         availability=avail,
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
+        day=None,
+        is_segment=True,
+        segment=seg,
     )
 
 

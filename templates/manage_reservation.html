@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+{% block title %}Gérer la réservation – Véhicules{% endblock %}
+{% block content %}
+
+{# Déterminer la date et le véhicule actuel selon le contexte #}
+{% if is_segment %}
+  {% set display_date = segment.start_at %}
+  {% set current_vehicle = segment.vehicle %}
+  {% set current_vehicle_id = segment.vehicle_id %}
+{% elif day %}
+  {% set display_date = day %}
+  {% set current_vehicle = reservation.vehicle %}
+  {% set current_vehicle_id = reservation.vehicle_id %}
+{% else %}
+  {% set display_date = reservation.start_at %}
+  {% set current_vehicle = reservation.vehicle %}
+  {% set current_vehicle_id = reservation.vehicle_id %}
+{% endif %}
+
+<div class="reservation-manager">
+  <!-- En-tête avec bouton retour -->
+  <div class="reservation-header">
+    <a href="{{ url_for('calendar_month', y=reservation.start_at.year, m=reservation.start_at.month) }}" class="back-link">
+      <i class="fa-solid fa-arrow-left"></i>
+      <span>Retour au planning</span>
+    </a>
+  </div>
+
+  <!-- Carte principale -->
+  <div class="reservation-card">
+    <!-- Section utilisateur -->
+    <div class="reservation-user">
+      <div class="user-avatar-large">
+        {{ reservation.user.first_name[0] }}{{ reservation.user.last_name[0] }}
+      </div>
+      <div class="user-info">
+        <h1 class="user-name-large">{{ reservation.user.first_name }} {{ reservation.user.last_name }}</h1>
+        <span class="reservation-status status-{{ reservation.status }}">
+          {% if reservation.status == 'approved' %}
+            <i class="fa-solid fa-check-circle"></i> Approuvée
+          {% elif reservation.status == 'pending' %}
+            <i class="fa-solid fa-clock"></i> En attente
+          {% else %}
+            <i class="fa-solid fa-times-circle"></i> Refusée
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- Informations de la réservation -->
+    <div class="reservation-details">
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-calendar-day"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Date</span>
+          <span class="detail-value">{{ display_date | date_fr }}</span>
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Créneau</span>
+          <span class="detail-value">
+            {% if is_segment %}
+              {{ slot_label(segment, segment.start_at) }}
+            {% else %}
+              {{ slot_label(reservation, display_date) }}
+            {% endif %}
+          </span>
+        </div>
+      </div>
+
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-car"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Véhicule actuel</span>
+          {% if current_vehicle %}
+            <span class="detail-value vehicle-current">
+              <strong>{{ current_vehicle.code }}</strong>
+              {% if current_vehicle.label %} — {{ current_vehicle.label }}{% endif %}
+            </span>
+          {% else %}
+            <span class="detail-value text-muted"><i class="fa-solid fa-question-circle"></i> Non attribué</span>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if reservation.purpose %}
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-file-lines"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Motif</span>
+          <span class="detail-value">{{ reservation.purpose }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if reservation.carpool %}
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Covoiturage</span>
+          <span class="detail-value">{{ reservation.carpool_with or 'Oui' }}</span>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if reservation.notes %}
+      <div class="detail-row">
+        <div class="detail-icon">
+          <i class="fa-solid fa-comment"></i>
+        </div>
+        <div class="detail-content">
+          <span class="detail-label">Notes</span>
+          <span class="detail-value">{{ reservation.notes }}</span>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Section changement de véhicule -->
+    <div class="vehicle-section">
+      <h2 class="section-title">
+        <i class="fa-solid fa-car-side"></i>
+        Choisir un véhicule
+      </h2>
+
+      <form method="post" class="vehicle-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="vehicle-grid">
+          {% for v, free in availability %}
+          <label class="vehicle-option {% if not free %}vehicle-unavailable{% endif %} {% if v.id == current_vehicle_id %}vehicle-selected{% endif %}">
+            <input type="radio" name="vehicle_id" value="{{ v.id }}"
+                   {% if not free %}disabled{% endif %}
+                   {% if v.id == current_vehicle_id %}checked{% endif %}>
+            <div class="vehicle-option-content">
+              <div class="vehicle-code">{{ v.code }}</div>
+              <div class="vehicle-label">{{ v.label or '' }}</div>
+              <div class="vehicle-status">
+                {% if free %}
+                  <span class="status-available"><i class="fa-solid fa-check"></i> Disponible</span>
+                {% else %}
+                  <span class="status-unavailable"><i class="fa-solid fa-times"></i> Occupé</span>
+                {% endif %}
+              </div>
+            </div>
+          </label>
+          {% else %}
+          <div class="empty-vehicles">
+            <i class="fa-solid fa-car-side"></i>
+            <p>Aucun véhicule configuré</p>
+          </div>
+          {% endfor %}
+        </div>
+
+        <!-- Actions unifiées -->
+        <div class="action-buttons">
+          {# Déterminer les actions selon le contexte #}
+          {% if is_segment %}
+            {% set save_action = "update" %}
+            {% set delete_action = "delete" %}
+          {% elif day %}
+            {% set save_action = "segment_day" %}
+            {% set delete_action = "delete_day" %}
+          {% else %}
+            {% set save_action = "approve" %}
+            {% set delete_action = "delete" if reservation.status != 'pending' else "reject" %}
+          {% endif %}
+
+          {# Bouton principal : Enregistrer/Approuver #}
+          {% if reservation.status == 'pending' and not is_segment and not day %}
+            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-success btn-action">
+              <i class="fa-solid fa-check"></i>
+              Approuver
+            </button>
+          {% else %}
+            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-primary btn-action">
+              <i class="fa-solid fa-save"></i>
+              Enregistrer
+            </button>
+          {% endif %}
+
+          {# Bouton secondaire : Supprimer/Refuser #}
+          {% if reservation.status == 'pending' and not is_segment and not day %}
+            <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-warning btn-action-secondary">
+              <i class="fa-solid fa-ban"></i>
+              Refuser
+            </button>
+          {% else %}
+            <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-danger btn-action-secondary"
+                    onclick="return confirm('Supprimer cette réservation ?');">
+              <i class="fa-solid fa-trash"></i>
+              Supprimer
+            </button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ============================================
+   GESTIONNAIRE DE RÉSERVATION - Styles
+   ============================================ */
+
+.reservation-manager {
+  max-width: 600px;
+  margin: 0 auto;
+  padding-bottom: var(--spacing-xl);
+}
+
+.reservation-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  padding: var(--spacing-sm) 0;
+  transition: color var(--transition-fast);
+}
+
+.back-link:hover {
+  color: var(--color-primary);
+}
+
+.reservation-card {
+  background: var(--color-background);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+/* Section utilisateur */
+.reservation-user {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  background: linear-gradient(135deg, var(--navbar-bg) 0%, #334155 100%);
+  color: white;
+}
+
+.user-avatar-large {
+  width: 56px;
+  height: 56px;
+  background: var(--color-primary);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1.25rem;
+  color: white;
+  flex-shrink: 0;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name-large {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 var(--spacing-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reservation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.status-approved { background: rgba(22, 163, 74, 0.2); color: #86efac; }
+.status-pending { background: rgba(217, 119, 6, 0.2); color: #fcd34d; }
+.status-rejected { background: rgba(220, 38, 38, 0.2); color: #fca5a5; }
+
+/* Détails */
+.reservation-details {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) 0;
+}
+
+.detail-row + .detail-row {
+  border-top: 1px solid var(--color-border-light);
+}
+
+.detail-icon {
+  width: 32px;
+  height: 32px;
+  background: var(--color-primary-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-primary);
+  flex-shrink: 0;
+  font-size: 0.9rem;
+}
+
+.detail-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.detail-value {
+  display: block;
+  font-size: 0.95rem;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.vehicle-current {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: 2px var(--spacing-sm);
+  background: var(--color-success-light);
+  color: var(--color-success);
+  border-radius: var(--radius-sm);
+}
+
+/* Section véhicules */
+.vehicle-section {
+  padding: var(--spacing-xl);
+}
+
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 var(--spacing-md);
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.section-title i {
+  color: var(--color-primary);
+}
+
+.vehicle-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-lg);
+}
+
+.vehicle-option {
+  position: relative;
+  cursor: pointer;
+}
+
+.vehicle-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vehicle-option-content {
+  padding: var(--spacing-md);
+  background: var(--color-background-alt);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition: all var(--transition-fast);
+}
+
+.vehicle-option:not(.vehicle-unavailable):hover .vehicle-option-content {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+}
+
+.vehicle-option input[type="radio"]:checked + .vehicle-option-content,
+.vehicle-option.vehicle-selected .vehicle-option-content {
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.vehicle-unavailable {
+  cursor: not-allowed;
+}
+
+.vehicle-unavailable .vehicle-option-content {
+  opacity: 0.5;
+}
+
+.vehicle-code {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 2px;
+}
+
+.vehicle-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--spacing-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vehicle-status {
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.status-available { color: var(--color-success); }
+.status-unavailable { color: var(--color-danger); }
+
+/* Boutons */
+.action-buttons {
+  display: flex;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: 1px solid var(--color-border);
+}
+
+.btn-action {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-weight: 600;
+}
+
+.btn-action-secondary {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .reservation-user {
+    padding: var(--spacing-lg);
+  }
+
+  .user-avatar-large {
+    width: 48px;
+    height: 48px;
+    font-size: 1rem;
+  }
+
+  .user-name-large {
+    font-size: 1.15rem;
+  }
+
+  .reservation-details,
+  .vehicle-section {
+    padding: var(--spacing-lg);
+  }
+
+  .vehicle-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-md);
+  }
+
+  .vehicle-option-content {
+    padding: var(--spacing-md) var(--spacing-sm);
+  }
+
+  .vehicle-code {
+    font-size: 1.2rem;
+  }
+
+  .vehicle-label {
+    font-size: 0.75rem;
+  }
+
+  .vehicle-status {
+    font-size: 0.7rem;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .btn-action,
+  .btn-action-secondary {
+    width: 100%;
+    justify-content: center;
+    padding: var(--spacing-md);
+  }
+}
+</style>
+
+{% endblock %}

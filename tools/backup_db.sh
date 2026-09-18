@@ -4,6 +4,7 @@ set -euo pipefail
 # Environment variables:
 #   DB_PATH                  Path to the SQLite database file. Overrides DATABASE_URL.
 #   DATABASE_URL             SQLAlchemy-style database URL (sqlite:// or file:// URLs are supported).
+#   ENV_FILE                 Path to .env file to backup (optional).
 #   COMPRESS                 Whether to gzip the backup (default: true).
 #   REMOTE_URI               rclone destination to receive the backup (optional).
 #   RCLONE_CONFIG            Path to a custom rclone configuration file (optional).
@@ -66,6 +67,13 @@ if [ "${COMPRESS:-true}" = "true" ]; then
   DB_FILE="${DB_FILE}.gz"
 fi
 
+ENV_FILE="${ENV_FILE:-.env}"
+ENV_BACKUP=""
+if [ -f "$ENV_FILE" ]; then
+  ENV_BACKUP="$BACKUP_DIR/env_${TS}.txt"
+  cp "$ENV_FILE" "$ENV_BACKUP"
+fi
+
 if [ -n "${REMOTE_URI:-}" ]; then
   RCLONE_ARGS=()
   if [ -n "${RCLONE_CONFIG:-}" ]; then
@@ -79,6 +87,14 @@ if [ -n "${REMOTE_URI:-}" ]; then
     echo "Error: failed to copy backup to remote destination '$REMOTE_URI'" >&2
     exit 1
   fi
+
+  if [ -n "$ENV_BACKUP" ]; then
+    if ! rclone "${RCLONE_ARGS[@]}" copy "$ENV_BACKUP" "$REMOTE_URI"; then
+      echo "Error: failed to copy .env backup to remote destination '$REMOTE_URI'" >&2
+      exit 1
+    fi
+  fi
 fi
 
 find "$BACKUP_DIR" -type f -mtime +30 -name 'vehicules_*' -delete
+find "$BACKUP_DIR" -type f -mtime +30 -name 'env_*' -delete

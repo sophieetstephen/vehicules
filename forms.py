@@ -118,5 +118,16 @@ class NotificationSettingsForm(FlaskForm):
 
 
 class ContactForm(FlaskForm):
+    subject = SelectField(
+        "Objet",
+        choices=[
+            ("question", "Question générale"),
+            ("annulation", "Annuler une réservation"),
+            ("mot_de_passe", "Changer mon mot de passe"),
+            ("probleme", "Signaler un problème"),
+            ("autre", "Autre"),
+        ],
+        validators=[DataRequired()],
+    )
     message = TextAreaField("Message", validators=[DataRequired(), Length(max=1000)])
     submit = SubmitField("Envoyer")

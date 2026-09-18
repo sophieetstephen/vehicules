@@ -18,6 +18,7 @@
 
 <h2 class="h6">Disponibilité des véhicules</h2>
 <form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="table-responsive">
     <table class="table table-bordered align-middle">
       <thead>
@@ -46,6 +47,7 @@
 </form>
 
 <form method="post" class="mt-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <button name="action" value="delete" class="btn btn-danger" onclick="return confirm('Supprimer cette réservation ?');">Supprimer la réservation</button>
 </form>
 
@@ -53,6 +55,7 @@
 <hr/>
 <h2 class="h6">Segmenter la journée du {{ day.strftime('%d/%m/%Y') }}</h2>
 <form method="post" class="row g-2">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="col-md-6">
     <label class="form-label">Véhicule</label>
     <select name="vehicle_id" class="form-select" required>
@@ -66,6 +69,7 @@
   </div>
 </form>
 <form method="post" class="mt-2" onsubmit="return confirm('Supprimer cette journée ?');">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="action" value="delete_day">
   <button class="btn btn-outline-danger">Supprimer cette journée</button>
 </form>

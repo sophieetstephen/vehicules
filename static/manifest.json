@@ -1,8 +1,17 @@
 {
-  "name": "Vehicules",
-  "short_name": "Vehicules",
+  "name": "Véhicules",
+  "short_name": "Véhicules",
+  "description": "Application de gestion de flotte automobile",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0d6efd"
+  "background_color": "#f8fafc",
+  "theme_color": "#1e293b",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

@@ -1,0 +1,6 @@
+[Unit]
+Description=Archivage annuel du planning vehicules en PDF
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker exec vehicules python tools/archive_year.py --keep-years 2

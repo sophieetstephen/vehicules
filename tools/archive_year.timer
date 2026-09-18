@@ -1,0 +1,9 @@
+[Unit]
+Description=Archivage annuel du planning le 31 decembre
+
+[Timer]
+OnCalendar=*-12-31 23:55:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

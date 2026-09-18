@@ -14,7 +14,7 @@ def test_login_page_bootstrap_classes():
         resp = client.get('/login')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
-        assert 'class="card' in html
+        assert 'class="login-card"' in html
         assert 'class="form-label"' in html
         # Connexion par identifiant : plus de champ e-mail ni d'inscription publique.
         assert 'Identifiant' in html

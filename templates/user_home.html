@@ -1,24 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Accueil utilisateur – Véhicules{% endblock %}
+{% block title %}Accueil – Véhicules{% endblock %}
 {% block content %}
-<h1 class="h4">Accueil utilisateur</h1>
-<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-house page-title-icon"></i>
+    Bienvenue, {{ user.first_name }}
+  </h1>
+</div>
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-4">
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('calendar_month') }}">
-      <i class="fa-solid fa-calendar fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('calendar_month') }}">
+      <i class="fa-solid fa-calendar-days dashboard-icon icon-calendar"></i>
       <h5 class="card-title">Planning mensuel</h5>
+      <p class="text-muted small mb-0">Consultez les réservations</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('new_request') }}">
-      <i class="fa-solid fa-car-side fa-2x mb-2"></i>
-      <h5 class="card-title">Demande de réservation</h5>
+    <a class="dashboard-card" href="{{ url_for('new_request') }}">
+      <i class="fa-solid fa-car-side dashboard-icon icon-car"></i>
+      <h5 class="card-title">Nouvelle réservation</h5>
+      <p class="text-muted small mb-0">Réservez un véhicule</p>
     </a>
   </div>
+
   <div class="col">
-    <a class="card text-center dashboard-card" href="{{ url_for('contact') }}">
-      <i class="fa-solid fa-envelope fa-2x mb-2"></i>
+    <a class="dashboard-card" href="{{ url_for('contact') }}">
+      <i class="fa-solid fa-envelope dashboard-icon icon-mail"></i>
       <h5 class="card-title">Contact</h5>
+      <p class="text-muted small mb-0">Contactez l'administration</p>
     </a>
   </div>
 </div>
