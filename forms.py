@@ -112,6 +112,25 @@ class UserForm(FlaskForm):
     submit = SubmitField("Enregistrer")
 
 
+class UnavailabilityForm(FlaskForm):
+    """Déclaration d'une indisponibilité de véhicule par un administrateur."""
+
+    start_date = DateField("Du", format="%Y-%m-%d", validators=[DataRequired()])
+    end_date = DateField(
+        "Au (inclus, vide = jusqu'à nouvel ordre)",
+        format="%Y-%m-%d",
+        validators=[Optional()],
+        render_kw={"required": False},
+    )
+    category = SelectField(
+        "Motif",
+        choices=[],  # rempli dans la vue depuis VehicleUnavailability.CATEGORIES
+        validators=[DataRequired()],
+    )
+    details = StringField("Précisions", validators=[Optional(), Length(max=200)])
+    submit = SubmitField("Déclarer l'indisponibilité")
+
+
 class NotificationSettingsForm(FlaskForm):
     recipients = MultiCheckboxField("Notifier", choices=[])
     submit = SubmitField("Enregistrer")

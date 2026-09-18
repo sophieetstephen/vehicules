@@ -22,7 +22,9 @@
       <div class="vehicle-status vehicle-status-{{ entry.state }}">
         <div class="vehicle-status-head">
           <span class="vehicle-status-code">{{ v.code }}</span>
-          {% if entry.state == 'out' %}
+          {% if entry.state == 'unavailable' %}
+            <span class="badge bg-dark">Indisponible</span>
+          {% elif entry.state == 'out' %}
             <span class="badge bg-danger">Sorti</span>
           {% elif entry.state == 'later' %}
             <span class="badge bg-warning text-dark">Réservé plus tard</span>
@@ -32,7 +34,19 @@
         </div>
         <div class="vehicle-status-label">{{ v.label }}</div>
         {% set it = entry.current or entry.next %}
-        {% if it %}
+        {% if entry.state == 'unavailable' %}
+          {% set unav = entry.unavailability %}
+          <div class="vehicle-status-detail">
+            <div><i class="fa-solid fa-wrench me-1"></i>{{ unav.label }}</div>
+            <div>
+              <i class="fa-solid fa-clock me-1"></i>
+              {% if unav.end_at %}jusqu'au {{ unav.end_at.strftime('%d/%m') }}{% else %}jusqu'à nouvel ordre{% endif %}
+            </div>
+            {% if user and user.role in ['admin', 'superadmin'] %}
+              <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=v.id) }}" class="small">Gérer</a>
+            {% endif %}
+          </div>
+        {% elif it %}
           {% set r = it.reservation %}
           <div class="vehicle-status-detail">
             <div>
@@ -112,6 +126,7 @@
 .vehicle-status-free { border-left-color: var(--color-success); }
 .vehicle-status-out { border-left-color: var(--color-danger); }
 .vehicle-status-later { border-left-color: var(--color-warning); }
+.vehicle-status-unavailable { border-left-color: #6b7280; opacity: .85; }
 .vehicle-status-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 .vehicle-status-code { font-weight: 700; font-size: 1.1rem; color: var(--color-text); }
 .vehicle-status-label { color: var(--color-text-muted); font-size: .85rem; margin: .15rem 0 .5rem; }

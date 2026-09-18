@@ -47,6 +47,16 @@
             {% set day = start + timedelta(days=(i|int)) %}
             <td class="text-center min-w-40">
               {% set cell_has_res = false %}
+              {% for un in unavailabilities if un.vehicle_id==v.id and un.start_at.date() <= day.date() and (un.end_at is none or day.date() <= un.end_at.date()) %}
+                {% if loop.first %}
+                  {% set cell_has_res = true %}
+                  {% if user and user.role in ['admin', 'superadmin'] %}
+                    <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=v.id) }}" class="badge bg-dark" title="{{ un.label }}">Indispo.</a>
+                  {% else %}
+                    <span class="badge bg-dark" title="{{ un.label }}">Indispo.</span>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
               {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
                 {% set ns = namespace(has_seg=false) %}
                 {% for s in segments if s.reservation_id==r.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
@@ -94,6 +104,11 @@
   {% for i in range(days) %}
     {% set day = start + timedelta(days=(i|int)) %}
     {% set day_reservations = [] %}
+    {% for v in vehicles %}
+      {% for un in unavailabilities if un.vehicle_id==v.id and un.start_at.date() <= day.date() and (un.end_at is none or day.date() <= un.end_at.date()) %}
+        {% if loop.first %}{% set _ = day_reservations.append({'type': 'unav', 'vehicle': v, 'unav': un}) %}{% endif %}
+      {% endfor %}
+    {% endfor %}
 
     {# Collecter les réservations du jour #}
     {% for v in vehicles %}
@@ -120,6 +135,22 @@
       </div>
       <div class="mobile-day-reservations">
         {% for item in day_reservations %}
+          {% if item.type == 'unav' %}
+          <div class="mobile-reservation">
+            <div class="mobile-res-vehicle">{{ item.vehicle.code }}</div>
+            <div class="mobile-res-details">
+              <div class="mobile-res-user"><span class="badge bg-dark">Indispo.</span> {{ item.unav.label }}</div>
+              <div class="mobile-res-slot">
+                {% if item.unav.end_at %}jusqu'au {{ item.unav.end_at.strftime('%d/%m') }}{% else %}jusqu'à nouvel ordre{% endif %}
+              </div>
+            </div>
+            {% if user and user.role in ['admin', 'superadmin'] %}
+              <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=item.vehicle.id) }}" class="mobile-res-action">
+                <i class="fa-solid fa-chevron-right"></i>
+              </a>
+            {% endif %}
+          </div>
+          {% else %}
           <div class="mobile-reservation">
             <div class="mobile-res-vehicle">{{ item.vehicle.code }}</div>
             <div class="mobile-res-details">
@@ -141,6 +172,7 @@
               </a>
             {% endif %}
           </div>
+          {% endif %}
         {% endfor %}
       </div>
     </div>

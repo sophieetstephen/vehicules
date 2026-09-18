@@ -19,6 +19,14 @@
 
 ---
 
+### ~~5. Véhicule indisponible~~ ✅ FAIT
+- Déclaration par un admin (panne, entretien, carrosserie, autre), fin
+  facultative ; véhicule non attribuable et affiché "Indisponible" sur
+  l'accueil, le planning et la page de gestion ; alerte si des réservations
+  validées l'utilisent
+
+---
+
 ## Améliorations optionnelles (non prioritaires)
 
 ### Filtres dans les listes admin
