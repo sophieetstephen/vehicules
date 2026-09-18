@@ -459,7 +459,7 @@ def list_usernames_command():
 
 def current_user():
     uid = session.get("uid")
-    return User.query.get(uid) if uid else None
+    return db.session.get(User, uid) if uid else None
 
 
 @app.route("/api/users/search", methods=["GET"])
@@ -680,7 +680,7 @@ def cancel_reservation(rid):
     """Let a user cancel one of their own upcoming reservations."""
 
     u = current_user()
-    r = Reservation.query.get_or_404(rid)
+    r = db.get_or_404(Reservation, rid)
     if r.user_id != u.id:
         abort(403)
     if r.archived_at is not None or r.status not in ("pending", "approved"):
@@ -1158,7 +1158,7 @@ def new_request():
             include_account_review=False,
         )
         if not target_user:
-            target_user = User.query.get(target_user_id)
+            target_user = db.session.get(User, target_user_id)
         recipients = _normalize_email_candidates(recipients)
         if recipients:
             try:
@@ -1325,7 +1325,7 @@ def admin_user_credentials():
 @app.route("/admin/user/<int:user_id>/edit", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_user_edit(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     u = current_user()
     form = UserForm(obj=target)
     if form.validate_on_submit():
@@ -1350,7 +1350,7 @@ def admin_user_edit(user_id):
 @app.route("/admin/promote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_promote(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     target.role = User.ROLE_ADMIN
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
@@ -1360,7 +1360,7 @@ def admin_promote(user_id):
 @app.route("/admin/demote/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_demote(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     target.role = User.ROLE_USER
     db.session.commit()
     flash("Utilisateur rétrogradé", "info")
@@ -1370,7 +1370,7 @@ def admin_demote(user_id):
 @app.route("/admin/activate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_activate(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     target.status = "active"
     db.session.commit()
     subject = "Votre compte est activé"
@@ -1393,7 +1393,7 @@ def admin_activate(user_id):
 @app.route("/admin/deactivate/<int:user_id>", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_deactivate(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     target.status = "inactive"
     db.session.commit()
     flash("Utilisateur désactivé", "warning")
@@ -1409,7 +1409,7 @@ def admin_reset_password(user_id):
     regenerate one, which is then shown once on screen and e-mailed.
     """
 
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     if not target.username:
         target.assign_username()
     password = target.set_random_password()
@@ -1430,7 +1430,7 @@ def admin_reset_password(user_id):
 @app.route("/admin/delete/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_user_delete(user_id):
-    target = User.query.get_or_404(user_id)
+    target = db.get_or_404(User, user_id)
     if target.role == User.ROLE_SUPERADMIN:
         flash("Impossible de supprimer un superadministrateur", "danger")
         return redirect(url_for("admin_users"))
@@ -1463,7 +1463,7 @@ def admin_vehicle_unavailability(vehicle_id):
     """List and declare unavailability periods for a vehicle."""
 
     user = current_user()
-    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
     form = UnavailabilityForm()
     form.category.choices = list(VehicleUnavailability.CATEGORIES)
     now = local_now()
@@ -1529,7 +1529,7 @@ def _render_vehicle_unavailability(vehicle, form, user, now):
 @app.route("/admin/vehicles/unavailability/<int:unav_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_unavailability_delete(unav_id):
-    unav = VehicleUnavailability.query.get_or_404(unav_id)
+    unav = db.get_or_404(VehicleUnavailability, unav_id)
     vehicle_id = unav.vehicle_id
     db.session.delete(unav)
     db.session.commit()
@@ -1558,7 +1558,7 @@ def admin_vehicle_new():
 @app.route("/admin/vehicles/<int:vehicle_id>/edit", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_edit(vehicle_id):
-    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
     if request.method == "POST":
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
@@ -1574,7 +1574,7 @@ def admin_vehicle_edit(vehicle_id):
 @app.route("/admin/vehicles/<int:vehicle_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_delete(vehicle_id):
-    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
     db.session.delete(vehicle)
     db.session.commit()
     flash("Véhicule supprimé", "info")
@@ -1928,7 +1928,7 @@ def admin_leaves():
 @app.route("/admin/manage/<int:rid>", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def manage_request(rid):
-    r = Reservation.query.get_or_404(rid)
+    r = db.get_or_404(Reservation, rid)
     day_str = request.args.get("day")
     day = None
     if day_str:
@@ -1965,10 +1965,10 @@ def manage_request(rid):
                     ReservationSegment.start_at < day_end,
                 ).first()
                 if existing:
-                    old_vehicle = Vehicle.query.get(existing.vehicle_id)
+                    old_vehicle = db.session.get(Vehicle, existing.vehicle_id)
                     existing.vehicle_id = veh_id
                     db.session.commit()
-                    new_vehicle = Vehicle.query.get(veh_id)
+                    new_vehicle = db.session.get(Vehicle, veh_id)
                     recipients = reservation_notification_recipients(r)
                     if recipients:
                         try:
@@ -2020,7 +2020,7 @@ def manage_request(rid):
                     r.vehicle_id = None
                 r.status = "approved"
                 db.session.commit()
-                vehicle = Vehicle.query.get(veh_id)
+                vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
                     try:
@@ -2075,7 +2075,7 @@ def manage_request(rid):
             return redirect(url_for("admin_reservations"))
         if action == "approve":
             veh_id = int(request.form.get("vehicle_id"))
-            v = Vehicle.query.get_or_404(veh_id)
+            v = db.get_or_404(Vehicle, veh_id)
             if has_conflict(v.id, r.start_at, r.end_at, exclude_reservation_id=r.id):
                 flash(
                     "Conflit détecté sur ce véhicule pour la période.", "danger"
@@ -2118,7 +2118,7 @@ def manage_request(rid):
                 r.status = "approved"
                 db.session.add(seg)
                 db.session.commit()
-                vehicle = Vehicle.query.get(veh_id)
+                vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
                     try:
@@ -2197,7 +2197,7 @@ def manage_request(rid):
 @app.route("/admin/manage/segment/<int:sid>", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def manage_segment(sid):
-    seg = ReservationSegment.query.get_or_404(sid)
+    seg = db.get_or_404(ReservationSegment, sid)
     r = seg.reservation
     if request.method == "POST":
         action = request.form.get("action")
@@ -2211,7 +2211,7 @@ def manage_segment(sid):
                 old_vehicle = seg.vehicle
                 seg.vehicle_id = veh_id
                 db.session.commit()
-                new_vehicle = Vehicle.query.get(veh_id)
+                new_vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
                     try:

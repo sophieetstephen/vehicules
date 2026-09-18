@@ -94,9 +94,9 @@ def test_admin_cannot_approve_reservation_on_unavailable_vehicle(ctx):
     page = c.get(f"/admin/manage/{r.id}").data.decode()
     assert "Indisponible" in page
     c.post(f"/admin/manage/{r.id}", data={"action": "approve", "vehicle_id": v1.id})
-    assert Reservation.query.get(r.id).status == "pending"
+    assert db.session.get(Reservation, r.id).status == "pending"
     c.post(f"/admin/manage/{r.id}", data={"action": "approve", "vehicle_id": v2.id})
-    assert Reservation.query.get(r.id).status == "approved"
+    assert db.session.get(Reservation, r.id).status == "approved"
 
 
 # --- accueil et planning ------------------------------------------------------
@@ -194,5 +194,5 @@ def test_deleting_vehicle_removes_its_unavailabilities(ctx):
     v1, _ = _vehicles()
     _unav(v1, datetime(2026, 9, 20))
     _client_as(admin).post(f"/admin/vehicles/{v1.id}/delete")
-    assert Vehicle.query.get(v1.id) is None
+    assert db.session.get(Vehicle, v1.id) is None
     assert VehicleUnavailability.query.count() == 0
