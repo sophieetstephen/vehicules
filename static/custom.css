@@ -150,13 +150,13 @@ body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background-color: var(--color-background-alt);
   color: var(--color-text);
+  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 /* Le thème Litera applique une police à empattements (Georgia) aux
    paragraphes : on garde la même police que le reste de l'interface. */
 p {
   font-family: inherit;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
 /* --- Navbar personnalisée --- */
