@@ -44,7 +44,29 @@ automatiquement un identifiant pour chaque compte existant et **affiche la
 correspondance e‑mail → identifiant** dans le terminal. Les mots de passe
 existants restent valables.
 
+## Accueil : tableau du jour et annulation
+
+La page d'accueil de chaque rôle affiche :
+
+* **Aujourd'hui** : pour chaque véhicule, son état à l'instant présent —
+  *Sorti* (avec qui, jusqu'à quelle heure), *Réservé plus tard* (à partir de
+  quelle heure) ou *Libre*. Les réservations validées et leurs segments
+  jour par jour sont pris en compte. Les admins voient en plus le nombre de
+  demandes en attente.
+* **Mes réservations à venir** : les demandes en attente et les réservations
+  validées de l'utilisateur, avec un bouton **Annuler**. L'annulation passe
+  la réservation au statut `cancelled`, libère immédiatement le véhicule, et
+  envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
+  Une réservation terminée, refusée ou archivée ne peut plus être annulée.
+
+L'heure « maintenant » est calculée dans le fuseau `APP_TIMEZONE` (par
+défaut `Europe/Paris`), car les créneaux 8h‑12h / 13h‑17h sont en heure
+locale alors que le conteneur Docker tourne en UTC.
+
 ## Notifications par e‑mail
+
+* **Annulation par l'utilisateur** – les administrateurs sélectionnés dans
+  « Gestion des congés » et les participants reçoivent un e‑mail.
 
 * **Création de compte / régénération de mot de passe** – l'utilisateur
   reçoit ses identifiants de connexion par e‑mail.

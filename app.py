@@ -45,6 +45,9 @@ from utils import reservation_slot_label
 
 ACCOUNT_REVIEW_RECIPIENTS = {"salexandre@sdis62.fr"}
 
+# Statuts qui ne bloquent plus un véhicule.
+INACTIVE_STATUSES = ("rejected", "cancelled")
+
 
 def _normalize_email_candidates(*candidates):
     """Return a deterministic list of non-empty email addresses.
@@ -619,7 +622,89 @@ def home():
         template = "user_home.html"
     else:
         return redirect(url_for("login"))
-    return render_template(template, user=u, current_user=u)
+    if u.status != "active":
+        return render_template(template, user=u, current_user=u)
+    now = local_now()
+    pending_count = 0
+    if u.role in (User.ROLE_ADMIN, User.ROLE_SUPERADMIN):
+        pending_count = Reservation.query.filter(
+            Reservation.status == "pending",
+            Reservation.archived_at.is_(None),
+        ).count()
+    return render_template(
+        template,
+        user=u,
+        current_user=u,
+        now=now,
+        overview=today_overview(now),
+        my_reservations=my_upcoming_reservations(u, now),
+        pending_count=pending_count,
+        slot_label=reservation_slot_label,
+        vehicle_codes=reservation_vehicle_codes,
+    )
+
+
+@app.route("/reservation/<int:rid>/cancel", methods=["POST"])
+def cancel_reservation(rid):
+    """Let a user cancel one of their own upcoming reservations."""
+
+    u = current_user()
+    r = Reservation.query.get_or_404(rid)
+    if r.user_id != u.id:
+        abort(403)
+    if r.archived_at is not None or r.status not in ("pending", "approved"):
+        flash("Cette réservation ne peut plus être annulée.", "warning")
+        return redirect(url_for("home"))
+    if r.end_at <= local_now():
+        flash("Cette réservation est terminée et ne peut plus être annulée.", "warning")
+        return redirect(url_for("home"))
+
+    start_str = r.start_at.strftime("%d/%m/%Y %H:%M")
+    end_str = r.end_at.strftime("%d/%m/%Y %H:%M")
+    codes = reservation_vehicle_codes(r)
+    vehicle_info = ", ".join(codes) if codes else "non attribué"
+    was_pending = r.status == "pending"
+    participants = reservation_notification_recipients(r)
+
+    r.status = "cancelled"
+    # Les segments portent l'attribution jour par jour : les supprimer libère
+    # immédiatement les véhicules pour d'autres demandes.
+    for seg in list(r.segments):
+        db.session.delete(seg)
+    db.session.commit()
+
+    admin_recipients = _normalize_email_candidates(
+        admin_notification_recipients(
+            fallback_when_empty=False, include_account_review=False
+        )
+    )
+    if admin_recipients:
+        try:
+            send_mail_msmtp(
+                "Réservation annulée par l'utilisateur",
+                (
+                    f"{u.name} a annulé sa {'demande de réservation' if was_pending else 'réservation'} "
+                    f"du {start_str} au {end_str} (véhicule : {vehicle_info}).\n"
+                    "Aucune action n'est nécessaire : le véhicule est de nouveau disponible."
+                ),
+                admin_recipients,
+            )
+        except Exception:
+            app.logger.exception("Erreur lors de l'envoi du mail")
+    if participants:
+        try:
+            send_mail_msmtp(
+                "Réservation annulée",
+                (
+                    f"La réservation du {start_str} au {end_str} (véhicule : {vehicle_info}) "
+                    f"a été annulée par {u.name}."
+                ),
+                participants,
+            )
+        except Exception:
+            app.logger.exception("Erreur lors de l'envoi du mail")
+    flash("Votre réservation a été annulée.", "success")
+    return redirect(url_for("home"))
 
 
 # --- Routes de connexion
@@ -1274,7 +1359,7 @@ def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
         return True
     q_res = Reservation.query.filter(
         Reservation.vehicle_id == vehicle_id,
-        Reservation.status != "rejected",
+        Reservation.status.notin_(INACTIVE_STATUSES),
         Reservation.end_at > start,
         Reservation.start_at < end,
     )
@@ -1289,6 +1374,125 @@ def vehicles_availability(start, end):
         conflict = has_conflict(v.id, start, end)
         out.append((v, not conflict))
     return out
+
+
+def local_now():
+    """Return the current local (naive) datetime.
+
+    Reservation slots are stored as naive local times (8h-12h, 13h-17h), so
+    "now" must be expressed in the same time zone whatever the container's
+    system clock is set to (Docker images default to UTC).
+    """
+
+    tz_name = app.config.get("APP_TIMEZONE") or "Europe/Paris"
+    try:
+        from zoneinfo import ZoneInfo
+
+        return datetime.now(ZoneInfo(tz_name)).replace(tzinfo=None)
+    except Exception:
+        return datetime.now()
+
+
+def today_overview(now=None):
+    """Return, for each vehicle, its situation at ``now``.
+
+    Each entry is a dict with:
+
+    * ``vehicle``  – the Vehicle
+    * ``state``    – ``"out"`` (currently used), ``"later"`` (booked later
+                     today) or ``"free"`` (nothing else today)
+    * ``current``  – the occupation in progress, if any
+    * ``next``     – the next occupation later today, if any
+    * ``items``    – every occupation touching today, sorted by start
+
+    An occupation is a dict ``{start, end, reservation}`` built from approved
+    reservations (direct vehicle assignment) and from their segments (per-day
+    vehicle assignment).
+    """
+
+    now = now or local_now()
+    day_start = datetime.combine(now.date(), time.min)
+    day_end = datetime.combine(now.date(), time.max)
+    vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    occupations = {v.id: [] for v in vehicles}
+
+    direct = Reservation.query.filter(
+        Reservation.status == "approved",
+        Reservation.vehicle_id.isnot(None),
+        Reservation.start_at <= day_end,
+        Reservation.end_at >= day_start,
+    ).all()
+    for r in direct:
+        if r.vehicle_id in occupations:
+            occupations[r.vehicle_id].append(
+                {"start": r.start_at, "end": r.end_at, "reservation": r}
+            )
+    segments = (
+        ReservationSegment.query.join(Reservation)
+        .filter(
+            Reservation.status == "approved",
+            ReservationSegment.start_at <= day_end,
+            ReservationSegment.end_at >= day_start,
+        )
+        .all()
+    )
+    for seg in segments:
+        if seg.vehicle_id in occupations:
+            occupations[seg.vehicle_id].append(
+                {"start": seg.start_at, "end": seg.end_at, "reservation": seg.reservation}
+            )
+
+    overview = []
+    for v in vehicles:
+        items = sorted(occupations[v.id], key=lambda it: it["start"])
+        current = next(
+            (it for it in items if it["start"] <= now < it["end"]), None
+        )
+        upcoming = [it for it in items if it["start"] > now]
+        if current:
+            state = "out"
+        elif upcoming:
+            state = "later"
+        else:
+            state = "free"
+        overview.append(
+            {
+                "vehicle": v,
+                "state": state,
+                "current": current,
+                "next": upcoming[0] if upcoming else None,
+                "items": items,
+            }
+        )
+    return overview
+
+
+def my_upcoming_reservations(user, now=None):
+    """Return the user's pending/approved reservations not finished yet."""
+
+    now = now or local_now()
+    return (
+        Reservation.query.filter(
+            Reservation.user_id == user.id,
+            Reservation.archived_at.is_(None),
+            Reservation.status.in_(["pending", "approved"]),
+            Reservation.end_at > now,
+        )
+        .order_by(Reservation.start_at.asc())
+        .all()
+    )
+
+
+def reservation_vehicle_codes(reservation):
+    """Return the vehicle codes attached to a reservation (direct or segments)."""
+
+    codes = []
+    if reservation.vehicle is not None:
+        codes.append(reservation.vehicle.code)
+    for seg in sorted(reservation.segments, key=lambda s: s.start_at):
+        if seg.vehicle is not None and seg.vehicle.code not in codes:
+            codes.append(seg.vehicle.code)
+    return codes
 
 
 def reservation_carpool_users(reservation):

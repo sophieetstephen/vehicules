@@ -1,0 +1,126 @@
+{# Tableau du jour : état de chaque véhicule maintenant + mes réservations à venir.
+   Variables attendues : now, overview, my_reservations, pending_count, slot_label, vehicle_codes #}
+{% if overview is defined %}
+<section class="today-section">
+  <div class="today-header">
+    <h2 class="today-title">
+      <i class="fa-solid fa-clock me-2"></i>Aujourd'hui
+      <span class="today-date">{{ weekday_abbr(now) }} {{ now.strftime('%d/%m') }} · {{ now.strftime('%H:%M') }}</span>
+    </h2>
+    {% if pending_count %}
+      <a class="btn btn-warning btn-sm" href="{{ url_for('admin_reservations') }}">
+        <i class="fa-solid fa-hourglass-half me-1"></i>{{ pending_count }} demande{{ 's' if pending_count > 1 }} en attente
+      </a>
+    {% endif %}
+  </div>
+
+  {% if overview %}
+  <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-3">
+    {% for entry in overview %}
+    {% set v = entry.vehicle %}
+    <div class="col">
+      <div class="vehicle-status vehicle-status-{{ entry.state }}">
+        <div class="vehicle-status-head">
+          <span class="vehicle-status-code">{{ v.code }}</span>
+          {% if entry.state == 'out' %}
+            <span class="badge bg-danger">Sorti</span>
+          {% elif entry.state == 'later' %}
+            <span class="badge bg-warning text-dark">Réservé plus tard</span>
+          {% else %}
+            <span class="badge bg-success">Libre</span>
+          {% endif %}
+        </div>
+        <div class="vehicle-status-label">{{ v.label }}</div>
+        {% set it = entry.current or entry.next %}
+        {% if it %}
+          {% set r = it.reservation %}
+          <div class="vehicle-status-detail">
+            <div>
+              <i class="fa-solid fa-user me-1"></i>{{ r.user.first_name }} {{ r.user.last_name }}
+              {% if r.carpool_with %}<span class="text-muted">· avec {{ r.carpool_with }}</span>{% endif %}
+            </div>
+            <div>
+              <i class="fa-solid fa-clock me-1"></i>
+              {% if entry.state == 'out' %}
+                jusqu'{% if it.end.date() == now.date() %}à {{ it.end.strftime('%H:%M') }}{% else %}au {{ it.end.strftime('%d/%m') }} {{ it.end.strftime('%H:%M') }}{% endif %}
+              {% else %}
+                à partir de {{ it.start.strftime('%H:%M') }} ({{ slot_label(r, now) }})
+              {% endif %}
+            </div>
+            {% if r.purpose %}<div class="text-muted"><i class="fa-solid fa-file-lines me-1"></i>{{ r.purpose }}</div>{% endif %}
+          </div>
+        {% else %}
+          <div class="vehicle-status-detail">
+            <a href="{{ url_for('new_request') }}"><i class="fa-solid fa-plus me-1"></i>Réserver</a>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-muted">Aucun véhicule enregistré.</p>
+  {% endif %}
+</section>
+
+<section class="today-section">
+  <h2 class="today-title"><i class="fa-solid fa-list-check me-2"></i>Mes réservations à venir</h2>
+  {% if my_reservations %}
+  <div class="my-reservations">
+    {% for r in my_reservations %}
+    <div class="my-reservation">
+      <div class="my-reservation-main">
+        <div class="my-reservation-dates">
+          <i class="fa-solid fa-calendar me-1"></i>
+          {% if r.start_at.date() == r.end_at.date() %}
+            {{ r.start_at.strftime('%d/%m/%Y') }} · {{ slot_label(r, r.start_at) }}
+          {% else %}
+            {{ r.start_at.strftime('%d/%m/%Y') }} ({{ slot_label(r, r.start_at) }}) → {{ r.end_at.strftime('%d/%m/%Y') }} ({{ slot_label(r, r.end_at) }})
+          {% endif %}
+        </div>
+        <div class="my-reservation-meta">
+          {% if r.status == 'approved' %}
+            <span class="badge bg-success">Validée</span>
+            {% set codes = vehicle_codes(r) %}
+            <span class="text-muted">{{ codes|join(', ') if codes else 'véhicule à préciser' }}</span>
+          {% else %}
+            <span class="badge bg-warning text-dark">En attente</span>
+            <span class="text-muted">véhicule attribué à la validation</span>
+          {% endif %}
+          {% if r.purpose %}<span class="text-muted">· {{ r.purpose }}</span>{% endif %}
+        </div>
+      </div>
+      <form method="post" action="{{ url_for('cancel_reservation', rid=r.id) }}" onsubmit="return confirm('Annuler cette réservation ? Les administrateurs seront prévenus.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-outline-danger btn-sm" type="submit"><i class="fa-solid fa-xmark me-1"></i>Annuler</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-muted mb-0">Aucune réservation à venir. <a href="{{ url_for('new_request') }}">Faire une demande</a></p>
+  {% endif %}
+</section>
+
+<style>
+.today-section { margin-bottom: var(--spacing-xl, 2rem); }
+.today-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--spacing-sm, .5rem); margin-bottom: var(--spacing-md, 1rem); }
+.today-title { font-size: 1.1rem; font-weight: 600; margin: 0 0 var(--spacing-md, 1rem); color: var(--color-text); }
+.today-header .today-title { margin-bottom: 0; }
+.today-date { font-weight: 400; color: var(--color-text-muted); font-size: .9rem; margin-left: .5rem; }
+.vehicle-status { background: var(--color-background); border: 1px solid var(--color-border); border-left: 5px solid var(--color-border); border-radius: var(--radius-lg, .75rem); padding: var(--spacing-md, 1rem); height: 100%; }
+.vehicle-status-free { border-left-color: var(--color-success); }
+.vehicle-status-out { border-left-color: var(--color-danger); }
+.vehicle-status-later { border-left-color: var(--color-warning); }
+.vehicle-status-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.vehicle-status-code { font-weight: 700; font-size: 1.1rem; color: var(--color-text); }
+.vehicle-status-label { color: var(--color-text-muted); font-size: .85rem; margin: .15rem 0 .5rem; }
+.vehicle-status-detail { font-size: .9rem; color: var(--color-text); display: flex; flex-direction: column; gap: .2rem; }
+.my-reservations { display: flex; flex-direction: column; gap: var(--spacing-sm, .5rem); }
+.my-reservation { display: flex; justify-content: space-between; align-items: center; gap: var(--spacing-md, 1rem); background: var(--color-background); border: 1px solid var(--color-border); border-radius: var(--radius-lg, .75rem); padding: var(--spacing-md, 1rem); flex-wrap: wrap; }
+.my-reservation-main { flex: 1; min-width: 200px; }
+.my-reservation-dates { font-weight: 600; color: var(--color-text); }
+.my-reservation-meta { font-size: .85rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .25rem; }
+[data-theme="dark"] .vehicle-status, [data-theme="dark"] .my-reservation { background: var(--color-background-alt); }
+</style>
+{% endif %}
