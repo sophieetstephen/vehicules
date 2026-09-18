@@ -63,3 +63,10 @@ class Config:
     # Fuseau horaire utilisé pour "maintenant" dans le tableau du jour. Les
     # créneaux de réservation (8h-12h, 13h-17h) sont exprimés en heure locale.
     APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "Europe/Paris")
+    # Limitation des tentatives de connexion : au-delà de LOGIN_MAX_ATTEMPTS
+    # échecs sur un identifiant en LOGIN_LOCKOUT_MINUTES, l'identifiant est
+    # bloqué pendant LOGIN_LOCKOUT_MINUTES. Même principe par adresse IP avec
+    # LOGIN_IP_MAX_ATTEMPTS (plus large : plusieurs personnes derrière une IP).
+    LOGIN_MAX_ATTEMPTS = int(os.environ.get("LOGIN_MAX_ATTEMPTS", "5"))
+    LOGIN_LOCKOUT_MINUTES = int(os.environ.get("LOGIN_LOCKOUT_MINUTES", "15"))
+    LOGIN_IP_MAX_ATTEMPTS = int(os.environ.get("LOGIN_IP_MAX_ATTEMPTS", "30"))

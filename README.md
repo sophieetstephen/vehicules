@@ -27,6 +27,24 @@ Les variables `SUPERADMIN_EMAILS` / `ADMIN_EMAILS` ne servent plus qu'aux
 notifications de secours lorsque aucun destinataire n'est coché dans
 « Gestion des congés ».
 
+### Limitation des tentatives de connexion
+
+Chaque tentative de connexion est enregistrée (identifiant saisi, adresse IP,
+succès ou échec). Après **5 échecs** sur un même identifiant en 15 minutes,
+cet identifiant est bloqué **15 minutes** (« Trop de tentatives échouées »),
+même si le bon mot de passe est ensuite saisi. Une connexion réussie remet le
+compteur à zéro. Une adresse IP qui accumule 30 échecs en 15 minutes est
+bloquée de la même façon, quel que soit l'identifiant. Variables :
+`LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES`, `LOGIN_IP_MAX_ATTEMPTS`.
+
+Derrière le proxy Caddy, l'adresse du client est lue dans `X-Forwarded-For`.
+L'historique est conservé 30 jours et consultable :
+
+```bash
+flask login-attempts              # échecs des dernières 24 h
+flask login-attempts --hours 168 --all
+```
+
 ### Commandes de secours (super administrateur)
 
 Si l'interface web n'est pas accessible, ces commandes s'exécutent sur le

@@ -165,6 +165,20 @@ class VehicleUnavailability(db.Model):
         return self.start_at <= moment and (self.end_at is None or self.end_at > moment)
 
 
+class LoginAttempt(db.Model):
+    """Tentative de connexion, réussie ou non.
+
+    Sert à limiter les tentatives (blocage temporaire après plusieurs échecs)
+    et fournit un historique consultable des connexions échouées.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(60), nullable=False, index=True)
+    ip = db.Column(db.String(45), nullable=True, index=True)
+    success = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
 class NotificationSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     notify_superadmin = db.Column(db.Boolean, default=False)

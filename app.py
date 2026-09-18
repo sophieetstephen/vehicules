@@ -45,6 +45,7 @@ from models import (
     ReservationSegment,
     NotificationSettings,
     VehicleUnavailability,
+    LoginAttempt,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
@@ -755,20 +756,143 @@ def _safe_next_url(candidate):
     return candidate
 
 
+def client_ip():
+    """Return the client IP, honouring the reverse proxy header (Caddy).
+
+    Behind the HTTPS proxy, ``remote_addr`` is the proxy's address; the real
+    client is the first entry of ``X-Forwarded-For``.
+    """
+
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        first = forwarded.split(",")[0].strip()
+        if first:
+            return first[:45]
+    return (request.remote_addr or "")[:45] or None
+
+
+def _lockout_remaining(failures_query, max_attempts, lockout_minutes, now):
+    """Return remaining lock minutes (>=1) if ``failures_query`` exceeds the limit."""
+
+    if max_attempts <= 0:
+        return 0
+    window_start = now - timedelta(minutes=lockout_minutes)
+    recent = (
+        failures_query.filter(LoginAttempt.created_at > window_start)
+        .order_by(LoginAttempt.created_at.desc())
+        .limit(max_attempts)
+        .all()
+    )
+    if len(recent) < max_attempts:
+        return 0
+    latest = recent[0].created_at
+    remaining = (latest + timedelta(minutes=lockout_minutes)) - now
+    return max(1, int(remaining.total_seconds() // 60) + 1)
+
+
+def login_blocked_minutes(identifier, ip, now=None):
+    """Minutes before ``identifier`` / ``ip`` may try again, 0 if not blocked."""
+
+    now = now or datetime.utcnow()
+    lockout = app.config.get("LOGIN_LOCKOUT_MINUTES", 15)
+    blocked = 0
+    if identifier:
+        blocked = _lockout_remaining(
+            LoginAttempt.query.filter(
+                LoginAttempt.username == identifier,
+                LoginAttempt.success.is_(False),
+            ),
+            app.config.get("LOGIN_MAX_ATTEMPTS", 5),
+            lockout,
+            now,
+        )
+    if ip:
+        blocked = max(
+            blocked,
+            _lockout_remaining(
+                LoginAttempt.query.filter(
+                    LoginAttempt.ip == ip,
+                    LoginAttempt.success.is_(False),
+                ),
+                app.config.get("LOGIN_IP_MAX_ATTEMPTS", 30),
+                lockout,
+                now,
+            ),
+        )
+    return blocked
+
+
+def record_login_attempt(identifier, ip, success):
+    """Store an attempt; a success clears the identifier's failure counter."""
+
+    now = datetime.utcnow()
+    db.session.add(
+        LoginAttempt(username=identifier or "", ip=ip, success=bool(success), created_at=now)
+    )
+    if success and identifier:
+        LoginAttempt.query.filter(
+            LoginAttempt.username == identifier,
+            LoginAttempt.success.is_(False),
+        ).delete(synchronize_session=False)
+    # Historique conservé 30 jours.
+    LoginAttempt.query.filter(
+        LoginAttempt.created_at < now - timedelta(days=30)
+    ).delete(synchronize_session=False)
+    db.session.commit()
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        u = User.find_by_login(form.username.data)
+        identifier = (form.username.data or "").strip().lower()
+        ip = client_ip()
+        blocked = login_blocked_minutes(identifier, ip)
+        if blocked:
+            app.logger.warning("Connexion bloquée pour '%s' depuis %s", identifier, ip)
+            flash(
+                f"Trop de tentatives échouées. Réessayez dans {blocked} minute{'s' if blocked > 1 else ''}.",
+                "danger",
+            )
+            return render_template("login.html", form=form), 429
+        u = User.find_by_login(identifier)
         if u and u.check_password(form.password.data):
+            record_login_attempt(identifier, ip, True)
             session["uid"] = u.id
             session["last_activity"] = datetime.utcnow().isoformat()
             session.permanent = True
             return redirect(
                 _safe_next_url(request.args.get("next")) or url_for("home")
             )
+        record_login_attempt(identifier, ip, False)
+        app.logger.warning("Échec de connexion pour '%s' depuis %s", identifier, ip)
         flash("Identifiants invalides", "danger")
     return render_template("login.html", form=form), 200
+
+
+@app.cli.command("login-attempts")
+@click.option("--hours", default=24, show_default=True, help="Période à afficher")
+@click.option("--all", "show_all", is_flag=True, help="Inclure les connexions réussies")
+def login_attempts_command(hours, show_all):
+    """Afficher les tentatives de connexion récentes (échecs par défaut)."""
+
+    since = datetime.utcnow() - timedelta(hours=hours)
+    query = LoginAttempt.query.filter(LoginAttempt.created_at > since)
+    if not show_all:
+        query = query.filter(LoginAttempt.success.is_(False))
+    rows = query.order_by(LoginAttempt.created_at.desc()).all()
+    if not rows:
+        print(f"Aucune tentative {'enregistrée' if show_all else 'échouée'} depuis {hours} h.")
+        return
+    for a in rows:
+        status = "OK    " if a.success else "ÉCHEC "
+        print(f"{a.created_at.strftime('%d/%m/%Y %H:%M:%S')} UTC  {status} {a.username:20} {a.ip or '-'}")
+    if not show_all:
+        counts = {}
+        for a in rows:
+            counts[a.username] = counts.get(a.username, 0) + 1
+        worst = sorted(counts.items(), key=lambda kv: -kv[1])[:5]
+        print("\nIdentifiants les plus visés : " + ", ".join(f"{u} ({n})" for u, n in worst))
 
 
 @app.route("/logout")
