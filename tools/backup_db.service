@@ -3,8 +3,15 @@ Description=Sauvegarde de la base Vehicules
 
 [Service]
 Type=oneshot
-WorkingDirectory=/workspace/vehicules
-Environment=DB_PATH=instance/vehicules.db
+# Exécuter en tant qu'utilisateur applicatif (pas root) : rclone réécrit son
+# fichier de configuration à chaque rafraîchissement du jeton Google ; lancé
+# en root, le fichier deviendrait propriété de root et les sauvegardes
+# manuelles de l'utilisateur échoueraient ensuite ("permission denied").
+User=pi
+Group=pi
+# Adapter les chemins à l'installation (exemple : Raspberry Pi, déploiement Docker).
+WorkingDirectory=/opt/vehicules/app/vehicules
+Environment=DB_PATH=/opt/vehicules/app/vehicules/instance/instance/vehicules.db
 Environment=REMOTE_URI=gdrive:vehicules-backups
-Environment=RCLONE_CONFIG=/path/to/rclone.conf
+Environment=RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
 ExecStart=/usr/bin/env bash tools/backup_db.sh
