@@ -11,7 +11,7 @@ from wtforms import (
     SelectMultipleField,
     HiddenField,
 )
-from wtforms.validators import DataRequired, Email, Length, EqualTo, Optional
+from wtforms.validators import DataRequired, Email, Length, Optional
 from wtforms.widgets import CheckboxInput, ListWidget
 from models import User
 
@@ -20,46 +20,38 @@ class MultiCheckboxField(SelectMultipleField):
     option_widget = CheckboxInput()
 
 class LoginForm(FlaskForm):
-    email = StringField("Email", validators=[DataRequired(), Email()])
+    username = StringField(
+        "Identifiant",
+        validators=[DataRequired(), Length(max=60)],
+        render_kw={"autocomplete": "username", "autocapitalize": "none"},
+    )
     password = PasswordField("Mot de passe", validators=[DataRequired()])
     submit = SubmitField("Se connecter")
 
 
-class RegisterForm(FlaskForm):
+class NewUserForm(FlaskForm):
+    """Création d'un compte par un administrateur.
+
+    Aucun mot de passe n'est demandé : l'identifiant et le mot de passe sont
+    générés par l'application et affichés une seule fois.
+    """
+
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])
     last_name = StringField("Nom", validators=[DataRequired(), Length(max=60)])
-    email = StringField("Email", validators=[DataRequired(), Email(), Length(max=120)])
-    password = PasswordField(
-        "Mot de passe", validators=[DataRequired(), Length(min=8)]
+    email = StringField(
+        "Email (pour les notifications)",
+        validators=[DataRequired(), Email(), Length(max=120)],
     )
-    password2 = PasswordField(
-        "Confirmer le mot de passe",
-        validators=[
-            DataRequired(),
-            EqualTo(
-                "password",
-                message="Les mots de passe doivent correspondre.",
-            ),
+    role = SelectField(
+        "Rôle",
+        choices=[
+            (User.ROLE_USER, "user"),
+            (User.ROLE_ADMIN, "admin"),
+            (User.ROLE_SUPERADMIN, "superadmin"),
         ],
+        default=User.ROLE_USER,
     )
-    submit = SubmitField("Créer mon compte")
-
-
-class ResetPasswordForm(FlaskForm):
-    password = PasswordField(
-        "Nouveau mot de passe", validators=[DataRequired(), Length(min=8)]
-    )
-    password2 = PasswordField(
-        "Confirmer le mot de passe",
-        validators=[
-            DataRequired(),
-            EqualTo(
-                "password",
-                message="Les mots de passe doivent correspondre.",
-            ),
-        ],
-    )
-    submit = SubmitField("Enregistrer")
+    submit = SubmitField("Créer le compte")
 
 class NewRequestForm(FlaskForm):
     first_name = StringField("Prénom", validators=[DataRequired(), Length(max=60)])

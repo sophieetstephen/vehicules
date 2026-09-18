@@ -1,17 +1,23 @@
 {% extends "base.html" %}{% block title %}Administration – Utilisateurs{% endblock %}{% block content %}
-<h4 class="mb-3">Utilisateurs</h4>
-<form method="get" action="{{ url_for('admin_users') }}" class="mb-3">
-  <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" />
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Utilisateurs</h4>
+  <a class="btn btn-success" href="{{ url_for('admin_user_new') }}">
+    <i class="fa-solid fa-user-plus me-1"></i>Nouvel utilisateur
+  </a>
+</div>
+<form method="get" action="{{ url_for('admin_users') }}" class="mb-3 d-flex gap-2">
+  <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control" placeholder="Nom" />
   <button type="submit" class="btn btn-primary">Chercher</button>
 </form>
-<p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
+<p class="text-muted small mb-2">Les comptes sont créés par un administrateur ; les utilisateurs ne peuvent pas modifier leur mot de passe.</p>
 <div class="table-responsive">
   <table class="table table-striped align-middle">
-    <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
+    <thead><tr><th>ID</th><th>Identifiant</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
     <tbody>
     {% for u in users %}
       <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
         <td>{{u.id}}</td>
+        <td><code>{{u.username or "—"}}</code></td>
         <td>{{u.first_name or ""}}</td>
         <td>{{u.last_name or ""}}</td>
         <td>{{u.email}}</td>
@@ -31,8 +37,9 @@
             <a class="btn btn-sm btn-outline-success" href="{{ url_for('admin_activate', user_id=u.id) }}">Activer</a>
           {% endif %}
           {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-            <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
-              <button class="btn btn-sm btn-outline-secondary" type="submit">Réinitialiser mot de passe</button>
+            <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
+              {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Régénérer le mot de passe</button>
             </form>
           {% endif %}
           {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}

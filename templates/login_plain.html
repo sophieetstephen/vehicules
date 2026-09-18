@@ -9,11 +9,11 @@
     <form method="post" action="{{ url_for('login', **request.args) }}">
       {{ form.csrf_token }}
       <div class="mb-3">
-        <label class="form-label">Email</label>
-        {{ form.email(class="form-control", type="email", required=True) }}
+        <label class="form-label" for="username">Identifiant</label>
+        {{ form.username(class="form-control", required=True, placeholder="ex : dupontj") }}
       </div>
       <div class="mb-3">
-        <label class="form-label">Mot de passe</label>
+        <label class="form-label" for="password">Mot de passe</label>
         {{ form.password(class="form-control", type="password", required=True) }}
       </div>
       <div class="d-grid mb-3">
@@ -21,9 +21,10 @@
       </div>
     </form>
     <hr class="my-3">
-    <div class="text-center">
-      <a href="{{ url_for('register') }}">Créer un compte</a>
-    </div>
+    <p class="text-center text-muted small mb-0">
+      Pas de compte ou mot de passe oublié ? Adressez-vous au responsable du centre :
+      les comptes sont créés et les mots de passe régénérés par un administrateur.
+    </p>
   </div>
 </div>
 {% endblock %}

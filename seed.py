@@ -40,27 +40,37 @@ with app.app_context():
     print("Compte Super Admin (gestionvehiculestomer@gmail.com)")
     mdp_super = demander_mot_de_passe("gestionvehiculestomer@gmail.com")
     super_admin = User(
-        name="Super Admin",
+        name="Admin Super",
+        first_name="Super",
+        last_name="Admin",
         email="gestionvehiculestomer@gmail.com",
         role=User.ROLE_SUPERADMIN,
         status="active",
     )
     super_admin.set_password(mdp_super)
-    print("✓ Compte Super Admin créé\n")
+    db.session.add(super_admin)
+    db.session.flush()
+    super_admin.assign_username()
+    print(f"✓ Compte Super Admin créé — identifiant : {super_admin.username}\n")
 
     print("Compte Admin (alexandre.stephen@free.fr)")
     mdp_admin = demander_mot_de_passe("alexandre.stephen@free.fr")
     admin = User(
-        name="Administrateur",
+        name="Stephen Alexandre",
+        first_name="Alexandre",
+        last_name="Stephen",
         email="alexandre.stephen@free.fr",
         role=User.ROLE_ADMIN,
         status="active",
     )
     admin.set_password(mdp_admin)
-    print("✓ Compte Admin créé\n")
+    db.session.add(admin)
+    db.session.flush()
+    admin.assign_username()
+    print(f"✓ Compte Admin créé — identifiant : {admin.username}\n")
 
-    db.session.add_all([super_admin, admin])
     db.session.commit()
 
-    print("=== Initialisation terminée ===\n")
+    print("=== Initialisation terminée ===")
+    print("Connectez-vous avec l'IDENTIFIANT ci-dessus (pas l'adresse e-mail).\n")
 

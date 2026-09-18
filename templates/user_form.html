@@ -5,6 +5,11 @@
 <form method="post">
   {{ form.hidden_tag() }}
   <div class="mb-3">
+    <label class="form-label">Identifiant de connexion</label>
+    <input class="form-control" value="{{ target.username or '' }}" readonly>
+    <div class="form-text">L'identifiant ne change pas, même si le nom est modifié.</div>
+  </div>
+  <div class="mb-3">
     {{ form.first_name.label(class="form-label") }}
     {{ form.first_name(class="form-control") }}
   </div>

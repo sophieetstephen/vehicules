@@ -2,8 +2,7 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask import current_app
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+from utils import build_username_base, generate_password, make_unique_username
 db = SQLAlchemy()
 
 class User(db.Model):
@@ -15,6 +14,9 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=False)
     first_name = db.Column(db.String(60), nullable=True)
     last_name = db.Column(db.String(60), nullable=True)
+    # Identifiant de connexion (nom + initiale du prénom, ex: "dupontj").
+    # L'adresse e-mail ne sert plus qu'aux notifications.
+    username = db.Column(db.String(60), unique=True, nullable=True, index=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     role = db.Column(db.String(50), default=ROLE_USER)
     password_hash = db.Column(db.String(255), nullable=False)
@@ -26,20 +28,45 @@ class User(db.Model):
     def check_password(self, pwd):
         return check_password_hash(self.password_hash, pwd)
 
-    def generate_reset_token(self):
-        """Return a signed token to reset the password."""
-        s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-        return s.dumps({"user_id": self.id})
+    def set_random_password(self):
+        """Assign a freshly generated password and return it in clear text.
+
+        The clear text value is only returned so that it can be shown once to
+        the administrator and e-mailed to the user; it is never stored.
+        """
+
+        password = generate_password()
+        self.set_password(password)
+        return password
 
     @staticmethod
-    def verify_reset_token(token, max_age=3600):
-        """Validate a reset token and return the associated user if valid."""
-        s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
-        try:
-            data = s.loads(token, max_age=max_age)
-        except (BadSignature, SignatureExpired):
+    def username_taken(candidate, exclude_id=None):
+        query = User.query.filter(User.username == candidate)
+        if exclude_id is not None:
+            query = query.filter(User.id != exclude_id)
+        return query.first() is not None
+
+    def assign_username(self):
+        """Compute and set a unique login identifier for this user."""
+
+        base = build_username_base(
+            first_name=self.first_name,
+            last_name=self.last_name,
+            name=self.name,
+            email=self.email,
+        )
+        self.username = make_unique_username(
+            base, lambda c: User.username_taken(c, exclude_id=self.id)
+        )
+        return self.username
+
+    @staticmethod
+    def find_by_login(identifier):
+        """Return the user matching a login identifier (case-insensitive)."""
+
+        if not identifier:
             return None
-        return User.query.get(data.get("user_id"))
+        return User.query.filter(User.username == identifier.strip().lower()).first()
 
 class Vehicle(db.Model):
     id = db.Column(db.Integer, primary_key=True)

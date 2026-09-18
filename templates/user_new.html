@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Administration – Nouvel utilisateur{% endblock %}
+{% block content %}
+<div class="card mx-auto max-w-520">
+  <div class="card-body">
+    <h1 class="h4 mb-3">Nouvel utilisateur</h1>
+    <p class="text-muted small">
+      L'identifiant (nom + initiale du prénom) et le mot de passe sont générés
+      automatiquement et affichés une seule fois après validation.
+      L'adresse e-mail sert uniquement à recevoir les notifications de réservation.
+    </p>
+    <form method="post">
+      {{ form.hidden_tag() }}
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          {{ form.first_name.label(class="form-label") }}
+          {{ form.first_name(class="form-control" + (" is-invalid" if form.first_name.errors else "")) }}
+          {% for e in form.first_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+        <div class="col-md-6 mb-3">
+          {{ form.last_name.label(class="form-label") }}
+          {{ form.last_name(class="form-control" + (" is-invalid" if form.last_name.errors else "")) }}
+          {% for e in form.last_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+        </div>
+      </div>
+      <div class="mb-3">
+        {{ form.email.label(class="form-label") }}
+        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), type="email") }}
+        {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+      </div>
+      {% if user and user.role == 'superadmin' %}
+      <div class="mb-3">
+        {{ form.role.label(class="form-label") }}
+        {{ form.role(class="form-select") }}
+      </div>
+      {% endif %}
+      {{ form.submit(class="btn btn-success") }}
+      <a class="btn btn-secondary" href="{{ url_for('admin_users') }}">Annuler</a>
+    </form>
+  </div>
+</div>
+{% endblock %}
