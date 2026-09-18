@@ -23,6 +23,7 @@ def test_session_timeout_redirects_to_login_with_flash_message():
             name="Test User",
             first_name="Test",
             last_name="User",
+            username="usert",
             email="test@example.com",
             role=User.ROLE_USER,
             status="active",
@@ -35,7 +36,7 @@ def test_session_timeout_redirects_to_login_with_flash_message():
 
         login_resp = client.post(
             "/login",
-            data={"email": "test@example.com", "password": "password123"},
+            data={"username": "usert", "password": "password123"},
             follow_redirects=False,
         )
         assert login_resp.status_code == 302

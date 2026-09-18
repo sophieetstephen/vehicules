@@ -10,6 +10,7 @@ import tempfile
 # Signature: AS-2024-6f9e3c42
 from urllib.parse import quote as _urlquote
 from functools import wraps
+import click
 from collections.abc import Iterable
 from flask import (
     Flask,
@@ -27,8 +28,7 @@ from datetime import datetime, timedelta, time
 from io import BytesIO
 from forms import (
     LoginForm,
-    RegisterForm,
-    ResetPasswordForm,
+    NewUserForm,
     NewRequestForm,
     UserForm,
     NotificationSettingsForm,
@@ -393,6 +393,56 @@ def purge_archived_reservations_command():
     )
 
 
+@app.cli.command("reset-password")
+@click.argument("identifier")
+def reset_password_command(identifier):
+    """Regenerate the password of a user (by identifiant or e-mail).
+
+    Usage: ``flask reset-password dupontj`` — rescue path for the super
+    administrator if the web interface is not reachable.
+    """
+
+    user = User.find_by_login(identifier) or User.query.filter_by(
+        email=identifier.strip().lower()
+    ).first()
+    if not user:
+        print("Utilisateur introuvable")
+        raise SystemExit(1)
+    if not user.username:
+        user.assign_username()
+    password = user.set_random_password()
+    db.session.commit()
+    print(f"Identifiant  : {user.username}")
+    print(f"Mot de passe : {password}")
+
+
+@app.cli.command("set-username")
+@click.argument("email")
+@click.argument("username")
+def set_username_command(email, username):
+    """Change the login identifier of the user owning ``email``."""
+
+    user = User.query.filter_by(email=email.strip().lower()).first()
+    if not user:
+        print("Utilisateur introuvable")
+        raise SystemExit(1)
+    candidate = username.strip().lower()
+    if User.username_taken(candidate, exclude_id=user.id):
+        print(f"L'identifiant '{candidate}' est déjà utilisé")
+        raise SystemExit(1)
+    user.username = candidate
+    db.session.commit()
+    print(f"{user.email} -> identifiant '{user.username}'")
+
+
+@app.cli.command("list-usernames")
+def list_usernames_command():
+    """Print every account with its login identifier."""
+
+    for user in User.query.order_by(User.username).all():
+        print(f"{user.username or '(aucun)':20} {user.email:40} {user.role:10} {user.status}")
+
+
 def current_user():
     uid = session.get("uid")
     return User.query.get(uid) if uid else None
@@ -531,13 +581,12 @@ def _force_login():
     p = request.path or "/"
     public = {
         "/login",
-        "/register",
         "/logout",
         "/__ping__",
         "/home",
         "/",
     }
-    if p in public or p.startswith("/static/") or p.startswith("/reset/"):
+    if p in public or p.startswith("/static/"):
         return None
     if not session.get("uid"):
         nxt = request.full_path if request.query_string else p
@@ -574,19 +623,34 @@ def home():
 
 
 # --- Routes de connexion
+def _safe_next_url(candidate):
+    """Only allow redirections to a relative path of this application.
+
+    Prevents an attacker from crafting ``/login?next=https://evil.example``
+    phishing links.
+    """
+
+    if not candidate:
+        return None
+    candidate = candidate.strip()
+    if not candidate.startswith("/") or candidate.startswith("//"):
+        return None
+    if "\\" in candidate or ":" in candidate.split("?", 1)[0]:
+        return None
+    return candidate
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
     if form.validate_on_submit():
-        u = User.query.filter_by(
-            email=form.email.data.lower()
-        ).first()
+        u = User.find_by_login(form.username.data)
         if u and u.check_password(form.password.data):
             session["uid"] = u.id
             session["last_activity"] = datetime.utcnow().isoformat()
             session.permanent = True
             return redirect(
-                request.args.get("next") or url_for("home")
+                _safe_next_url(request.args.get("next")) or url_for("home")
             )
         flash("Identifiants invalides", "danger")
     return render_template("login.html", form=form), 200
@@ -600,78 +664,39 @@ def logout():
     return redirect(url_for("login"))
 
 
-@app.route("/register", methods=["GET", "POST"])
-def register():
-    form = RegisterForm()
-    if form.validate_on_submit():
-        if form.password.data != form.password2.data:
-            flash("Les mots de passe doivent correspondre", "danger")
-            return render_template("register.html", form=form), 200
-        name = f"{form.last_name.data} {form.first_name.data}"
-        email = form.email.data.lower()
-        role = User.ROLE_USER
-        if email in app.config.get("SUPERADMIN_EMAILS", []):
-            role = User.ROLE_SUPERADMIN
-        elif email in app.config.get("ADMIN_EMAILS", []):
-            role = User.ROLE_ADMIN
-        user = User(
-            name=name,
-            first_name=form.first_name.data,
-            last_name=form.last_name.data,
-            email=email,
-            role=role,
+def _credentials_email_body(user, password, *, regenerated=False):
+    intro = (
+        "Votre mot de passe a été régénéré par un administrateur."
+        if regenerated
+        else "Un compte vient d'être créé pour vous sur la plateforme de réservation des véhicules."
+    )
+    return (
+        "Bonjour,\n\n"
+        f"{intro}\n\n"
+        f"Identifiant : {user.username}\n"
+        f"Mot de passe : {password}\n\n"
+        "Ce mot de passe ne peut pas être modifié depuis l'application. "
+        "En cas d'oubli, adressez-vous à l'administrateur qui vous en "
+        "fournira un nouveau.\n"
+    )
+
+
+def _send_credentials(user, password, *, regenerated=False):
+    """E-mail the login details to ``user``; return True if sent."""
+
+    subject = (
+        "Nouveau mot de passe – Réservation des véhicules"
+        if regenerated
+        else "Vos accès – Réservation des véhicules"
+    )
+    try:
+        sent, _ = send_mail_msmtp(
+            subject, _credentials_email_body(user, password, regenerated=regenerated), user.email
         )
-        user.set_password(form.password.data)
-        db.session.add(user)
-        try:
-            db.session.commit()
-        except IntegrityError:
-            db.session.rollback()
-            flash("Adresse e‑mail déjà utilisée", "danger")
-            return render_template("register.html", form=form), 200
-        recipients = sorted(ACCOUNT_REVIEW_RECIPIENTS)
-        if recipients:
-            subject = "Nouvelle demande de création de compte"
-            applicant_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
-            if not applicant_name:
-                applicant_name = user.name
-            body_lines = [
-                "Bonjour,",
-                "",
-                "Une nouvelle demande de création de compte vient d'être soumise.",
-                "",
-                f"Nom : {applicant_name}",
-                f"Email : {user.email}",
-            ]
-            if request.remote_addr:
-                body_lines.extend(["", f"Adresse IP : {request.remote_addr}"])
-            body_lines.append("")
-            body_lines.append("Merci de traiter cette demande dans les meilleurs délais.")
-            body = "\n".join(body_lines)
-            try:
-                send_mail_msmtp(subject, body, recipients)
-            except Exception:
-                app.logger.exception(
-                    "Impossible d'envoyer la notification de création de compte"
-                )
-        session["uid"] = user.id
-        return redirect(url_for("home"))
-    return render_template("register.html", form=form), 200
-
-
-@app.route("/reset/<token>", methods=["GET", "POST"])
-def reset_with_token(token):
-    user = User.verify_reset_token(token)
-    if not user:
-        flash("Lien de réinitialisation invalide ou expiré", "danger")
-        return redirect(url_for("login"))
-    form = ResetPasswordForm()
-    if form.validate_on_submit():
-        user.set_password(form.password.data)
-        db.session.commit()
-        flash("Mot de passe mis à jour", "success")
-        return redirect(url_for("login"))
-    return render_template("reset_password.html", form=form), 200
+        return bool(sent)
+    except Exception:
+        app.logger.exception("Erreur lors de l'envoi des identifiants")
+        return False
 
 
 @app.route("/request/new", methods=["GET", "POST"])
@@ -996,6 +1021,68 @@ def admin_users():
     )
 
 
+@app.route("/admin/users/new", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_user_new():
+    u = current_user()
+    form = NewUserForm()
+    is_superadmin = u.role == User.ROLE_SUPERADMIN
+    if not is_superadmin:
+        # Un admin ne peut créer que des comptes "user".
+        form.role.choices = [(User.ROLE_USER, "user")]
+        form.role.data = User.ROLE_USER
+    if form.validate_on_submit():
+        email = form.email.data.strip().lower()
+        if User.query.filter_by(email=email).first():
+            form.email.errors.append("Cette adresse e-mail est déjà utilisée.")
+            return render_template("user_new.html", form=form, user=u, current_user=u), 200
+        first_name = form.first_name.data.strip()
+        last_name = form.last_name.data.strip()
+        target = User(
+            name=f"{last_name} {first_name}",
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            role=form.role.data if is_superadmin else User.ROLE_USER,
+            status="active",
+        )
+        target.assign_username()
+        password = target.set_random_password()
+        db.session.add(target)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash("Impossible de créer ce compte (doublon).", "danger")
+            return render_template("user_new.html", form=form, user=u, current_user=u), 200
+        sent = _send_credentials(target, password)
+        session["pending_credentials"] = {
+            "user_id": target.id,
+            "username": target.username,
+            "password": password,
+            "email": target.email,
+            "name": f"{first_name} {last_name}",
+            "regenerated": False,
+            "mail_sent": sent,
+        }
+        return redirect(url_for("admin_user_credentials"))
+    return render_template("user_new.html", form=form, user=u, current_user=u)
+
+
+@app.route("/admin/users/credentials")
+@role_required("admin", "superadmin")
+def admin_user_credentials():
+    """Show freshly generated credentials exactly once."""
+
+    creds = session.pop("pending_credentials", None)
+    if not creds:
+        return redirect(url_for("admin_users"))
+    u = current_user()
+    return render_template(
+        "user_credentials.html", creds=creds, user=u, current_user=u
+    )
+
+
 @app.route("/admin/user/<int:user_id>/edit", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_user_edit(user_id):
@@ -1077,19 +1164,28 @@ def admin_deactivate(user_id):
 @app.route("/admin/reset_password/<int:user_id>", methods=["POST"])
 @role_required("superadmin")
 def admin_reset_password(user_id):
+    """Generate a brand new random password for ``user_id``.
+
+    Users can never change their own password: only a super administrator can
+    regenerate one, which is then shown once on screen and e-mailed.
+    """
+
     target = User.query.get_or_404(user_id)
-    token = target.generate_reset_token()
-    reset_url = url_for("reset_with_token", token=token, _external=True)
-    try:
-        send_mail_msmtp(
-            "Réinitialisation de mot de passe",
-            f"Bonjour, pour réinitialiser votre mot de passe, suivez ce lien : {reset_url}",
-            target.email,
-        )
-    except Exception:
-        pass
-    flash("Lien de réinitialisation envoyé", "info")
-    return redirect(url_for("admin_users"))
+    if not target.username:
+        target.assign_username()
+    password = target.set_random_password()
+    db.session.commit()
+    sent = _send_credentials(target, password, regenerated=True)
+    session["pending_credentials"] = {
+        "user_id": target.id,
+        "username": target.username,
+        "password": password,
+        "email": target.email,
+        "name": f"{target.first_name or ''} {target.last_name or ''}".strip() or target.name,
+        "regenerated": True,
+        "mail_sent": sent,
+    }
+    return redirect(url_for("admin_user_credentials"))
 
 
 @app.route("/admin/delete/<int:user_id>", methods=["POST"])

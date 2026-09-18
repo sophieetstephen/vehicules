@@ -2,11 +2,14 @@
 {% block title %}Administration – Utilisateurs{% endblock %}
 {% block content %}
 
-<div class="page-header">
-  <h1 class="page-title">
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <h1 class="page-title mb-0">
     <i class="fa-solid fa-users page-title-icon"></i>
     Utilisateurs
   </h1>
+  <a class="btn btn-success" href="{{ url_for('admin_user_new') }}">
+    <i class="fa-solid fa-user-plus me-1"></i>Nouvel utilisateur
+  </a>
 </div>
 
 <!-- Formulaire de recherche -->
@@ -21,16 +24,21 @@
   </button>
 </form>
 
+<p class="text-muted small mb-3">
+  Les comptes sont créés par un administrateur ; les utilisateurs ne peuvent pas modifier leur mot de passe.
+  En cas d'oubli, utilisez « Régénérer MDP » : un nouveau mot de passe est affiché et envoyé par e-mail.
+</p>
+
 <!-- ========== VUE DESKTOP (tableau) ========== -->
 <div class="users-desktop">
-  <p class="text-muted small mb-2">Les lignes en surbrillance correspondent aux utilisateurs en attente d'activation.</p>
   <div class="table-responsive">
     <table class="table table-striped align-middle">
-      <thead><tr><th>ID</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
+      <thead><tr><th>ID</th><th>Identifiant</th><th>Prénom</th><th>Nom</th><th>Email</th><th>Rôle</th><th>Status</th><th>Actions</th></tr></thead>
       <tbody>
       {% for u in users %}
         <tr{% if (u.status or '') == 'pending' %} class="table-warning"{% endif %}>
           <td>{{u.id}}</td>
+          <td><code>{{u.username or "—"}}</code></td>
           <td>{{u.first_name or ""}}</td>
           <td>{{u.last_name or ""}}</td>
           <td>{{u.email}}</td>
@@ -56,9 +64,9 @@
               </form>
             {% endif %}
             {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-              <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+              <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Réinit. MDP</button>
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Régénérer MDP</button>
               </form>
             {% endif %}
             {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
@@ -96,7 +104,7 @@
       </div>
       <div class="user-info-mobile">
         <div class="user-name-mobile">{{ u.first_name or "" }} {{ u.last_name or "" }}</div>
-        <div class="user-email-mobile">{{ u.email }}</div>
+        <div class="user-email-mobile"><code>{{ u.username or "—" }}</code> · {{ u.email }}</div>
       </div>
     </div>
 
@@ -132,10 +140,10 @@
 
     {% if current_user and current_user.role==ROLE_SUPERADMIN %}
     <div class="user-card-actions-admin">
-      <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Réinitialiser le mot de passe ?');">
+      <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-outline-secondary" type="submit">
-          <i class="fa-solid fa-key"></i> Réinit. MDP
+          <i class="fa-solid fa-key"></i> Régénérer MDP
         </button>
       </form>
       {% if u.role!=ROLE_SUPERADMIN %}

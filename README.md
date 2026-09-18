@@ -4,21 +4,50 @@ Application Flask de gestion des véhicules.
 
 Projet développé par Mr Alexandre Stephen.
 
-## Rôles administratifs
+## Comptes utilisateurs et connexion
 
-Lors de l'inscription via la page `/register`, l'application vérifie si l'adresse e‑mail figure dans les variables d'environnement `SUPERADMIN_EMAILS` ou `ADMIN_EMAILS` afin d'attribuer automatiquement le rôle approprié.
+Il n'y a **pas d'inscription publique**. Les comptes sont créés par un
+administrateur depuis *Gestion des utilisateurs → Nouvel utilisateur* en
+saisissant uniquement le prénom, le nom et l'adresse e‑mail.
 
-* `SUPERADMIN_EMAILS` – adresses séparées par des virgules qui recevront le
-  rôle `superadmin`.
-* `ADMIN_EMAILS` – adresses séparées par des virgules qui recevront le rôle
-  `admin`.
+* **Identifiant de connexion** : généré automatiquement sous la forme
+  `nom` + `initiale du prénom` (ex. `dupontj`, puis `dupontj2` en cas
+  d'homonyme). Il ne change jamais, même si le nom est corrigé ensuite.
+* **Mot de passe** : généré aléatoirement par l'application (ex.
+  `Kx7m-Rp2v-Q9wT`), affiché **une seule fois** à l'administrateur et envoyé
+  par e‑mail à l'utilisateur.
+* **L'utilisateur ne peut pas modifier son mot de passe.** En cas d'oubli,
+  un super administrateur clique sur *Régénérer le mot de passe* dans la
+  liste des utilisateurs.
+* **L'adresse e‑mail** ne sert plus qu'aux notifications (réservations,
+  validations). Elle n'est jamais utilisée pour se connecter, ce qui évite
+  toute réutilisation d'un mot de passe de messagerie professionnelle.
+
+Les variables `SUPERADMIN_EMAILS` / `ADMIN_EMAILS` ne servent plus qu'aux
+notifications de secours lorsque aucun destinataire n'est coché dans
+« Gestion des congés ».
+
+### Commandes de secours (super administrateur)
+
+Si l'interface web n'est pas accessible, ces commandes s'exécutent sur le
+serveur (préfixer par `docker compose run --rm vehicules` en déploiement
+Docker) :
+
+```bash
+flask list-usernames                       # afficher tous les identifiants
+flask reset-password <identifiant|email>   # nouveau mot de passe aléatoire
+flask set-username <email> <identifiant>   # changer un identifiant
+```
+
+Lors de la première mise à jour vers cette version, `flask db upgrade` crée
+automatiquement un identifiant pour chaque compte existant et **affiche la
+correspondance e‑mail → identifiant** dans le terminal. Les mots de passe
+existants restent valables.
 
 ## Notifications par e‑mail
 
-* **Création de compte** – chaque nouvelle demande génère un message envoyé à
-  tous les super administrateurs actifs, aux adresses présentes dans la
-  configuration `SUPERADMIN_EMAILS` ainsi qu'à `salexandre@sdis62.fr` afin de
-  faciliter l'activation du compte.
+* **Création de compte / régénération de mot de passe** – l'utilisateur
+  reçoit ses identifiants de connexion par e‑mail.
 * **Activation de compte** – dès qu'un administrateur active un utilisateur, ce
   dernier reçoit une confirmation par e‑mail l'informant que la plateforme est
   accessible.

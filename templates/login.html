@@ -45,29 +45,20 @@
       {% endwith %}
 
       <form method="post" action="{{ url_for('login', **request.args) }}">
-        {{ form.csrf_token if form.csrf_token else '' }}
-        {{ form.hidden_tag() if form.hidden_tag else '' }}
+        {{ form.hidden_tag() }}
 
         <div class="mb-3">
-          <label class="form-label" for="email">
-            <i class="fa-solid fa-envelope me-1 text-muted"></i>Adresse email
+          <label class="form-label" for="username">
+            <i class="fa-solid fa-user me-1 text-muted"></i>Identifiant
           </label>
-          {% if form.email %}
-            {{ form.email(class="form-control", type="email", placeholder="vous@exemple.com", required=True, id="email") }}
-          {% else %}
-            <input id="email" name="email" type="email" class="form-control" placeholder="vous@exemple.com" required>
-          {% endif %}
+          {{ form.username(class="form-control", placeholder="ex : dupontj", required=True, id="username") }}
         </div>
 
         <div class="mb-4">
           <label class="form-label" for="password">
             <i class="fa-solid fa-lock me-1 text-muted"></i>Mot de passe
           </label>
-          {% if form.password %}
-            {{ form.password(class="form-control", type="password", placeholder="••••••••", required=True, id="password") }}
-          {% else %}
-            <input id="password" name="password" type="password" class="form-control" placeholder="••••••••" required>
-          {% endif %}
+          {{ form.password(class="form-control", type="password", placeholder="••••••••", required=True, id="password") }}
         </div>
 
         <button class="btn btn-primary" type="submit">
@@ -77,8 +68,10 @@
     </div>
 
     <div class="login-footer">
-      <span class="text-muted">Pas encore de compte ?</span>
-      <a href="{{ url_for('register') }}">Créer un compte</a>
+      <span class="text-muted">
+        Pas de compte ou mot de passe oublié ? Adressez-vous au responsable du centre :
+        les comptes sont créés et les mots de passe régénérés par un administrateur.
+      </span>
     </div>
   </div>
 </div>
