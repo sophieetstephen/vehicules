@@ -153,6 +153,12 @@ body {
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }
 
+/* Le thème Litera applique une police à empattements (Georgia) aux
+   paragraphes : on garde la même police que le reste de l'interface. */
+p {
+  font-family: inherit;
+}
+
 /* --- Navbar personnalisée --- */
 .navbar-custom {
   background: linear-gradient(135deg, var(--navbar-bg) 0%, #334155 100%);
