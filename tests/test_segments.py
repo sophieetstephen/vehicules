@@ -294,12 +294,11 @@ def test_segment_update_sends_mail(app_ctx, monkeypatch):
 
     assert ReservationSegment.query.get(seg.id).vehicle_id == v2.id
     subject, body, to_addr = called["args"]
-    assert subject == "Modification de votre réservation"
+    # E-mail unifié "Véhicule attribué" : période et nouveau véhicule (code + libellé).
+    assert subject == "Véhicule attribué"
     assert to_addr == [user.email]
-    assert "Vehicule 1" in body
-    assert "Vehicule 2" in body
-    assert "01/01/2024 08:00" in body
-    assert "01/01/2024 12:00" in body
+    assert "V2 (Vehicule 2)" in body
+    assert "du 01/01/2024 au 01/01/2024" in body
 
 
 def test_calendar_links_for_multiple_day_segments(app_ctx):

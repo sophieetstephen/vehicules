@@ -73,7 +73,11 @@ def test_contact_sends_emails(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
-        client.post('/contact', data={'message': 'Hello'}, follow_redirects=True)
+        client.post(
+            '/contact',
+            data={'subject': 'question', 'message': 'Hello'},
+            follow_redirects=True,
+        )
 
         assert len(calls) == 2
         body_admin = calls[0][1]
