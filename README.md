@@ -59,6 +59,23 @@ La page d'accueil de chaque rôle affiche :
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
 
+## Indisponibilité d'un véhicule
+
+Depuis *Gestion du parc → Indisponibilités*, un administrateur déclare une
+période pendant laquelle un véhicule ne peut pas être attribué (panne
+mécanique, entretien / contrôle technique, carrosserie, autre), avec une date
+de fin facultative (« jusqu'à nouvel ordre »). Effets :
+
+* le véhicule apparaît **Indisponible** sur l'accueil, dans le planning
+  mensuel et dans la page de gestion d'une réservation ;
+* il ne peut plus être attribué à une réservation ni à un segment sur la
+  période (`has_conflict`) ;
+* si des réservations validées l'utilisent déjà, l'administrateur est averti
+  et la liste des réservations à réattribuer s'affiche avec un lien vers
+  chacune.
+
+Le bouton **Lever** supprime l'indisponibilité et rend le véhicule attribuable.
+
 L'heure « maintenant » est calculée dans le fuseau `APP_TIMEZONE` (par
 défaut `Europe/Paris`), car les créneaux 8h‑12h / 13h‑17h sont en heure
 locale alors que le conteneur Docker tourne en UTC.

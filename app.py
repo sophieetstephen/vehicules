@@ -33,9 +33,18 @@ from forms import (
     UserForm,
     NotificationSettingsForm,
     ContactForm,
+    UnavailabilityForm,
 )
 from wtforms.validators import DataRequired, Length
-from models import db, User, Vehicle, Reservation, ReservationSegment, NotificationSettings
+from models import (
+    db,
+    User,
+    Vehicle,
+    Reservation,
+    ReservationSegment,
+    NotificationSettings,
+    VehicleUnavailability,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
 from notify import send_mail_msmtp
@@ -1293,12 +1302,94 @@ def admin_user_delete(user_id):
 def admin_vehicles():
     user = current_user()
     vehicles = Vehicle.query.order_by(Vehicle.code).all()
+    now = local_now()
     return render_template(
         "admin_vehicles.html",
         vehicles=vehicles,
         user=user,
         current_user=user,
+        unavailable_now=vehicles_unavailability_map(now, now + timedelta(seconds=1)),
     )
+
+
+@app.route("/admin/vehicles/<int:vehicle_id>/unavailability", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_unavailability(vehicle_id):
+    """List and declare unavailability periods for a vehicle."""
+
+    user = current_user()
+    vehicle = Vehicle.query.get_or_404(vehicle_id)
+    form = UnavailabilityForm()
+    form.category.choices = list(VehicleUnavailability.CATEGORIES)
+    now = local_now()
+    if form.validate_on_submit():
+        start_at = datetime.combine(form.start_date.data, time.min)
+        end_at = None
+        if form.end_date.data:
+            if form.end_date.data < form.start_date.data:
+                form.end_date.errors.append("La date de fin doit être postérieure à la date de début.")
+                return _render_vehicle_unavailability(vehicle, form, user, now), 200
+            end_at = datetime.combine(form.end_date.data, time.max)
+        unav = VehicleUnavailability(
+            vehicle_id=vehicle.id,
+            start_at=start_at,
+            end_at=end_at,
+            category=form.category.data,
+            details=(form.details.data or "").strip() or None,
+            created_by=user.id,
+        )
+        db.session.add(unav)
+        db.session.commit()
+        affected = reservations_using_vehicle(vehicle.id, start_at, end_at)
+        if affected:
+            flash(
+                f"Indisponibilité enregistrée. Attention : {len(affected)} réservation(s) validée(s) "
+                f"utilisent {vehicle.code} sur cette période, pensez à les réattribuer (liste ci-dessous).",
+                "warning",
+            )
+        else:
+            flash("Indisponibilité enregistrée.", "success")
+        return redirect(url_for("admin_vehicle_unavailability", vehicle_id=vehicle.id))
+    if request.method == "GET":
+        form.start_date.data = now.date()
+    return _render_vehicle_unavailability(vehicle, form, user, now)
+
+
+def _render_vehicle_unavailability(vehicle, form, user, now):
+    entries = (
+        VehicleUnavailability.query.filter_by(vehicle_id=vehicle.id)
+        .order_by(VehicleUnavailability.start_at.desc())
+        .all()
+    )
+    current_or_future = [e for e in entries if e.end_at is None or e.end_at >= now]
+    past = [e for e in entries if e not in current_or_future][:20]
+    affected = {}
+    for e in current_or_future:
+        rows = reservations_using_vehicle(vehicle.id, max(e.start_at, now), e.end_at)
+        if rows:
+            affected[e.id] = rows
+    return render_template(
+        "vehicle_unavailability.html",
+        vehicle=vehicle,
+        form=form,
+        current=current_or_future,
+        past=past,
+        affected=affected,
+        now=now,
+        user=user,
+        current_user=user,
+    )
+
+
+@app.route("/admin/vehicles/unavailability/<int:unav_id>/delete", methods=["POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_unavailability_delete(unav_id):
+    unav = VehicleUnavailability.query.get_or_404(unav_id)
+    vehicle_id = unav.vehicle_id
+    db.session.delete(unav)
+    db.session.commit()
+    flash("Indisponibilité supprimée : le véhicule peut de nouveau être attribué.", "info")
+    return redirect(url_for("admin_vehicle_unavailability", vehicle_id=vehicle_id))
 
 
 @app.route("/admin/vehicles/new", methods=["GET", "POST"])
@@ -1345,7 +1436,37 @@ def admin_vehicle_delete(vehicle_id):
     return redirect(url_for("admin_vehicles"))
 
 
+def vehicle_unavailability(vehicle_id, start, end):
+    """Return the first unavailability of ``vehicle_id`` overlapping [start, end)."""
+
+    return (
+        VehicleUnavailability.query.filter(
+            VehicleUnavailability.vehicle_id == vehicle_id,
+            VehicleUnavailability.start_at < end,
+            or_(
+                VehicleUnavailability.end_at.is_(None),
+                VehicleUnavailability.end_at > start,
+            ),
+        )
+        .order_by(VehicleUnavailability.start_at.asc())
+        .first()
+    )
+
+
+def vehicles_unavailability_map(start, end):
+    """Return ``{vehicle_id: unavailability}`` for vehicles blocked on the window."""
+
+    out = {}
+    for v in Vehicle.query.order_by(Vehicle.code).all():
+        unav = vehicle_unavailability(v.id, start, end)
+        if unav is not None:
+            out[v.id] = unav
+    return out
+
+
 def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
+    if vehicle_unavailability(vehicle_id, start, end) is not None:
+        return True
     q_seg = ReservationSegment.query.filter(
         ReservationSegment.vehicle_id == vehicle_id,
         ReservationSegment.end_at > start,
@@ -1449,7 +1570,10 @@ def today_overview(now=None):
             (it for it in items if it["start"] <= now < it["end"]), None
         )
         upcoming = [it for it in items if it["start"] > now]
-        if current:
+        unav = vehicle_unavailability(v.id, now, now + timedelta(seconds=1))
+        if unav is not None:
+            state = "unavailable"
+        elif current:
             state = "out"
         elif upcoming:
             state = "later"
@@ -1462,9 +1586,39 @@ def today_overview(now=None):
                 "current": current,
                 "next": upcoming[0] if upcoming else None,
                 "items": items,
+                "unavailability": unav,
             }
         )
     return overview
+
+
+def reservations_using_vehicle(vehicle_id, start, end):
+    """Approved reservations (direct or via segments) using a vehicle on a window."""
+
+    if end is None:
+        end = datetime.max
+    found = {}
+    direct = Reservation.query.filter(
+        Reservation.vehicle_id == vehicle_id,
+        Reservation.status == "approved",
+        Reservation.start_at < end,
+        Reservation.end_at > start,
+    ).all()
+    for r in direct:
+        found[r.id] = r
+    segs = (
+        ReservationSegment.query.join(Reservation)
+        .filter(
+            ReservationSegment.vehicle_id == vehicle_id,
+            Reservation.status == "approved",
+            ReservationSegment.start_at < end,
+            ReservationSegment.end_at > start,
+        )
+        .all()
+    )
+    for seg in segs:
+        found[seg.reservation_id] = seg.reservation
+    return sorted(found.values(), key=lambda r: r.start_at)
 
 
 def my_upcoming_reservations(user, now=None):
@@ -1885,6 +2039,7 @@ def manage_request(rid):
         "manage_reservation.html",
         reservation=r,
         availability=avail,
+        unavailable=vehicles_unavailability_map(day_start, day_end),
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
@@ -1940,6 +2095,7 @@ def manage_segment(sid):
         "manage_reservation.html",
         reservation=r,
         availability=avail,
+        unavailable=vehicles_unavailability_map(seg.start_at, seg.end_at),
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
@@ -2001,11 +2157,19 @@ def calendar_month():
         ReservationSegment.start_at < end,
         ReservationSegment.end_at > start,
     ).all()
+    unavailabilities = VehicleUnavailability.query.filter(
+        VehicleUnavailability.start_at < end,
+        or_(
+            VehicleUnavailability.end_at.is_(None),
+            VehicleUnavailability.end_at > start,
+        ),
+    ).all()
     return render_template(
         "calendar_month.html",
         vehicles=vehicles,
         reservations=res,
         segments=segs,
+        unavailabilities=unavailabilities,
         start=start,
         end=end,
         user=user,

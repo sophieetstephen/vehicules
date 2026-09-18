@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Administration – Indisponibilités {{ vehicle.code }}{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-wrench page-title-icon"></i>
+    Indisponibilités – {{ vehicle.code }}
+    <span class="text-muted fw-normal fs-6 ms-2">{{ vehicle.label }}</span>
+  </h1>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin_vehicles') }}">
+    <i class="fa-solid fa-arrow-left me-1"></i>Retour au parc
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Déclarer une indisponibilité</h2>
+        <p class="text-muted small">
+          Pendant cette période, le véhicule ne pourra plus être attribué à une
+          réservation et apparaîtra « Indisponible » sur l'accueil et le planning.
+        </p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          <div class="row">
+            <div class="col-6 mb-3">
+              {{ form.start_date.label(class="form-label") }}
+              {{ form.start_date(class="form-control" + (" is-invalid" if form.start_date.errors else "")) }}
+              {% for e in form.start_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-6 mb-3">
+              {{ form.end_date.label(class="form-label") }}
+              {{ form.end_date(class="form-control" + (" is-invalid" if form.end_date.errors else "")) }}
+              {% for e in form.end_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+          </div>
+          <div class="mb-3">
+            {{ form.category.label(class="form-label") }}
+            {{ form.category(class="form-select") }}
+          </div>
+          <div class="mb-3">
+            {{ form.details.label(class="form-label") }}
+            {{ form.details(class="form-control", placeholder="ex : embrayage, garage Martin, retour prévu lundi") }}
+          </div>
+          {{ form.submit(class="btn btn-warning") }}
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <h2 class="h5 mb-3">En cours et à venir</h2>
+    {% if current %}
+      {% for e in current %}
+      <div class="unav-card {% if e.is_active_at(now) %}unav-active{% endif %}">
+        <div class="unav-main">
+          <div class="unav-dates">
+            <i class="fa-solid fa-calendar-xmark me-1"></i>
+            Du {{ e.start_at.strftime('%d/%m/%Y') }}
+            {% if e.end_at %}au {{ e.end_at.strftime('%d/%m/%Y') }}{% else %}<em>jusqu'à nouvel ordre</em>{% endif %}
+            {% if e.is_active_at(now) %}<span class="badge bg-dark ms-2">En cours</span>{% endif %}
+          </div>
+          <div class="unav-label">{{ e.label }}</div>
+          {% if e.creator %}<div class="text-muted small">déclaré par {{ e.creator.first_name }} {{ e.creator.last_name }}</div>{% endif %}
+          {% if affected.get(e.id) %}
+          <div class="alert alert-warning mt-2 mb-0 py-2 small">
+            <strong>{{ affected[e.id]|length }} réservation(s) validée(s) utilisent ce véhicule :</strong>
+            <ul class="mb-0 mt-1">
+              {% for r in affected[e.id] %}
+              <li>
+                <a href="{{ url_for('manage_request', rid=r.id) }}">{{ r.start_at.strftime('%d/%m/%Y') }}{% if r.start_at.date() != r.end_at.date() %} → {{ r.end_at.strftime('%d/%m/%Y') }}{% endif %} · {{ r.user.first_name }} {{ r.user.last_name }}</a>
+                {% if r.purpose %}<span class="text-muted">({{ r.purpose }})</span>{% endif %}
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('admin_vehicle_unavailability_delete', unav_id=e.id) }}" onsubmit="return confirm('Lever cette indisponibilité ?');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-success" type="submit"><i class="fa-solid fa-check me-1"></i>Lever</button>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">Aucune indisponibilité en cours ou à venir. Le véhicule est attribuable.</p>
+    {% endif %}
+
+    {% if past %}
+    <h2 class="h6 text-muted mt-4 mb-2">Historique</h2>
+    <ul class="list-unstyled small text-muted mb-0">
+      {% for e in past %}
+      <li>{{ e.start_at.strftime('%d/%m/%Y') }} → {{ e.end_at.strftime('%d/%m/%Y') }} · {{ e.label }}</li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+.unav-card { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--spacing-md, 1rem); background: var(--color-background); border: 1px solid var(--color-border); border-left: 5px solid var(--color-warning); border-radius: var(--radius-lg, .75rem); padding: var(--spacing-md, 1rem); margin-bottom: var(--spacing-sm, .5rem); flex-wrap: wrap; }
+.unav-card.unav-active { border-left-color: var(--color-danger); }
+.unav-main { flex: 1; min-width: 220px; }
+.unav-dates { font-weight: 600; color: var(--color-text); }
+.unav-label { color: var(--color-text); margin-top: .2rem; }
+[data-theme="dark"] .unav-card { background: var(--color-background-alt); }
+</style>
+{% endblock %}

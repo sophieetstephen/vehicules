@@ -115,6 +115,56 @@ class ReservationSegment(db.Model):
     vehicle = db.relationship("Vehicle")
 
 
+class VehicleUnavailability(db.Model):
+    """Période pendant laquelle un véhicule ne peut pas être attribué.
+
+    ``end_at`` à ``None`` signifie « jusqu'à nouvel ordre ».
+    """
+
+    CATEGORIES = [
+        ("mecanique", "Panne mécanique"),
+        ("entretien", "Entretien / contrôle technique"),
+        ("carrosserie", "Carrosserie"),
+        ("autre", "Autre"),
+    ]
+
+    id = db.Column(db.Integer, primary_key=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
+    start_at = db.Column(db.DateTime, nullable=False)
+    end_at = db.Column(db.DateTime, nullable=True)
+    category = db.Column(db.String(30), nullable=False, default="mecanique")
+    details = db.Column(db.String(200), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    vehicle = db.relationship(
+        "Vehicle",
+        backref=db.backref("unavailabilities", cascade="all, delete-orphan"),
+    )
+    creator = db.relationship("User")
+
+    @property
+    def category_label(self):
+        return dict(self.CATEGORIES).get(self.category, self.category or "")
+
+    @property
+    def label(self):
+        base = self.category_label
+        if self.details:
+            return f"{base} – {self.details}"
+        return base
+
+    def covers(self, start, end):
+        """True if the unavailability overlaps the ``[start, end)`` window."""
+
+        if self.start_at >= end:
+            return False
+        return self.end_at is None or self.end_at > start
+
+    def is_active_at(self, moment):
+        return self.start_at <= moment and (self.end_at is None or self.end_at > moment)
+
+
 class NotificationSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     notify_superadmin = db.Column(db.Boolean, default=False)
