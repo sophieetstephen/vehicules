@@ -314,7 +314,7 @@ def test_manage_request_approval_notifies_carpoolers(monkeypatch):
 
         assert len(calls) == 1
         subject, recipients = calls[0]
-        assert subject == 'Réservation validée'
+        assert subject == 'Véhicule attribué'
         assert set(recipients) == {requester.email, carpool_active.email}
         assert carpool_inactive.email not in recipients
 
@@ -392,7 +392,7 @@ def test_manage_request_approval_includes_manual_carpool_email(monkeypatch):
 
         assert len(captured) == 1
         subject, recipients = captured[0]
-        assert subject == 'Réservation validée'
+        assert subject == 'Véhicule attribué'
         assert set(recipients) == {requester.email, manual_email}
         db.drop_all()
 
@@ -507,7 +507,7 @@ def test_manage_segment_change_vehicle_notifies_carpoolers(monkeypatch):
 
         assert len(calls) == 1
         subject, recipients = calls[0]
-        assert subject == 'Modification de votre réservation'
+        assert subject == 'Véhicule attribué'
         assert set(recipients) == {requester.email, carpool_active.email}
         assert carpool_inactive.email not in recipients
         db.drop_all()

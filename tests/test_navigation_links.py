@@ -24,9 +24,12 @@ def _render_nav(role: str) -> str:
 
 @pytest.mark.parametrize('role', [User.ROLE_SUPERADMIN, User.ROLE_ADMIN, User.ROLE_USER])
 def test_links_hidden_for_superadmin(role):
+    """La barre de navigation ne contient que la marque et le menu utilisateur."""
     html = _render_nav(role)
-    assert 'Accueil' in html
+    assert 'navbar-brand-custom' in html
+    assert 'Déconnexion' in html
     assert 'Planning mensuel' not in html
+    assert 'Nouvelle réservation' not in html
     assert 'Demande de réservation' not in html
 
 
@@ -51,10 +54,10 @@ def _render_home(role: str) -> str:
 @pytest.mark.parametrize(
     'role,links',
     [
-        (User.ROLE_USER, ['Planning mensuel', 'Demande de réservation', 'Contact']),
+        (User.ROLE_USER, ['Planning mensuel', 'Nouvelle réservation', 'Contact']),
         (
             User.ROLE_ADMIN,
-            ['Gestion du parc', 'Gestion des réservations', 'Planning mensuel', 'Demande de réservation'],
+            ['Gestion du parc', 'Gestion des réservations', 'Planning mensuel', 'Nouvelle réservation'],
         ),
         (
             User.ROLE_SUPERADMIN,
@@ -64,7 +67,7 @@ def _render_home(role: str) -> str:
                 'Gestion des réservations',
                 'Gestion des congés',
                 'Planning mensuel',
-                'Demande de réservation',
+                'Nouvelle réservation',
             ],
         ),
     ],

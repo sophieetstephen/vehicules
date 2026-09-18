@@ -59,6 +59,17 @@ La page d'accueil de chaque rôle affiche :
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
 
+## Lancer les tests
+
+```bash
+pip install -r requirements.txt pytest
+python -m pytest -q
+```
+
+`tests/conftest.py` fournit la `SECRET_KEY` et un serveur mail factice :
+aucune variable d'environnement n'est nécessaire. La suite doit passer
+intégralement ; c'est le filet de sécurité avant chaque mise à jour.
+
 ## Installation sur téléphone (PWA)
 
 L'application s'installe depuis le navigateur, sans passer par les stores :

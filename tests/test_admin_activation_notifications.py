@@ -57,7 +57,8 @@ def test_admin_activation_sends_notification(monkeypatch):
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
 
-        response = client.get(f"/admin/activate/{pending.id}")
+        # L'activation est une action POST (protection CSRF) depuis la refonte.
+        response = client.post(f"/admin/activate/{pending.id}")
         assert response.status_code == 302
 
         refreshed = User.query.get(pending.id)
