@@ -239,7 +239,7 @@ def test_segment_day_can_be_repeated_and_managed(app_ctx):
     # update second segment to v1
     data = {'action': 'update', 'vehicle_id': str(v1.id)}
     client.post(f'/admin/manage/segment/{seg_day2.id}', data=data)
-    assert ReservationSegment.query.get(seg_day2.id).vehicle_id == v1.id
+    assert db.session.get(ReservationSegment, seg_day2.id).vehicle_id == v1.id
     # delete third segment
     data = {'action': 'delete'}
     client.post(f'/admin/manage/segment/{seg_day3.id}', data=data)
@@ -292,7 +292,7 @@ def test_segment_update_sends_mail(app_ctx, monkeypatch):
     data = {"action": "update", "vehicle_id": str(v2.id)}
     client.post(f"/admin/manage/segment/{seg.id}", data=data)
 
-    assert ReservationSegment.query.get(seg.id).vehicle_id == v2.id
+    assert db.session.get(ReservationSegment, seg.id).vehicle_id == v2.id
     subject, body, to_addr = called["args"]
     # E-mail unifié "Véhicule attribué" : période et nouveau véhicule (code + libellé).
     assert subject == "Véhicule attribué"

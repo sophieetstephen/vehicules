@@ -39,5 +39,5 @@ def test_vehicle_list_and_edit(client):
     rv = client.post(f'/admin/vehicles/{vid}/edit', data={'code': 'C1', 'label': 'Car1', 'category': 'New'}, follow_redirects=True)
     assert rv.status_code == 200
     with app.app_context():
-        v = Vehicle.query.get(vid)
+        v = db.session.get(Vehicle, vid)
         assert v.category == 'New'

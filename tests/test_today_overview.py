@@ -171,7 +171,7 @@ def test_user_cancels_own_reservation_and_frees_vehicle(ctx, monkeypatch):
     resp = client.post(f"/reservation/{r.id}/cancel")
     assert resp.status_code == 302
 
-    r = Reservation.query.get(r.id)
+    r = db.session.get(Reservation, r.id)
     assert r.status == "cancelled"
     assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 0
     assert not has_conflict(v1.id, datetime(2026, 9, 21, 8), datetime(2026, 9, 21, 12))
@@ -201,7 +201,7 @@ def test_user_cannot_cancel_someone_else_reservation(ctx, monkeypatch):
     with client.session_transaction() as s:
         s["uid"] = jean.id
     assert client.post(f"/reservation/{r.id}/cancel").status_code == 403
-    assert Reservation.query.get(r.id).status == "approved"
+    assert db.session.get(Reservation, r.id).status == "approved"
 
 
 def test_cannot_cancel_finished_or_rejected_reservation(ctx, monkeypatch):
@@ -215,8 +215,8 @@ def test_cannot_cancel_finished_or_rejected_reservation(ctx, monkeypatch):
         s["uid"] = jean.id
     assert client.post(f"/reservation/{finished.id}/cancel").status_code == 302
     assert client.post(f"/reservation/{rejected.id}/cancel").status_code == 302
-    assert Reservation.query.get(finished.id).status == "approved"
-    assert Reservation.query.get(rejected.id).status == "rejected"
+    assert db.session.get(Reservation, finished.id).status == "approved"
+    assert db.session.get(Reservation, rejected.id).status == "rejected"
     assert calls == []
 
 
@@ -226,4 +226,4 @@ def test_cancel_requires_login(ctx):
     r = _reservation(jean, datetime(2026, 9, 21, 8), datetime(2026, 9, 21, 12), v1)
     resp = app.test_client().post(f"/reservation/{r.id}/cancel")
     assert resp.status_code == 302 and resp.headers["Location"].startswith("/login")
-    assert Reservation.query.get(r.id).status == "approved"
+    assert db.session.get(Reservation, r.id).status == "approved"

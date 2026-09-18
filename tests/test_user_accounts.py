@@ -221,7 +221,7 @@ def test_superadmin_regenerates_password(monkeypatch):
 
         resp = client.post(f"/admin/reset_password/{target.id}")
         assert resp.status_code == 302
-        refreshed = User.query.get(target.id)
+        refreshed = db.session.get(User, target.id)
         assert not refreshed.check_password("Old-Pass-1234")
         assert calls and calls[-1]["to"] == "jean@example.com"
         new_password = calls[-1]["body"].split("Mot de passe : ")[1].splitlines()[0]
@@ -240,7 +240,7 @@ def test_admin_cannot_regenerate_password():
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
         assert client.post(f"/admin/reset_password/{target.id}").status_code == 403
-        assert User.query.get(target.id).check_password("Old-Pass-1234")
+        assert db.session.get(User, target.id).check_password("Old-Pass-1234")
         db.drop_all()
 
 

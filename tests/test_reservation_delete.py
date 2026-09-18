@@ -73,5 +73,5 @@ def test_delete_reservation_removes_segments(app_ctx):
     data = {'action': 'delete'}
     client.post(f'/admin/manage/{r.id}', data=data)
 
-    assert Reservation.query.get(r.id) is None
+    assert db.session.get(Reservation, r.id) is None
     assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 0

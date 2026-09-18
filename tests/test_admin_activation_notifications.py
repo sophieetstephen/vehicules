@@ -61,7 +61,7 @@ def test_admin_activation_sends_notification(monkeypatch):
         response = client.post(f"/admin/activate/{pending.id}")
         assert response.status_code == 302
 
-        refreshed = User.query.get(pending.id)
+        refreshed = db.session.get(User, pending.id)
         assert refreshed.status == "active"
 
         assert captured, "An activation email should have been sent"
