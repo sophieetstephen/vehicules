@@ -72,6 +72,9 @@ ENV_BACKUP=""
 if [ -f "$ENV_FILE" ]; then
   ENV_BACKUP="$BACKUP_DIR/env_${TS}.txt"
   cp "$ENV_FILE" "$ENV_BACKUP"
+  # Le .env contient des secrets (mot de passe mail, SECRET_KEY) :
+  # lisible uniquement par l'utilisateur qui sauvegarde.
+  chmod 600 "$ENV_BACKUP"
 fi
 
 if [ -n "${REMOTE_URI:-}" ]; then
