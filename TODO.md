@@ -2,11 +2,13 @@
 
 ## Prioritaires - Résolus
 
-### ~~1. Page "Mes Réservations"~~ ✅ NON NÉCESSAIRE
-- Les notifications email informent l'utilisateur du statut de ses demandes
+### ~~1. Page "Mes Réservations"~~ ✅ FAIT (accueil)
+- Bloc "Mes réservations à venir" sur la page d'accueil, avec tableau
+  "Aujourd'hui" (état de chaque véhicule : sorti / réservé plus tard / libre)
 
-### ~~2. Annuler une demande~~ ✅ VIA CONTACT
-- Option "Annuler une réservation" dans le formulaire de contact
+### ~~2. Annuler une demande~~ ✅ FAIT (bouton Annuler sur l'accueil)
+- Statut `cancelled`, véhicule libéré, e-mail aux admins et participants
+- L'option "Annuler une réservation" du formulaire de contact reste disponible
 
 ### ~~3. Notifications email~~ ✅ FAIT
 - Emails unifiés : "Véhicule attribué", "Demande refusée", "Réservation supprimée"

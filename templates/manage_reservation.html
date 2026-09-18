@@ -40,6 +40,8 @@
             <i class="fa-solid fa-check-circle"></i> Approuvée
           {% elif reservation.status == 'pending' %}
             <i class="fa-solid fa-clock"></i> En attente
+          {% elif reservation.status == 'cancelled' %}
+            <i class="fa-solid fa-ban"></i> Annulée par l'utilisateur
           {% else %}
             <i class="fa-solid fa-times-circle"></i> Refusée
           {% endif %}
@@ -299,6 +301,7 @@
 .status-approved { background: rgba(22, 163, 74, 0.2); color: #86efac; }
 .status-pending { background: rgba(217, 119, 6, 0.2); color: #fcd34d; }
 .status-rejected { background: rgba(220, 38, 38, 0.2); color: #fca5a5; }
+.status-cancelled { background: rgba(107, 114, 128, 0.25); color: #d1d5db; }
 
 /* Détails */
 .reservation-details {

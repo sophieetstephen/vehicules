@@ -60,3 +60,6 @@ class Config:
     SUPERADMIN_EMAILS = ["gestionvehiculestomer@gmail.com"]
     ADMIN_EMAILS = ["alexandre.stephen@free.fr"]
     SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "30"))
+    # Fuseau horaire utilisé pour "maintenant" dans le tableau du jour. Les
+    # créneaux de réservation (8h-12h, 13h-17h) sont exprimés en heure locale.
+    APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "Europe/Paris")
