@@ -22,6 +22,7 @@ from flask import (
     url_for,
     abort,
     send_file,
+    send_from_directory,
     jsonify,
 )
 from datetime import datetime, timedelta, time
@@ -557,6 +558,24 @@ def __ping__():
     return "OK", 200
 
 
+# --- PWA : service worker servi à la racine pour couvrir tout le site
+@app.route("/service-worker.js")
+def service_worker():
+    resp = send_from_directory(app.static_folder, "service-worker.js")
+    resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-cache"
+    resp.headers["Service-Worker-Allowed"] = "/"
+    return resp
+
+
+@app.route("/installer")
+def install_guide():
+    """Guide d'installation sur téléphone (accessible sans connexion)."""
+
+    u = current_user()
+    return render_template("install.html", user=u, current_user=u)
+
+
 # --- Gestion de l'expiration de session
 @app.before_request
 def _check_session_timeout():
@@ -597,6 +616,8 @@ def _force_login():
         "/__ping__",
         "/home",
         "/",
+        "/service-worker.js",
+        "/installer",
     }
     if p in public or p.startswith("/static/"):
         return None

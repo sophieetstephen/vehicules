@@ -59,6 +59,22 @@ La page d'accueil de chaque rôle affiche :
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
 
+## Installation sur téléphone (PWA)
+
+L'application s'installe depuis le navigateur, sans passer par les stores :
+icône sur l'écran d'accueil et ouverture en plein écran. La page publique
+`/installer` explique la marche à suivre (Chrome sur Android, Safari sur
+iPhone/iPad) et un bandeau le propose aux utilisateurs connectés sur mobile.
+
+* `static/manifest.json` – nom, couleurs, icônes PNG (192, 512, maskable).
+* `static/icons/` – icônes générées par `python tools/make_icons.py` à partir
+  du dessin du favicon (à relancer si le dessin change).
+* `/service-worker.js` – servi à la racine (portée `/`). Les pages HTML ne
+  sont **jamais** mises en cache (toujours le réseau, page « Pas de
+  connexion » hors ligne) ; seuls les fichiers de `/static/` le sont.
+
+L'installation nécessite HTTPS (assuré par le proxy Caddy en production).
+
 ## Indisponibilité d'un véhicule
 
 Depuis *Gestion du parc → Indisponibilités*, un administrateur déclare une

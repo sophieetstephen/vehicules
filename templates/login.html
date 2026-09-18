@@ -12,6 +12,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Véhicules">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon-180.png') }}">
 </head>
 <body>
 <div class="login-page">
@@ -72,6 +78,9 @@
         Pas de compte ou mot de passe oublié ? Adressez-vous au responsable du centre :
         les comptes sont créés et les mots de passe régénérés par un administrateur.
       </span>
+      <div class="mt-2">
+        <a href="{{ url_for('install_guide') }}"><i class="fa-solid fa-mobile-screen-button me-1"></i>Installer l'application sur votre téléphone</a>
+      </div>
     </div>
   </div>
 </div>

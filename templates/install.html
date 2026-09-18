@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Installer l'application – Véhicules{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-mobile-screen-button page-title-icon"></i>
+    Installer l'application sur votre téléphone
+  </h1>
+</div>
+
+<p class="text-muted">
+  Pas besoin de l'App Store ni du Play Store : l'application s'installe directement depuis
+  le navigateur. Vous obtenez une icône sur l'écran d'accueil et l'application s'ouvre en
+  plein écran, sans barre d'adresse.
+</p>
+
+<div class="row g-4">
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3"><i class="fa-brands fa-android me-2 text-success"></i>Android (Chrome)</h2>
+        <div id="pwa-install-block" class="d-none mb-3">
+          <button id="pwa-install-button" class="btn btn-primary w-100" type="button">
+            <i class="fa-solid fa-download me-2"></i>Installer maintenant
+          </button>
+          <div class="form-text">Chrome propose l'installation en un clic.</div>
+        </div>
+        <ol class="mb-0">
+          <li>Ouvrez ce site dans <strong>Chrome</strong>.</li>
+          <li>Touchez le menu <strong>⋮</strong> en haut à droite.</li>
+          <li>Choisissez <strong>« Installer l'application »</strong> ou <strong>« Ajouter à l'écran d'accueil »</strong>.</li>
+          <li>Confirmez : l'icône <em>Véhicules</em> apparaît sur l'écran d'accueil.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card h-100">
+      <div class="card-body">
+        <h2 class="h5 mb-3"><i class="fa-brands fa-apple me-2"></i>iPhone / iPad (Safari)</h2>
+        <ol class="mb-3">
+          <li>Ouvrez ce site dans <strong>Safari</strong> (obligatoire : Chrome ou Firefox sur iPhone ne permettent pas l'installation).</li>
+          <li>Touchez le bouton <strong>Partager</strong> <i class="fa-solid fa-arrow-up-from-bracket"></i> en bas de l'écran.</li>
+          <li>Faites défiler et choisissez <strong>« Sur l'écran d'accueil »</strong>.</li>
+          <li>Touchez <strong>Ajouter</strong> en haut à droite.</li>
+        </ol>
+        <p class="text-muted small mb-0">
+          Sur iPad, le bouton Partager se trouve en haut à droite de Safari.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-4">
+  <div class="card-body">
+    <h2 class="h6">Bon à savoir</h2>
+    <ul class="mb-0 small text-muted">
+      <li>L'application a besoin d'Internet : le planning est toujours à jour, rien n'est stocké sur le téléphone.</li>
+      <li>Vous vous connectez avec votre <strong>identifiant</strong> et votre mot de passe, comme dans le navigateur.</li>
+      <li>Pour désinstaller : maintenez l'icône appuyée puis « Supprimer », comme n'importe quelle application.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+(function () {
+  const block = document.getElementById('pwa-install-block');
+  const button = document.getElementById('pwa-install-button');
+  let deferredPrompt = window.__pwaDeferredPrompt || null;
+  function show() { if (deferredPrompt && block) block.classList.remove('d-none'); }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferredPrompt = e;
+    show();
+  });
+  show();
+  if (button) {
+    button.addEventListener('click', async function () {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+      window.__pwaDeferredPrompt = null;
+      block.classList.add('d-none');
+    });
+  }
+})();
+</script>
+{% endblock %}
