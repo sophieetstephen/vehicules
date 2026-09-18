@@ -15,17 +15,20 @@ from PIL import Image, ImageDraw
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT_DIR = os.path.join(ROOT, "static", "icons")
 
-BLUE_TOP = (37, 99, 235)      # #2563eb
-BLUE_BOTTOM = (30, 64, 175)   # #1e40af
-WHITE = (255, 255, 255, 242)
-WINDOW = (37, 99, 235, 153)
-WHEEL = (30, 41, 59, 255)
-HUB = (100, 116, 139, 255)
+BLUE_TOP = (30, 41, 59)       # #1e293b (bleu nuit, couleur de la barre)
+BLUE_BOTTOM = (15, 23, 42)    # #0f172a
+BODY = (220, 38, 38, 255)     # #dc2626 rouge sapeur-pompier
+BODY_DARK = (185, 28, 28, 255)
+WINDOW = (224, 242, 254, 235) # vitres claires
+WHEEL = (15, 23, 42, 255)
+HUB = (148, 163, 184, 255)
 LIGHT = (251, 191, 36, 255)
+BEACON = (59, 130, 246, 255)  # gyrophare bleu
+BEACON_GLOW = (147, 197, 253, 110)
 
 
 def _gradient(size):
-    """Fond dégradé bleu, du haut-gauche au bas-droit."""
+    """Fond dégradé bleu nuit, du haut-gauche au bas-droit."""
 
     img = Image.new("RGBA", (size, size))
     px = img.load()
@@ -44,10 +47,17 @@ def _draw_car(draw, scale, offset):
     def p(x, y):
         return (offset + x * scale, offset + y * scale)
 
+    # Halo du gyrophare, puis gyrophare bleu sur le toit
+    draw.ellipse([p(25, 14), p(39, 26)], fill=BEACON_GLOW)
+    draw.rounded_rectangle([p(28, 18), p(36, 24)], radius=max(1, int(1.5 * scale)), fill=BEACON)
+    draw.rounded_rectangle([p(30, 19), p(34, 21)], radius=max(1, int(scale)), fill=(219, 234, 254, 255))
+    # Carrosserie rouge
     draw.polygon(
         [p(12, 38), p(16, 28), p(24, 24), p(40, 24), p(48, 28), p(52, 38), p(52, 44), p(12, 44)],
-        fill=WHITE,
+        fill=BODY,
     )
+    draw.rectangle([p(12, 40), p(52, 44)], fill=BODY_DARK)
+    # Vitres claires
     draw.polygon([p(18, 36), p(20, 30), p(26, 28), p(26, 36)], fill=WINDOW)
     draw.polygon([p(28, 36), p(28, 28), p(36, 28), p(38, 30), p(38, 36)], fill=WINDOW)
     for cx in (20, 44):
