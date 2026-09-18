@@ -12,6 +12,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <meta name="theme-color" content="#1e293b">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Véhicules">
+  <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon-180.png') }}">
 </head>
 <body>
 <nav class="navbar navbar-expand-lg navbar-custom mb-4">
@@ -77,6 +83,14 @@
       {% endfor %}
     {% endif %}
   {% endwith %}
+  <div id="pwa-banner" class="alert alert-info d-none align-items-center justify-content-between gap-2 flex-wrap" role="status">
+    <span><i class="fa-solid fa-mobile-screen-button me-2"></i>Installez l'application sur votre téléphone pour l'ouvrir en un clic.</span>
+    <span class="d-flex gap-2">
+      <button id="pwa-banner-install" class="btn btn-sm btn-primary d-none" type="button">Installer</button>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('install_guide') }}">Comment faire</a>
+      <button id="pwa-banner-close" class="btn btn-sm btn-link text-muted" type="button" aria-label="Fermer">Plus tard</button>
+    </span>
+  </div>
   {% block content %}{% endblock %}
 </div>
 
@@ -140,8 +154,46 @@
 
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register("{{ url_for('static', filename='service-worker.js') }}");
+  navigator.serviceWorker.register("{{ url_for('service_worker') }}", { scope: '/' });
 }
+// Bandeau d'installation (PWA) : proposé aux utilisateurs connectés sur mobile,
+// tant que l'application n'est pas installée et que le bandeau n'a pas été fermé.
+(function () {
+  const banner = document.getElementById('pwa-banner');
+  if (!banner) return;
+  const installBtn = document.getElementById('pwa-banner-install');
+  const closeBtn = document.getElementById('pwa-banner-close');
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+  const isLoggedIn = {{ 'true' if user else 'false' }};
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('pwa-banner-dismissed') === '1'; } catch (e) {}
+  function show() { banner.classList.remove('d-none'); banner.classList.add('d-flex'); }
+  if (isLoggedIn && isMobile && !isStandalone && !dismissed) {
+    show();
+  }
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__pwaDeferredPrompt = e;
+    if (isLoggedIn && !isStandalone && !dismissed) {
+      show();
+      installBtn.classList.remove('d-none');
+    }
+  });
+  installBtn.addEventListener('click', async function () {
+    const p = window.__pwaDeferredPrompt;
+    if (!p) return;
+    p.prompt();
+    await p.userChoice;
+    window.__pwaDeferredPrompt = null;
+    banner.classList.add('d-none');
+  });
+  closeBtn.addEventListener('click', function () {
+    banner.classList.add('d-none');
+    banner.classList.remove('d-flex');
+    try { localStorage.setItem('pwa-banner-dismissed', '1'); } catch (e) {}
+  });
+})();
 </script>
 </body>
 </html>

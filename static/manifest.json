@@ -1,17 +1,39 @@
 {
-  "name": "Véhicules",
+  "id": "/",
+  "name": "Véhicules – Réservation",
   "short_name": "Véhicules",
-  "description": "Application de gestion de flotte automobile",
-  "start_url": "/",
+  "description": "Réservation des véhicules du centre de secours",
+  "lang": "fr",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f8fafc",
   "theme_color": "#1e293b",
   "icons": [
     {
-      "src": "favicon.svg",
+      "src": "/static/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/static/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ]
 }
