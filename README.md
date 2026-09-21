@@ -27,6 +27,20 @@ Les variables `SUPERADMIN_EMAILS` / `ADMIN_EMAILS` ne servent plus qu'aux
 notifications de secours lorsque aucun destinataire n'est coché dans
 « Gestion des congés ».
 
+### Mots de passe et sessions
+
+Le mot de passe généré ne transite **jamais** par le cookie de session : il est
+conservé côté serveur (table `credential_handoff`, supprimée dès l'affichage et
+au plus tard après 10 minutes), la session ne portant qu'un jeton opaque.
+
+Régénérer un mot de passe **ferme immédiatement les sessions déjà ouvertes** de
+l'utilisateur concerné : la session porte une empreinte HMAC du mot de passe
+courant, comparée à chaque requête. Un compte compromis est donc réellement
+repris en main, sans attendre l'expiration de session.
+
+Conséquence au déploiement : les sessions ouvertes avant cette version n'ont pas
+d'empreinte et sont refusées. Chacun se reconnecte une fois, c'est normal.
+
 ### Limitation des tentatives de connexion
 
 Chaque tentative de connexion est enregistrée (identifiant saisi, adresse IP,

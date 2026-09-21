@@ -58,6 +58,7 @@ def test_calendar_month_params_interpreted():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         resp = client.get('/calendar/month?y=2023&m=12')
         html = resp.data.decode('utf-8')
         assert '?y=2023&amp;m=11' in html

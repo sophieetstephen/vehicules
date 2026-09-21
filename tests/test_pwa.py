@@ -92,6 +92,7 @@ def test_logged_in_pages_register_root_service_worker_and_banner():
         client = app.test_client()
         with client.session_transaction() as s:
             s["uid"] = u.id
+            s["pwd_stamp"] = u.session_stamp(app.config["SECRET_KEY"])
         html = client.get("/home").data.decode()
         assert "navigator.serviceWorker.register(\"/service-worker.js\", { scope: '/' })" in html
         assert 'id="pwa-banner"' in html

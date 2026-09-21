@@ -60,6 +60,7 @@ def _client_as(user):
     c = app.test_client()
     with c.session_transaction() as s:
         s["uid"] = user.id
+        s["pwd_stamp"] = user.session_stamp(app.config["SECRET_KEY"])
     return c
 
 

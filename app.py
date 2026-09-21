@@ -5,6 +5,7 @@ import json
 import locale
 import os
 import re
+import secrets
 import sys
 import tempfile
 # Signature: AS-2024-6f9e3c42
@@ -46,6 +47,7 @@ from models import (
     NotificationSettings,
     VehicleUnavailability,
     LoginAttempt,
+    CredentialHandoff,
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
@@ -508,9 +510,73 @@ def list_usernames_command():
         print(f"{user.username or '(aucun)':20} {user.email:40} {user.role:10} {user.status}")
 
 
+def store_credentials(target, password, *, regenerated, mail_sent):
+    """Garder les identifiants côté serveur et déposer un jeton en session.
+
+    Le mot de passe en clair ne doit jamais partir dans le cookie de session.
+    """
+
+    CredentialHandoff.query.filter(
+        CredentialHandoff.created_at
+        < datetime.utcnow() - timedelta(minutes=CredentialHandoff.MAX_AGE_MINUTES)
+    ).delete(synchronize_session=False)
+    token = secrets.token_urlsafe(32)
+    db.session.add(
+        CredentialHandoff(
+            token=token,
+            user_id=target.id,
+            password=password,
+            regenerated=regenerated,
+            mail_sent=mail_sent,
+        )
+    )
+    db.session.commit()
+    session["credentials_token"] = token
+
+
+def pop_credentials():
+    """Récupérer puis supprimer les identifiants en attente d'affichage."""
+
+    token = session.pop("credentials_token", None)
+    if not token:
+        return None
+    handoff = CredentialHandoff.query.filter_by(token=token).first()
+    if handoff is None:
+        return None
+    expired = handoff.created_at < datetime.utcnow() - timedelta(
+        minutes=CredentialHandoff.MAX_AGE_MINUTES
+    )
+    target = handoff.user
+    creds = None
+    if not expired and target is not None:
+        creds = {
+            "user_id": target.id,
+            "username": target.username,
+            "password": handoff.password,
+            "email": target.email,
+            "name": f"{target.first_name or ''} {target.last_name or ''}".strip()
+            or target.name,
+            "regenerated": handoff.regenerated,
+            "mail_sent": handoff.mail_sent,
+        }
+    db.session.delete(handoff)
+    db.session.commit()
+    return creds
+
+
 def current_user():
     uid = session.get("uid")
-    return db.session.get(User, uid) if uid else None
+    if not uid:
+        return None
+    user = db.session.get(User, uid)
+    if user is None:
+        session.clear()
+        return None
+    # Un mot de passe régénéré doit fermer les sessions déjà ouvertes.
+    if session.get("pwd_stamp") != user.session_stamp(app.config["SECRET_KEY"]):
+        session.clear()
+        return None
+    return user
 
 
 @app.route("/api/users/search", methods=["GET"])
@@ -673,13 +739,15 @@ def _force_login():
     }
     if p in public or p.startswith("/static/"):
         return None
-    if not session.get("uid"):
+    u = current_user() if session.get("uid") else None
+    if u is None:
+        # Pas de session, ou session close par une régénération de mot de
+        # passe ou la suppression du compte : on renvoie vers la connexion.
         nxt = request.full_path if request.query_string else p
         return redirect(
             "/login" + (f"?next={_urlquote(nxt)}" if nxt else "")
         )
-    u = current_user()
-    if not u or u.status != "active":
+    if u.status != "active":
         flash("Compte non activé", "danger")
         return redirect(url_for("home"))
     return None
@@ -910,6 +978,7 @@ def login():
         if u and u.check_password(form.password.data):
             record_login_attempt(identifier, ip, True)
             session["uid"] = u.id
+            session["pwd_stamp"] = u.session_stamp(app.config["SECRET_KEY"])
             session["last_activity"] = datetime.utcnow().isoformat()
             session.permanent = True
             return redirect(
@@ -1396,15 +1465,7 @@ def admin_user_new():
             flash("Impossible de créer ce compte (doublon).", "danger")
             return render_template("user_new.html", form=form, user=u, current_user=u), 200
         sent = _send_credentials(target, password)
-        session["pending_credentials"] = {
-            "user_id": target.id,
-            "username": target.username,
-            "password": password,
-            "email": target.email,
-            "name": f"{first_name} {last_name}",
-            "regenerated": False,
-            "mail_sent": sent,
-        }
+        store_credentials(target, password, regenerated=False, mail_sent=sent)
         return redirect(url_for("admin_user_credentials"))
     return render_template("user_new.html", form=form, user=u, current_user=u)
 
@@ -1414,7 +1475,7 @@ def admin_user_new():
 def admin_user_credentials():
     """Show freshly generated credentials exactly once."""
 
-    creds = session.pop("pending_credentials", None)
+    creds = pop_credentials()
     if not creds:
         return redirect(url_for("admin_users"))
     u = current_user()
@@ -1516,15 +1577,7 @@ def admin_reset_password(user_id):
     password = target.set_random_password()
     db.session.commit()
     sent = _send_credentials(target, password, regenerated=True)
-    session["pending_credentials"] = {
-        "user_id": target.id,
-        "username": target.username,
-        "password": password,
-        "email": target.email,
-        "name": f"{target.first_name or ''} {target.last_name or ''}".strip() or target.name,
-        "regenerated": True,
-        "mail_sent": sent,
-    }
+    store_credentials(target, password, regenerated=True, mail_sent=sent)
     return redirect(url_for("admin_user_credentials"))
 
 

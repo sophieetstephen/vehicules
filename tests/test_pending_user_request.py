@@ -24,6 +24,7 @@ def test_pending_user_cannot_create_request():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,

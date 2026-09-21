@@ -119,6 +119,7 @@ def test_export_route_passes_segments(ctx):
         client = app.test_client()
         with client.session_transaction() as s:
             s["uid"] = admin.id
+            s["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
         client.get("/export/pdf/month?y=2026&m=3")
     finally:
         app_module.render_template = vrai_rendu

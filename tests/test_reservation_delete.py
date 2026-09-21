@@ -70,6 +70,7 @@ def test_delete_reservation_removes_segments(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     data = {'action': 'delete'}
     client.post(f'/admin/manage/{r.id}', data=data)
 

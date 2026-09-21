@@ -25,6 +25,7 @@ def test_new_request_creates_correct_datetimes():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -66,6 +67,7 @@ def test_new_request_without_end_date_uses_start_date_and_end_slot_time():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -106,6 +108,7 @@ def test_new_request_without_end_slot_defaults_to_start_slot():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -145,6 +148,7 @@ def test_new_request_with_empty_end_slot_string_creates_reservation():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -186,6 +190,7 @@ def test_new_request_with_end_before_start_shows_error():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -235,6 +240,7 @@ def test_admin_lookup_fallback_uses_single_match_when_user_id_missing():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         data = {
             'user_lookup': f"{target.first_name} {target.last_name}",
             'user_id': '',
@@ -297,6 +303,7 @@ def test_admin_new_request_requires_valid_user_selection():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         data = {
             'user_lookup': 'Target',
             'user_id': '',
@@ -345,6 +352,7 @@ def test_admin_new_request_accepts_valid_user_selection():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         data = {
             'user_lookup': 'Target Person',
             'user_id': str(target.id),
