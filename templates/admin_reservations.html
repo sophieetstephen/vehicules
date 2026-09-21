@@ -49,7 +49,7 @@
             {% endif %}
           </td>
           <td class="text-end">
-            <a class="btn btn-sm btn-primary" href="{{ url_for('manage_request', rid=r.id) }}">
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('manage_request', rid=r.id) }}">
               <i class="fa-solid fa-pen-to-square"></i> Gérer
             </a>
           </td>
@@ -105,7 +105,7 @@
     </div>
 
     <div class="reservation-card-actions">
-      <a href="{{ url_for('manage_request', rid=r.id) }}" class="btn btn-primary btn-action-mobile">
+      <a href="{{ url_for('manage_request', rid=r.id) }}" class="btn btn-outline-primary btn-action-mobile">
         <i class="fa-solid fa-pen-to-square"></i>
         Gérer
       </a>

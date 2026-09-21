@@ -8,7 +8,7 @@
       <span class="today-date">{{ weekday_abbr(now) }} {{ now.strftime('%d/%m') }} · {{ now.strftime('%H:%M') }}</span>
     </h2>
     {% if pending_count %}
-      <a class="btn btn-warning btn-sm" href="{{ url_for('admin_reservations') }}">
+      <a class="btn btn-sm btn-warning" href="{{ url_for('admin_reservations') }}">
         <i class="fa-solid fa-hourglass-half me-1"></i>{{ pending_count }} demande{{ 's' if pending_count > 1 }} en attente
       </a>
     {% endif %}
@@ -106,7 +106,7 @@
       </div>
       <form method="post" action="{{ url_for('cancel_reservation', rid=r.id) }}" onsubmit="return confirm('Annuler cette réservation ? Les administrateurs seront prévenus.');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-outline-danger btn-sm" type="submit"><i class="fa-solid fa-xmark me-1"></i>Annuler</button>
+        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-xmark me-1"></i>Annuler</button>
       </form>
     </div>
     {% endfor %}
