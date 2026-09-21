@@ -34,7 +34,7 @@
           <td>{{ v.category or "" }}</td>
           <td class="text-end">
             <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_vehicle_unavailability', vehicle_id=v.id) }}"><i class="fa-solid fa-wrench me-1"></i>Indisponibilités</a>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">Modifier</a>
+            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">Modifier</a>
             <form method="post" action="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}" class="d-inline" onsubmit="return confirm('Supprimer ce véhicule ?');">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               {# Un rouge plein par ligne du tableau saturait la page : la
@@ -76,7 +76,7 @@
         <a class="btn btn-sm btn-outline-warning" href="{{ url_for('admin_vehicle_unavailability', vehicle_id=v.id) }}">
           <i class="fa-solid fa-wrench"></i> Indispo.
         </a>
-        <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">
+        <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_vehicle_edit', vehicle_id=v.id) }}">
           <i class="fa-solid fa-pen"></i> Modifier
         </a>
         <form method="post" action="{{ url_for('admin_vehicle_delete', vehicle_id=v.id) }}" class="d-inline" onsubmit="return confirm('Supprimer ce véhicule ?');">

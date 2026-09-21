@@ -26,7 +26,8 @@
 
 <p class="text-muted small mb-3">
   Les comptes sont créés par un administrateur ; les utilisateurs ne peuvent pas modifier leur mot de passe.
-  En cas d'oubli, utilisez « Régénérer MDP » : un nouveau mot de passe est affiché et envoyé par e-mail.
+  En cas d'oubli, ouvrez le menu « … » de la ligne puis « Régénérer le mot de passe » :
+  un nouveau mot de passe est affiché et envoyé par e-mail.
 </p>
 
 <!-- ========== VUE DESKTOP (tableau) ========== -->
@@ -50,42 +51,8 @@
               <span class="badge bg-{{ 'success' if (u.status or '')=='active' else ('secondary' if (u.status or '')=='inactive' else 'warning') }}">{{u.status or 'n/a'}}</span>
             {% endif %}
           </td>
-          <td class="d-flex gap-2 flex-wrap">
-            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">Modifier</a>
-            {% if (u.status or '') == 'active' %}
-              <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-warning" type="submit">Désactiver</button>
-              </form>
-            {% else %}
-              <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-success" type="submit">Activer</button>
-              </form>
-            {% endif %}
-            {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-              <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Régénérer MDP</button>
-              </form>
-            {% endif %}
-            {% if current_user and current_user.role==ROLE_SUPERADMIN and u.role!=ROLE_SUPERADMIN %}
-              {% if u.role==ROLE_ADMIN %}
-                <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-sm btn-outline-primary" type="submit">Rétrograder</button>
-                </form>
-              {% else %}
-                <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
-                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                  <button class="btn btn-sm btn-outline-primary" type="submit">Promouvoir</button>
-                </form>
-              {% endif %}
-              <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button class="btn btn-sm btn-outline-danger" type="submit">Supprimer</button>
-              </form>
-            {% endif %}
+          <td class="text-nowrap user-actions">
+            {% include "_user_actions.html" with context %}
           </td>
         </tr>
       {% endfor %}
@@ -118,59 +85,8 @@
     </div>
 
     <div class="user-card-actions">
-      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">
-        <i class="fa-solid fa-pen"></i> Modifier
-      </a>
-      {% if (u.status or '') == 'active' %}
-        <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}" class="d-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline-warning" type="submit">
-            <i class="fa-solid fa-ban"></i> Désactiver
-          </button>
-        </form>
-      {% else %}
-        <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}" class="d-inline">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline-success" type="submit">
-            <i class="fa-solid fa-check"></i> Activer
-          </button>
-        </form>
-      {% endif %}
+      {% include "_user_actions.html" with context %}
     </div>
-
-    {% if current_user and current_user.role==ROLE_SUPERADMIN %}
-    <div class="user-card-actions-admin">
-      <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="btn btn-sm btn-outline-secondary" type="submit">
-          <i class="fa-solid fa-key"></i> Régénérer MDP
-        </button>
-      </form>
-      {% if u.role!=ROLE_SUPERADMIN %}
-        {% if u.role==ROLE_ADMIN %}
-          <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-primary" type="submit">
-              <i class="fa-solid fa-arrow-down"></i> Rétrograder
-            </button>
-          </form>
-        {% else %}
-          <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}" class="d-inline">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button class="btn btn-sm btn-outline-primary" type="submit">
-              <i class="fa-solid fa-arrow-up"></i> Promouvoir
-            </button>
-          </form>
-        {% endif %}
-        <form method="post" action="{{ url_for('admin_user_delete', user_id=u.id) }}" class="d-inline" onsubmit="return confirm('Confirmer la suppression ?');">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          <button class="btn btn-sm btn-outline-danger" type="submit">
-            <i class="fa-solid fa-trash"></i>
-          </button>
-        </form>
-      {% endif %}
-    </div>
-    {% endif %}
   </div>
   {% else %}
   <div class="empty-state">
@@ -291,26 +207,16 @@
   display: flex;
   gap: var(--spacing-sm);
   padding: var(--spacing-md);
-  flex-wrap: wrap;
+  align-items: center;
 }
 
-.user-card-actions .btn {
+/* « Modifier » occupe la largeur, le menu garde une cible carrée à sa droite. */
+.user-card-actions > .btn {
   flex: 1;
-  min-width: 100px;
 }
 
-.user-card-actions-admin {
-  display: flex;
-  gap: var(--spacing-sm);
-  padding: 0 var(--spacing-md) var(--spacing-md);
-  flex-wrap: wrap;
-  border-top: 1px solid var(--color-border);
-  padding-top: var(--spacing-md);
-}
-
-.user-card-actions-admin .btn {
-  font-size: 0.75rem;
-  padding: var(--spacing-xs) var(--spacing-sm);
+.user-card-actions .dropdown > .btn {
+  min-width: 2.75rem;
 }
 
 /* ========== Mode sombre ========== */
@@ -323,5 +229,17 @@
   background: var(--color-background);
 }
 </style>
+
+<script>
+// Le tableau peut défiler horizontalement (.table-responsive) ; sans cela le
+// menu des dernières lignes serait coupé par le bord du conteneur.
+// Bootstrap est chargé en fin de page, d'où l'attente du DOM.
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.bootstrap) return;
+  document.querySelectorAll('.user-actions [data-bs-toggle="dropdown"]').forEach(function (el) {
+    bootstrap.Dropdown.getOrCreateInstance(el, { popperConfig: { strategy: 'fixed' } });
+  });
+});
+</script>
 
 {% endblock %}
