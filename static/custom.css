@@ -841,6 +841,22 @@ p {
   text-align: center;
 }
 
+/* Actions repliées dans un menu : chaque entrée est un formulaire POST, il ne
+   doit pas ajouter d'espace autour du bouton. */
+.dropdown-menu form {
+  margin: 0;
+}
+
+.dropdown-item-danger {
+  color: var(--btn-danger-text);
+}
+
+.dropdown-item-danger:hover,
+.dropdown-item-danger:focus {
+  background: var(--color-danger-light);
+  color: var(--btn-danger-text);
+}
+
 /* Navbar dropdown alignment */
 .navbar-nav .dropdown-menu {
   left: auto;
