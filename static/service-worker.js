@@ -7,9 +7,10 @@
  *  - fichiers statiques du site (/static/...) : cache d'abord, puis réseau.
  *  - tout le reste (API, CDN, formulaires) : réseau uniquement.
  */
-const CACHE_NAME = 'vehicules-static-v3';
+const CACHE_NAME = 'vehicules-static-v4';
+// La feuille de style n'est plus pré-chargée : son adresse porte désormais
+// l'empreinte de son contenu, elle est donc récupérée à la première visite.
 const PRECACHE = [
-  '/static/custom.css',
   '/static/favicon.svg',
   '/static/icons/icon-192.png',
   '/static/icons/icon-512.png',
@@ -58,19 +59,23 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (url.origin === self.location.origin && url.pathname.startsWith('/static/')) {
+    // Servir le cache tout de suite, puis le rafraîchir en arrière-plan :
+    // en « cache d'abord » pur, un fichier corrigé n'atteignait jamais les
+    // navigateurs déjà venus.
     event.respondWith(
-      caches.match(request).then((cached) => {
-        if (cached) {
-          return cached;
-        }
-        return fetch(request).then((response) => {
-          if (response.ok) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          }
-          return response;
-        });
-      })
+      caches.open(CACHE_NAME).then((cache) =>
+        cache.match(request).then((cached) => {
+          const reseau = fetch(request)
+            .then((response) => {
+              if (response.ok) {
+                cache.put(request, response.clone());
+              }
+              return response;
+            })
+            .catch(() => cached);
+          return cached || reseau;
+        })
+      )
     );
   }
 });
