@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
-"""Archive yearly planning to PDF and purge old reservations.
+"""Archive yearly planning to PDF.
 
 This script:
 1. Generates PDF exports for each month of the specified year
 2. Verifies all 12 PDFs were created successfully
-3. Only if all PDFs are OK: purges reservations from that year
-4. Removes PDF archives older than the retention period
+3. Removes PDF archives older than the retention period
+4. Only with --purge: deletes that year's reservations from the database
+
+IMPORTANT: the database purge is OFF by default. The reservations stay in the
+application so that the planning and the history remain consultable; a year of
+reservations weighs only a few hundred kilobytes. Use --purge only if you
+really want to delete them, and check the PDFs first.
 
 Usage:
-    python tools/archive_year.py [--year YYYY] [--dry-run] [--keep-years N]
+    python tools/archive_year.py [--year YYYY] [--dry-run] [--keep-years N] [--purge]
 
 Examples:
     # Archive the previous year (default behavior for end-of-year timer)
@@ -22,6 +27,9 @@ Examples:
 
     # Keep 3 years of archives instead of default 2
     python tools/archive_year.py --keep-years 3
+
+    # Also delete the year's reservations from the database (irreversible)
+    python tools/archive_year.py --year 2024 --purge
 """
 
 import argparse
@@ -55,6 +63,7 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
     from flask import render_template
     from app import (
         Vehicle, Reservation as ReservationModel,
+        ReservationSegment as SegmentModel,
         reservation_slot_label, month_year_label
     )
 
@@ -73,10 +82,19 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
             ReservationModel.end_at >= start
         ).all()
 
+        # Sans les segments, toute reservation repartie sur plusieurs vehicules
+        # serait absente de l'archive (son vehicle_id vaut None).
+        segments = SegmentModel.query.join(ReservationModel).filter(
+            ReservationModel.status == "approved",
+            SegmentModel.start_at < end,
+            SegmentModel.end_at >= start
+        ).all()
+
         html_content = render_template(
             "pdf_month.html",
             vehicles=vehicles,
             reservations=reservations,
+            segments=segments,
             start=start,
             end=end,
             slot_label=reservation_slot_label,
@@ -225,6 +243,12 @@ def main() -> int:
         default=DEFAULT_KEEP_YEARS,
         help=f"Nombre d'annees d'archives a conserver (defaut: {DEFAULT_KEEP_YEARS})"
     )
+    parser.add_argument(
+        "--purge",
+        action="store_true",
+        help="Supprimer aussi les reservations de l'annee dans la base "
+             "(IRREVERSIBLE, desactive par defaut : l'historique reste consultable)"
+    )
     args = parser.parse_args()
 
     print(f"=== Archivage annuel du planning ===")
@@ -238,13 +262,20 @@ def main() -> int:
 
     if not archive_success:
         print(f"\nERREUR: Seulement {pdf_count}/12 PDFs generes.")
-        print("Purge annulee par securite.")
+        if args.purge:
+            print("Purge annulee par securite.")
         return 1
 
     print(f"\nSUCCES: {pdf_count}/12 PDFs generes.")
 
-    # Step 2: Purge reservations (only if all PDFs OK)
-    purge_year_reservations(args.year, args.dry_run)
+    # Step 2: Purge reservations - uniquement sur demande explicite.
+    # Par defaut l'historique reste dans l'application (quelques centaines de
+    # kilo-octets par an) et reste consultable dans le planning.
+    if args.purge:
+        purge_year_reservations(args.year, args.dry_run)
+    else:
+        print("\nBase de donnees inchangee (utilisez --purge pour supprimer "
+              "les reservations de l'annee).")
 
     # Step 3: Cleanup old archives
     cleanup_old_archives(args.keep_years, args.dry_run)

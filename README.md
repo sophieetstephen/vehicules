@@ -27,6 +27,20 @@ Les variables `SUPERADMIN_EMAILS` / `ADMIN_EMAILS` ne servent plus qu'aux
 notifications de secours lorsque aucun destinataire n'est coché dans
 « Gestion des congés ».
 
+### Mots de passe et sessions
+
+Le mot de passe généré ne transite **jamais** par le cookie de session : il est
+conservé côté serveur (table `credential_handoff`, supprimée dès l'affichage et
+au plus tard après 10 minutes), la session ne portant qu'un jeton opaque.
+
+Régénérer un mot de passe **ferme immédiatement les sessions déjà ouvertes** de
+l'utilisateur concerné : la session porte une empreinte HMAC du mot de passe
+courant, comparée à chaque requête. Un compte compromis est donc réellement
+repris en main, sans attendre l'expiration de session.
+
+Conséquence au déploiement : les sessions ouvertes avant cette version n'ont pas
+d'empreinte et sont refusées. Chacun se reconnecte une fois, c'est normal.
+
 ### Limitation des tentatives de connexion
 
 Chaque tentative de connexion est enregistrée (identifiant saisi, adresse IP,
@@ -76,6 +90,66 @@ La page d'accueil de chaque rôle affiche :
   la réservation au statut `cancelled`, libère immédiatement le véhicule, et
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
+
+## Archivage annuel
+
+`tools/archive_year.py` génère un PDF par mois de l'année écoulée
+(minuteur systemd le 31 décembre à 23h55) et supprime les archives plus
+anciennes que `--keep-years`.
+
+**La base de données n'est pas purgée.** Les réservations restent dans
+l'application et le planning reste consultable ; une année pèse quelques
+centaines de kilo-octets. La suppression n'a lieu qu'avec `--purge`, à
+utiliser en connaissance de cause après vérification des PDF :
+
+```bash
+python tools/archive_year.py --year 2026 --dry-run   # simulation
+python tools/archive_year.py --year 2026 --purge     # supprime, irréversible
+```
+
+Les PDF (export mensuel comme archive annuelle) incluent les segments : une
+réservation répartie sur plusieurs véhicules a `vehicle_id = None` et serait
+sinon totalement absente du document.
+
+## Fiabilité des opérations
+
+**Échecs d'e-mail.** `send_mail_msmtp` renvoie `(False, "smtp error…")` au lieu
+de lever une exception : les `try/except` ne voyaient donc jamais les échecs,
+qui passaient inaperçus. Tous les envois passent désormais par `notify()`, qui
+journalise l'échec et l'affiche à la personne ayant déclenché l'action, puisque
+le destinataire, lui, ne recevra rien. Pour relever les échecs passés :
+
+```bash
+docker compose logs vehicules | grep "Echec d'envoi"
+```
+
+**Validation simultanée.** Entre la vérification de disponibilité et
+l'enregistrement, un autre administrateur peut avoir pris le même véhicule.
+`commit_if_still_free()` force l'écriture (SQLite prend alors son verrou),
+revérifie dans la même transaction et annule si un conflit est apparu. Le
+second administrateur voit « Ce véhicule vient d'être attribué par un autre
+administrateur » plutôt que de créer une double réservation.
+
+## Segments et suppressions
+
+Une réservation répartie sur plusieurs véhicules est découpée en *segments*.
+Toute suppression de réservation doit emporter ses segments : un segment
+orphelin est invisible dans le planning (qui fait une jointure sur la
+réservation) mais reste vu par `has_conflict`, ce qui **bloque le véhicule
+définitivement alors qu'il paraît libre**. La fonction `delete_reservations()`
+supprime toujours les segments d'abord ; elle est utilisée par la purge
+quotidienne, la purge des archives et la suppression d'un utilisateur.
+
+Un véhicule utilisé par une réservation ou un segment **ne peut pas être
+supprimé** : déclarez-le indisponible, ce qui le retire des attributions sans
+perdre l'historique.
+
+Pour nettoyer une base existante (fantômes créés avant ce correctif) :
+
+```bash
+flask repair-orphan-segments --dry-run   # afficher sans rien supprimer
+flask repair-orphan-segments             # supprimer
+```
 
 ## Lancer les tests
 

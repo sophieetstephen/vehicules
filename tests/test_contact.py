@@ -40,6 +40,7 @@ def test_contact_page_renders():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         resp = client.get('/contact')
         assert resp.status_code == 200
         html = resp.data.decode('utf-8')
@@ -73,6 +74,7 @@ def test_contact_sends_emails(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         client.post(
             '/contact',
             data={'subject': 'question', 'message': 'Hello'},

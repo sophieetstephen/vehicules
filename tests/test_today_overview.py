@@ -125,6 +125,7 @@ def test_home_shows_overview_and_my_reservations(ctx, role):
     client = app.test_client()
     with client.session_transaction() as s:
         s["uid"] = me.id
+        s["pwd_stamp"] = me.session_stamp(app.config["SECRET_KEY"])
     html = client.get("/home").data.decode()
     assert "Aujourd'hui" in html
     assert "Sorti" in html and "Paul Martin" in html and "avec Luc Bernard" in html and "jusqu'à 12:00" in html
@@ -144,6 +145,7 @@ def test_home_without_reservations(ctx):
     client = app.test_client()
     with client.session_transaction() as s:
         s["uid"] = me.id
+        s["pwd_stamp"] = me.session_stamp(app.config["SECRET_KEY"])
     html = client.get("/home").data.decode()
     assert "Aucune réservation à venir" in html
     assert html.count("Libre") == 3
@@ -168,6 +170,7 @@ def test_user_cancels_own_reservation_and_frees_vehicle(ctx, monkeypatch):
     client = app.test_client()
     with client.session_transaction() as s:
         s["uid"] = jean.id
+        s["pwd_stamp"] = jean.session_stamp(app.config["SECRET_KEY"])
     resp = client.post(f"/reservation/{r.id}/cancel")
     assert resp.status_code == 302
 
@@ -188,6 +191,7 @@ def test_user_cancels_own_reservation_and_frees_vehicle(ctx, monkeypatch):
     assert f"/reservation/{r.id}/cancel" not in client.get("/home").data.decode()
     with client.session_transaction() as s:
         s["uid"] = admin.id
+        s["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
     assert "Annulée" in client.get("/admin/reservations").data.decode()
 
 
@@ -200,6 +204,7 @@ def test_user_cannot_cancel_someone_else_reservation(ctx, monkeypatch):
     client = app.test_client()
     with client.session_transaction() as s:
         s["uid"] = jean.id
+        s["pwd_stamp"] = jean.session_stamp(app.config["SECRET_KEY"])
     assert client.post(f"/reservation/{r.id}/cancel").status_code == 403
     assert db.session.get(Reservation, r.id).status == "approved"
 
@@ -213,6 +218,7 @@ def test_cannot_cancel_finished_or_rejected_reservation(ctx, monkeypatch):
     client = app.test_client()
     with client.session_transaction() as s:
         s["uid"] = jean.id
+        s["pwd_stamp"] = jean.session_stamp(app.config["SECRET_KEY"])
     assert client.post(f"/reservation/{finished.id}/cancel").status_code == 302
     assert client.post(f"/reservation/{rejected.id}/cancel").status_code == 302
     assert db.session.get(Reservation, finished.id).status == "approved"

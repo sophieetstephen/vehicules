@@ -59,6 +59,7 @@ def test_admin_leaves_renders_checkboxes():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = sa.id
+            sess['pwd_stamp'] = sa.session_stamp(app.config['SECRET_KEY'])
         resp = client.get('/admin/leaves')
         html = resp.data.decode('utf-8')
         assert f'{sa.first_name} {sa.last_name}' in html
@@ -104,6 +105,7 @@ def test_new_request_notifies_selected_users(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -155,6 +157,7 @@ def test_new_request_notifies_users_when_ids_are_strings(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -203,6 +206,7 @@ def test_new_request_handles_json_string_ids(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = user.id
+            sess['pwd_stamp'] = user.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': user.first_name,
             'last_name': user.last_name,
@@ -286,6 +290,7 @@ def test_manage_request_approval_notifies_carpoolers(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = requester.id
+            sess['pwd_stamp'] = requester.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': requester.first_name,
             'last_name': requester.last_name,
@@ -309,6 +314,7 @@ def test_manage_request_approval_notifies_carpoolers(monkeypatch):
 
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         approve_data = {'action': 'approve', 'vehicle_id': str(vehicle.id)}
         client.post(f'/admin/manage/{reservation.id}', data=approve_data, follow_redirects=True)
 
@@ -366,6 +372,7 @@ def test_manage_request_approval_includes_manual_carpool_email(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = requester.id
+            sess['pwd_stamp'] = requester.session_stamp(app.config['SECRET_KEY'])
         data = {
             'first_name': requester.first_name,
             'last_name': requester.last_name,
@@ -387,6 +394,7 @@ def test_manage_request_approval_includes_manual_carpool_email(monkeypatch):
 
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         approve_data = {'action': 'approve', 'vehicle_id': str(vehicle.id)}
         client.post(f'/admin/manage/{reservation.id}', data=approve_data, follow_redirects=True)
 
@@ -502,6 +510,7 @@ def test_manage_segment_change_vehicle_notifies_carpoolers(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         update_data = {'action': 'update', 'vehicle_id': str(vehicle_new.id)}
         client.post(f'/admin/manage/segment/{segment.id}', data=update_data, follow_redirects=True)
 

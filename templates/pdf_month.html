@@ -30,21 +30,36 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 .planning-table{margin-bottom:24px;table-layout:fixed}
 .planning-table:last-of-type{margin-bottom:0}
 </style>
-{% macro render_day_cell(vehicle, day) %}
-<td>
-    {% for r in reservations if r.vehicle_id==vehicle.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-    <span class="badge text-bg-success">{{ slot_label(r, day) }}</span>
-    {% set full_name = (r.user.first_name or '') ~ (' ' if r.user.first_name and r.user.last_name else '') ~ (r.user.last_name or '') %}
+{# Une réservation répartie sur plusieurs véhicules a vehicle_id=None et porte
+   ses attributions dans des segments : sans eux, elle serait absente du PDF. #}
+{% set segments = segments|default([]) %}
+{% macro render_entry(reservation, slot_source, day) %}
+    <span class="badge text-bg-success">{{ slot_label(slot_source, day) }}</span>
+    {% set full_name = (reservation.user.first_name or '') ~ (' ' if reservation.user.first_name and reservation.user.last_name else '') ~ (reservation.user.last_name or '') %}
     {% if full_name|trim %}
         {% set reserver_name = full_name|trim %}
     {% else %}
-        {% set reserver_name = r.user.name %}
+        {% set reserver_name = reservation.user.name %}
     {% endif %}
-    {% set purpose = r.purpose|default('', true)|trim %}
+    {% set purpose = reservation.purpose|default('', true)|trim %}
     {% if not purpose %}
         {% set purpose = 'Motif non renseigné' %}
     {% endif %}
     <div class="small text-muted reservation-details">{{ reserver_name }} — {{ purpose }}</div>
+{% endmacro %}
+{% macro render_day_cell(vehicle, day) %}
+<td>
+    {% for r in reservations if r.vehicle_id==vehicle.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
+        {% set ns = namespace(has_seg=false) %}
+        {% for s in segments if s.reservation_id==r.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
+            {% set ns.has_seg = true %}
+        {% endfor %}
+        {% if not ns.has_seg %}
+            {{ render_entry(r, r, day) }}
+        {% endif %}
+    {% endfor %}
+    {% for s in segments if s.vehicle_id==vehicle.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
+        {{ render_entry(s.reservation, s, day) }}
     {% endfor %}
 </td>
 {% endmacro %}

@@ -1,4 +1,6 @@
 
+import hashlib
+import hmac
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -24,6 +26,20 @@ class User(db.Model):
 
     def set_password(self, pwd):
         self.password_hash = generate_password_hash(pwd)
+
+    def session_stamp(self, secret_key):
+        """Empreinte du mot de passe courant, à comparer à celle de la session.
+
+        Permet d'invalider les sessions déjà ouvertes dès qu'un mot de passe est
+        régénéré. C'est un HMAC : la valeur déposée dans le cookie ne révèle
+        rien du hachage sans la clé secrète du serveur.
+        """
+
+        return hmac.new(
+            str(secret_key).encode(),
+            (self.password_hash or "").encode(),
+            hashlib.sha256,
+        ).hexdigest()[:16]
 
     def check_password(self, pwd):
         return check_password_hash(self.password_hash, pwd)
@@ -163,6 +179,29 @@ class VehicleUnavailability(db.Model):
 
     def is_active_at(self, moment):
         return self.start_at <= moment and (self.end_at is None or self.end_at > moment)
+
+
+class CredentialHandoff(db.Model):
+    """Identifiants fraîchement générés, en attente d'affichage à l'administrateur.
+
+    Le mot de passe en clair ne doit **pas** transiter par le cookie de session :
+    celui-ci part chez le navigateur et peut y être conservé. Il est donc gardé
+    côté serveur le temps d'une redirection, la session ne portant qu'un jeton
+    opaque. La ligne est supprimée dès l'affichage, et de toute façon au bout de
+    ``MAX_AGE_MINUTES``.
+    """
+
+    MAX_AGE_MINUTES = 10
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(64), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    password = db.Column(db.String(64), nullable=False)
+    regenerated = db.Column(db.Boolean, nullable=False, default=False)
+    mail_sent = db.Column(db.Boolean, nullable=False, default=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    user = db.relationship("User")
 
 
 class LoginAttempt(db.Model):

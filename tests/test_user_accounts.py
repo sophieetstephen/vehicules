@@ -135,6 +135,7 @@ def test_admin_creates_user_with_generated_credentials(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
+            sess["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
 
         resp = client.post(
             "/admin/users/new",
@@ -181,6 +182,7 @@ def test_admin_cannot_create_duplicate_email(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
+            sess["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
         resp = client.post(
             "/admin/users/new",
             data={"first_name": "Jean", "last_name": "Dupont", "email": "jean@example.com", "role": "user"},
@@ -198,6 +200,7 @@ def test_simple_user_cannot_create_accounts():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = user.id
+            sess["pwd_stamp"] = user.session_stamp(app.config["SECRET_KEY"])
         assert client.get("/admin/users/new").status_code == 403
         assert client.post(
             "/admin/users/new",
@@ -218,6 +221,7 @@ def test_superadmin_regenerates_password(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = boss.id
+            sess["pwd_stamp"] = boss.session_stamp(app.config["SECRET_KEY"])
 
         resp = client.post(f"/admin/reset_password/{target.id}")
         assert resp.status_code == 302
@@ -239,6 +243,7 @@ def test_admin_cannot_regenerate_password():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
+            sess["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
         assert client.post(f"/admin/reset_password/{target.id}").status_code == 403
         assert db.session.get(User, target.id).check_password("Old-Pass-1234")
         db.drop_all()

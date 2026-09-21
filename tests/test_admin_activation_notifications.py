@@ -56,6 +56,7 @@ def test_admin_activation_sends_notification(monkeypatch):
         client = app.test_client()
         with client.session_transaction() as sess:
             sess["uid"] = admin.id
+            sess["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
 
         # L'activation est une action POST (protection CSRF) depuis la refonte.
         response = client.post(f"/admin/activate/{pending.id}")

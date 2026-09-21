@@ -37,6 +37,7 @@ def test_search_users_returns_matches_and_excludes_current_user():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = current.id
+            sess['pwd_stamp'] = current.session_stamp(app.config['SECRET_KEY'])
 
         response = client.get('/api/users/search?q=al')
         assert response.status_code == 200
@@ -74,6 +75,7 @@ def test_search_users_allows_admin_to_include_self():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
 
         response = client.get('/api/users/search?q=ad&include_self=1')
         assert response.status_code == 200
@@ -103,6 +105,7 @@ def test_search_users_include_self_flag_ignored_for_regular_user():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = regular.id
+            sess['pwd_stamp'] = regular.session_stamp(app.config['SECRET_KEY'])
 
         response = client.get('/api/users/search?q=ri&include_self=1')
         assert response.status_code == 200

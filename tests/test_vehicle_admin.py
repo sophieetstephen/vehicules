@@ -23,6 +23,7 @@ def client():
         client = app.test_client()
         with client.session_transaction() as sess:
             sess['uid'] = admin.id
+            sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
         yield client
         db.drop_all()
 

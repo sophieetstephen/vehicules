@@ -149,6 +149,7 @@ def test_segment_day_preserves_other_days(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
     segments = (
@@ -184,6 +185,7 @@ def test_segment_day_keeps_all_other_days(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
     segments = (
@@ -218,6 +220,7 @@ def test_segment_day_can_be_repeated_and_managed(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     # segment day 2 to v2
     data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
@@ -289,6 +292,7 @@ def test_segment_update_sends_mail(app_ctx, monkeypatch):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess["uid"] = admin.id
+        sess["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
     data = {"action": "update", "vehicle_id": str(v2.id)}
     client.post(f"/admin/manage/segment/{seg.id}", data=data)
 
@@ -321,6 +325,7 @@ def test_calendar_links_for_multiple_day_segments(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     # segment day 2 to v2
     data = {'action': 'segment_day', 'vehicle_id': str(v2.id)}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
@@ -375,6 +380,7 @@ def test_delete_day_from_reservation(app_ctx):
     client = app.test_client()
     with client.session_transaction() as sess:
         sess['uid'] = admin.id
+        sess['pwd_stamp'] = admin.session_stamp(app.config['SECRET_KEY'])
     data = {'action': 'delete_day'}
     client.post(f'/admin/manage/{r.id}?day=2024-01-02', data=data)
     segments = (
