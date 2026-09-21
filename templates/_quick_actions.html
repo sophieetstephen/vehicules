@@ -1,0 +1,13 @@
+{# Raccourcis immédiats, sur téléphone uniquement.
+   Sur petit écran, l'état des véhicules et les réservations à venir occupent
+   toute la hauteur avant les grandes tuiles : ces deux boutons mettent les
+   actions les plus fréquentes à portée dès l'ouverture. Sur ordinateur, les
+   tuiles sont déjà visibles, on ne duplique pas. #}
+<div class="quick-actions d-flex d-md-none gap-2 mb-3">
+  <a class="btn btn-primary flex-fill" href="{{ url_for('new_request') }}">
+    <i class="fa-solid fa-calendar-plus me-1"></i>Réserver
+  </a>
+  <a class="btn btn-outline-primary flex-fill" href="{{ url_for('calendar_month') }}">
+    <i class="fa-solid fa-calendar-days me-1"></i>Planning
+  </a>
+</div>

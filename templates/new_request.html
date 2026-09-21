@@ -2,9 +2,9 @@
 {% extends "base.html" %}
 {% block title %}Demande de réservation – Véhicules{% endblock %}
 {% block content %}
-<div class="card">
+<div class="card mx-auto max-w-720">
   <div class="card-body">
-    <h1 class="h4">Demande de réservation</h1>
+    <h1 class="h4 mb-3">Demande de réservation</h1>
     <form method="post">
       {{ form.csrf_token }}
       {% if user and user.role in ['admin', 'superadmin'] %}
@@ -33,15 +33,18 @@
         <label class="form-check-label" for="multiDay">
           Réservation sur plusieurs jours
         </label>
+        <div class="form-text">Cochez pour indiquer une date de fin.</div>
       </div>
-      <div class="form-text mb-3">La date de fin est uniquement nécessaire pour les réservations de plusieurs jours.</div>
       <div id="end_fields" class="row d-none">
         <div class="col-md-6 mb-3">{{ form.end_date.label(class="form-label") }} {{ form.end_date(class="form-control") }}</div>
         <div class="col-md-6 mb-3">{{ form.end_slot.label(class="form-label") }} {{ form.end_slot(class="form-select") }}</div>
       </div>
       <div class="mb-3">{{ form.purpose.label(class="form-label") }} {{ form.purpose(class="form-control") }}</div>
-      <div class="form-check mb-3">{{ form.carpool(class="form-check-input") }} {{ form.carpool.label(class="form-check-label") }}</div>
-      <div class="mb-3">
+      <div class="form-check mb-3">
+        {{ form.carpool(class="form-check-input") }} {{ form.carpool.label(class="form-check-label") }}
+        <div class="form-text">Cochez pour indiquer les personnes qui vous accompagnent.</div>
+      </div>
+      <div id="carpool_fields" class="mb-3 d-none">
         {{ form.carpool_with.label(class="form-label") }}
         {{ form.carpool_with(class="form-control", list="carpool_suggestions", autocomplete="off") }}
         <datalist id="carpool_suggestions"></datalist>
@@ -65,6 +68,21 @@
   const carpoolHidden = document.getElementById('carpool_with_ids');
   const carpoolDatalist = document.getElementById('carpool_suggestions');
   const carpoolSelected = document.getElementById('carpool_selected');
+  const carpoolCheck = document.getElementById('carpool');
+  const carpoolFields = document.getElementById('carpool_fields');
+
+  // « Avec qui » n'a de sens que si le covoiturage est coché : inutile de
+  // l'afficher le reste du temps.
+  function toggleCarpoolFields() {
+    const enabled = carpoolCheck.checked;
+    carpoolFields.classList.toggle('d-none', !enabled);
+    if (!enabled) {
+      carpoolInput.value = '';
+      selectedUsers = [];
+      syncSelectedDisplay();
+    }
+  }
+
   function toggleEndFields() {
     const enabled = multiDay.checked;
     endFields.classList.toggle('d-none', !enabled);
@@ -344,5 +362,13 @@
   }
 
   initializeSelectedFromHidden();
+
+  // Après restauration d'une saisie précédente : garder le bloc ouvert si des
+  // passagers sont déjà renseignés.
+  if (selectedUsers.length > 0) {
+    carpoolCheck.checked = true;
+  }
+  carpoolCheck.addEventListener('change', toggleCarpoolFields);
+  carpoolFields.classList.toggle('d-none', !carpoolCheck.checked);
 </script>
 {% endblock %}

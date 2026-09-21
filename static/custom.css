@@ -614,6 +614,11 @@ p {
   max-width: 420px;
 }
 
+/* Formulaires à deux colonnes : au-delà, les champs s'étirent inutilement. */
+.max-w-720 {
+  max-width: 720px;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   body {
@@ -629,13 +634,29 @@ p {
     font-size: 1.25rem;
   }
 
+  /* Sur téléphone, les grandes tuiles carrées repoussaient les raccourcis
+     plusieurs écrans plus bas : on passe en bandeaux horizontaux compacts. */
   .dashboard-card {
-    padding: var(--spacing-lg);
-    min-height: 140px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+    min-height: 0;
   }
 
   .dashboard-icon {
-    font-size: 2rem;
+    font-size: 1.5rem;
+    width: 2rem;
+    flex-shrink: 0;
+    text-align: center;
+    margin-bottom: 0;
+  }
+
+  .dashboard-card .card-title {
+    font-size: 1rem;
+    margin-bottom: 0.1rem;
   }
 
   .page-header {
