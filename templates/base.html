@@ -22,7 +22,10 @@
 <body>
 <nav class="navbar navbar-expand-lg navbar-custom mb-4">
   <div class="container">
-    <a class="navbar-brand-custom" href="{{ url_for('home') if user else url_for('login') }}">
+    {# Pour un utilisateur connecté, la marque mène à l'accueil, exactement comme
+       le lien « Accueil » juste à côté : sur téléphone on garde le lien nommé,
+       plus clair, et on récupère la place. #}
+    <a class="navbar-brand-custom{{ ' d-none d-sm-flex' if user }}" href="{{ url_for('home') if user else url_for('login') }}">
       <span class="brand-icon">
         <i class="fa-solid fa-car-side"></i>
       </span>

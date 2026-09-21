@@ -649,10 +649,10 @@ p {
 @media (max-width: 575.98px) {
   /* Une icône seule se devine mal : on garde un libellé, en petit, sous
      l'icône, et on écarte les liens pour éviter les erreurs de doigt. */
+  /* La marque étant masquée pour un utilisateur connecté, la place libérée
+     revient aux liens : cibles plus larges et mieux séparées. */
   .nav-main {
-    gap: 0.45rem !important;
-    /* La marge de séparation d'avec la marque n'a pas lieu d'être ici : sur un
-       écran de 360 px, elle suffisait à faire passer la barre sur deux lignes. */
+    gap: 0.6rem !important;
     margin-left: 0 !important;
   }
 
@@ -664,9 +664,9 @@ p {
     gap: 0.1rem;
     /* Cible d'au moins 44 px de haut : l'application s'utilise parfois avec
        des gants. */
-    padding: 0.5rem 0.25rem;
+    padding: 0.5rem 0.4rem;
     line-height: 1.1;
-    min-width: 3.05rem;
+    min-width: 3.8rem;
   }
 
   .nav-main .nav-link i {

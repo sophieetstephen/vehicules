@@ -49,6 +49,26 @@ def test_user_menu_and_brand_kept(role):
     assert "Déconnexion" in html
 
 
+@pytest.mark.parametrize("role", [User.ROLE_SUPERADMIN, User.ROLE_ADMIN, User.ROLE_USER])
+def test_brand_hidden_on_phones_when_logged_in(role):
+    """La marque mène à l'accueil, comme le lien « Accueil » voisin.
+
+    Garder les deux sur un écran de téléphone gaspillait la place et prêtait à
+    confusion : on conserve le lien nommé, plus explicite.
+    """
+    html = _nav(role)
+    marque = html.split('class="navbar-brand-custom')[1][:40]
+    assert "d-none d-sm-flex" in marque, "masquée sur téléphone, rendue dès 576 px"
+
+
+def test_brand_kept_when_not_logged_in():
+    """Sans lien « Accueil » à côté, la marque reste le seul repère."""
+    with app.test_request_context("/installer"):
+        html = render_template("base.html", user=None)
+    marque = html.split('class="navbar-brand-custom')[1][:40]
+    assert "d-none" not in marque
+
+
 def test_no_links_when_not_logged_in():
     with app.test_request_context("/login"):
         html = render_template("base.html", user=None)
