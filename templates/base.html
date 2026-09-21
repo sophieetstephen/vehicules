@@ -87,8 +87,8 @@
     <span><i class="fa-solid fa-mobile-screen-button me-2"></i>Installez l'application sur votre téléphone pour l'ouvrir en un clic.</span>
     <span class="d-flex gap-2">
       <button id="pwa-banner-install" class="btn btn-sm btn-primary d-none" type="button">Installer</button>
-      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('install_guide') }}">Comment faire</a>
-      <button id="pwa-banner-close" class="btn btn-sm btn-link text-muted" type="button" aria-label="Fermer">Plus tard</button>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('install_guide') }}">Comment faire</a>
+      <button id="pwa-banner-close" class="btn btn-sm btn-link" type="button" aria-label="Fermer">Plus tard</button>
     </span>
   </div>
   {% block content %}{% endblock %}
@@ -175,7 +175,9 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('beforeinstallprompt', function (e) {
     e.preventDefault();
     window.__pwaDeferredPrompt = e;
-    if (isLoggedIn && !isStandalone && !dismissed) {
+    // Chrome déclenche aussi cet événement sur ordinateur : le bandeau ne
+    // concerne que les téléphones, sinon il s'affiche à tort sur un poste fixe.
+    if (isLoggedIn && isMobile && !isStandalone && !dismissed) {
       show();
       installBtn.classList.remove('d-none');
     }
