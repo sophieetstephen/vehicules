@@ -111,6 +111,25 @@ Les PDF (export mensuel comme archive annuelle) incluent les segments : une
 réservation répartie sur plusieurs véhicules a `vehicle_id = None` et serait
 sinon totalement absente du document.
 
+## Fiabilité des opérations
+
+**Échecs d'e-mail.** `send_mail_msmtp` renvoie `(False, "smtp error…")` au lieu
+de lever une exception : les `try/except` ne voyaient donc jamais les échecs,
+qui passaient inaperçus. Tous les envois passent désormais par `notify()`, qui
+journalise l'échec et l'affiche à la personne ayant déclenché l'action, puisque
+le destinataire, lui, ne recevra rien. Pour relever les échecs passés :
+
+```bash
+docker compose logs vehicules | grep "Echec d'envoi"
+```
+
+**Validation simultanée.** Entre la vérification de disponibilité et
+l'enregistrement, un autre administrateur peut avoir pris le même véhicule.
+`commit_if_still_free()` force l'écriture (SQLite prend alors son verrou),
+revérifie dans la même transaction et annule si un conflit est apparu. Le
+second administrateur voit « Ce véhicule vient d'être attribué par un autre
+administrateur » plutôt que de créer une double réservation.
+
 ## Segments et suppressions
 
 Une réservation répartie sur plusieurs véhicules est découpée en *segments*.

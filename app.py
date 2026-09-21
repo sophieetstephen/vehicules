@@ -25,6 +25,7 @@ from flask import (
     send_file,
     send_from_directory,
     jsonify,
+    has_request_context,
 )
 from datetime import datetime, timedelta, time
 from io import BytesIO
@@ -829,30 +830,24 @@ def cancel_reservation(rid):
         )
     )
     if admin_recipients:
-        try:
-            send_mail_msmtp(
-                "Réservation annulée par l'utilisateur",
-                (
-                    f"{u.name} a annulé sa {'demande de réservation' if was_pending else 'réservation'} "
-                    f"du {start_str} au {end_str} (véhicule : {vehicle_info}).\n"
-                    "Aucune action n'est nécessaire : le véhicule est de nouveau disponible."
-                ),
-                admin_recipients,
-            )
-        except Exception:
-            app.logger.exception("Erreur lors de l'envoi du mail")
+        notify(
+            "Réservation annulée par l'utilisateur",
+            (
+                f"{u.name} a annulé sa {'demande de réservation' if was_pending else 'réservation'} "
+                f"du {start_str} au {end_str} (véhicule : {vehicle_info}).\n"
+                "Aucune action n'est nécessaire : le véhicule est de nouveau disponible."
+            ),
+            admin_recipients,
+        )
     if participants:
-        try:
-            send_mail_msmtp(
-                "Réservation annulée",
-                (
-                    f"La réservation du {start_str} au {end_str} (véhicule : {vehicle_info}) "
-                    f"a été annulée par {u.name}."
-                ),
-                participants,
-            )
-        except Exception:
-            app.logger.exception("Erreur lors de l'envoi du mail")
+        notify(
+            "Réservation annulée",
+            (
+                f"La réservation du {start_str} au {end_str} (véhicule : {vehicle_info}) "
+                f"a été annulée par {u.name}."
+            ),
+            participants,
+        )
     flash("Votre réservation a été annulée.", "success")
     return redirect(url_for("home"))
 
@@ -1073,6 +1068,59 @@ def logout():
     return redirect(url_for("login"))
 
 
+def _mail_result_ok(result):
+    """Interpréter la valeur renvoyée par l'expéditeur.
+
+    ``send_mail_msmtp`` renvoie ``(True, "sent")`` ou ``(False, "smtp error…")``
+    au lieu de lever une exception : un simple ``try/except`` ne voyait donc
+    jamais les échecs. On tolère aussi ``None``/``True`` pour les doublures de
+    test.
+    """
+
+    if result is None or result is True:
+        return True, ""
+    if isinstance(result, tuple):
+        if not result:
+            return True, ""
+        detail = str(result[1]) if len(result) > 1 else ""
+        return bool(result[0]), detail
+    return bool(result), ""
+
+
+def notify(subject, body, recipients, *, about=""):
+    """Envoyer un e-mail en signalant l'échec au lieu de le taire.
+
+    Retourne True si l'envoi a réussi. Un échec est journalisé (repérable avec
+    ``docker compose logs vehicules | grep "Echec d'envoi"``) et signalé à
+    l'écran à la personne qui a déclenché l'action, car le destinataire, lui,
+    ne recevra rien.
+    """
+
+    if not recipients:
+        return True
+    cible = recipients if isinstance(recipients, str) else ", ".join(recipients)
+    sujet_log = about or subject
+    try:
+        resultat = send_mail_msmtp(subject, body, recipients)
+    except Exception as exc:  # noqa: BLE001 - on veut tous les échecs
+        app.logger.exception("Echec d'envoi (%s) vers %s", sujet_log, cible)
+        detail = str(exc)
+        envoye = False
+    else:
+        envoye, detail = _mail_result_ok(resultat)
+        if not envoye:
+            app.logger.error(
+                "Echec d'envoi (%s) vers %s : %s", sujet_log, cible, detail
+            )
+    if not envoye and has_request_context():
+        flash(
+            f"L'e-mail « {subject} » n'a pas pu être envoyé à {cible}. "
+            "Prévenez la personne concernée directement.",
+            "warning",
+        )
+    return envoye
+
+
 def _credentials_email_body(user, password, *, regenerated=False):
     intro = (
         "Votre mot de passe a été régénéré par un administrateur."
@@ -1098,14 +1146,12 @@ def _send_credentials(user, password, *, regenerated=False):
         if regenerated
         else "Vos accès – Réservation des véhicules"
     )
-    try:
-        sent, _ = send_mail_msmtp(
-            subject, _credentials_email_body(user, password, regenerated=regenerated), user.email
-        )
-        return bool(sent)
-    except Exception:
-        app.logger.exception("Erreur lors de l'envoi des identifiants")
-        return False
+    return notify(
+        subject,
+        _credentials_email_body(user, password, regenerated=regenerated),
+        user.email,
+        about="envoi des identifiants",
+    )
 
 
 @app.route("/request/new", methods=["GET", "POST"])
@@ -1331,31 +1377,26 @@ def new_request():
             target_user = db.session.get(User, target_user_id)
         recipients = _normalize_email_candidates(recipients)
         if recipients:
-            try:
-                msg = f"Une nouvelle demande a été soumise par {u.name}"
-                if target_user and target_user.id != u.id:
-                    msg += f" pour {target_user.name}"
-                msg += "."
-                send_mail_msmtp(
-                    "Demande de réservation",
-                    msg,
-                    recipients,
-                )
-            except Exception:
-                app.logger.exception("Erreur lors de l'envoi du mail")
+            msg = f"Une nouvelle demande a été soumise par {u.name}"
+            if target_user and target_user.id != u.id:
+                msg += f" pour {target_user.name}"
+            msg += "."
+            notify(
+                "Demande de réservation",
+                msg,
+                recipients,
+                about="alerte des administrateurs",
+            )
         if target_user:
-            try:
-                send_mail_msmtp(
-                    "Demande de réservation reçue",
-                    (
-                        f"Nous avons bien reçu votre demande de réservation du "
-                        f"{start_at.strftime('%d/%m/%Y %H:%M')} au {end_at.strftime('%d/%m/%Y %H:%M')}. "
-                        "Elle est en attente de validation."
-                    ),
-                    target_user.email,
-                )
-            except Exception:
-                app.logger.exception("Erreur lors de l'envoi du mail")
+            notify(
+                "Demande de réservation reçue",
+                (
+                    f"Nous avons bien reçu votre demande de réservation du "
+                    f"{start_at.strftime('%d/%m/%Y %H:%M')} au {end_at.strftime('%d/%m/%Y %H:%M')}. "
+                    "Elle est en attente de validation."
+                ),
+                target_user.email,
+            )
         flash("Votre demande a été transmise.", "success")
         return redirect(url_for("home"))
     return render_template("new_request.html", form=form, user=current_user())
@@ -1390,22 +1431,16 @@ def contact():
                 f"Prénom : {u.first_name}\n"
                 f"Email : {u.email}"
             )
-            try:
-                send_mail_msmtp(
-                    f"Contact : {subject_label}",
-                    body_admin,
-                    recipients,
-                )
-            except Exception:
-                app.logger.exception("Erreur lors de l'envoi du mail")
-        try:
-            send_mail_msmtp(
-                "Confirmation de message",
-                "Votre message a bien été envoyé à l'Administrateur, vous recevrez prochainement une réponse.",
-                current_user().email,
+            notify(
+                f"Contact : {subject_label}",
+                body_admin,
+                recipients,
             )
-        except Exception:
-            app.logger.exception("Erreur lors de l'envoi du mail")
+        notify(
+            "Confirmation de message",
+            "Votre message a bien été envoyé à l'Administrateur, vous recevrez prochainement une réponse.",
+            current_user().email,
+        )
         flash("Votre message a été envoyé.", "success")
         return redirect(url_for("home"))
     return render_template("contact.html", form=form, user=current_user())
@@ -1540,14 +1575,7 @@ def admin_activate(user_id):
         "Votre compte est activé. Vous pouvez désormais accéder à la plateforme "
         "de réservation."
     )
-    try:
-        send_mail_msmtp(subject, body, target.email)
-    except Exception:
-        app.logger.exception("Erreur lors de l'envoi du mail d'activation")
-        flash(
-            "Utilisateur activé mais l'e-mail de notification n'a pas pu être envoyé.",
-            "warning",
-        )
+    notify(subject, body, target.email)
     flash("Utilisateur activé", "success")
     return redirect(url_for("admin_users"))
 
@@ -1799,6 +1827,24 @@ def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     if exclude_reservation_id is not None:
         q_res = q_res.filter(Reservation.id != exclude_reservation_id)
     return q_res.first() is not None
+
+
+def commit_if_still_free(vehicle_id, start, end, reservation_id):
+    """Enregistrer l'attribution en cours, sauf si le véhicule vient d'être pris.
+
+    Entre la vérification de disponibilité et l'enregistrement, un autre
+    administrateur peut avoir attribué le même véhicule sur la même période.
+    On force l'écriture (``flush`` : SQLite prend alors son verrou d'écriture),
+    on revérifie dans la même transaction, et on annule si un conflit est
+    apparu entre-temps. Retourne True si l'attribution est enregistrée.
+    """
+
+    db.session.flush()
+    if has_conflict(vehicle_id, start, end, exclude_reservation_id=reservation_id):
+        db.session.rollback()
+        return False
+    db.session.commit()
+    return True
 
 
 def vehicles_availability(start, end):
@@ -2138,19 +2184,16 @@ def manage_request(rid):
                     new_vehicle = db.session.get(Vehicle, veh_id)
                     recipients = reservation_notification_recipients(r)
                     if recipients:
-                        try:
-                            send_mail_msmtp(
-                                "Véhicule attribué",
-                                (
-                                    f"Véhicule attribué pour votre réservation :\n\n"
-                                    f"Période : du {existing.start_at.strftime('%d/%m/%Y')} au {existing.end_at.strftime('%d/%m/%Y')}\n"
-                                    f"Véhicule : {new_vehicle.code}"
-                                    + (f" ({new_vehicle.label})" if new_vehicle.label else "")
-                                ),
-                                recipients,
-                            )
-                        except Exception:
-                            app.logger.exception("Erreur lors de l'envoi du mail")
+                        notify(
+                            "Véhicule attribué",
+                            (
+                                f"Véhicule attribué pour votre réservation :\n\n"
+                                f"Période : du {existing.start_at.strftime('%d/%m/%Y')} au {existing.end_at.strftime('%d/%m/%Y')}\n"
+                                f"Véhicule : {new_vehicle.code}"
+                                + (f" ({new_vehicle.label})" if new_vehicle.label else "")
+                            ),
+                            recipients,
+                        )
                     flash("Segment mis à jour.", "success")
                     return redirect(url_for("admin_reservations"))
                 seg = ReservationSegment(
@@ -2190,19 +2233,16 @@ def manage_request(rid):
                 vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
-                    try:
-                        send_mail_msmtp(
-                            "Véhicule attribué",
-                            (
-                                f"Véhicule attribué pour votre réservation :\n\n"
-                                f"Période : du {day_start.strftime('%d/%m/%Y')} au {day_end.strftime('%d/%m/%Y')}\n"
-                                f"Véhicule : {vehicle.code}"
-                                + (f" ({vehicle.label})" if vehicle.label else "")
-                            ),
-                            recipients,
-                        )
-                    except Exception:
-                        app.logger.exception("Erreur lors de l'envoi du mail")
+                    notify(
+                        "Véhicule attribué",
+                        (
+                            f"Véhicule attribué pour votre réservation :\n\n"
+                            f"Période : du {day_start.strftime('%d/%m/%Y')} au {day_end.strftime('%d/%m/%Y')}\n"
+                            f"Véhicule : {vehicle.code}"
+                            + (f" ({vehicle.label})" if vehicle.label else "")
+                        ),
+                        recipients,
+                    )
                 flash("Segment ajouté.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "delete_day" and day:
@@ -2250,11 +2290,16 @@ def manage_request(rid):
             else:
                 r.vehicle_id = v.id
                 r.status = "approved"
-                db.session.commit()
-                recipients = reservation_notification_recipients(r)
-                if recipients:
-                    try:
-                        send_mail_msmtp(
+                if not commit_if_still_free(v.id, r.start_at, r.end_at, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                else:
+                    recipients = reservation_notification_recipients(r)
+                    if recipients:
+                        notify(
                             "Véhicule attribué",
                             (
                                 f"Véhicule attribué pour votre réservation :\n\n"
@@ -2264,10 +2309,8 @@ def manage_request(rid):
                             ),
                             recipients,
                         )
-                    except Exception:
-                        app.logger.exception("Erreur lors de l'envoi du mail")
-                flash("Demande approuvée et véhicule attribué.", "success")
-                return redirect(url_for("admin_reservations"))
+                    flash("Demande approuvée et véhicule attribué.", "success")
+                    return redirect(url_for("admin_reservations"))
         elif action == "segment":
             start_at = datetime.fromisoformat(request.form.get("start_at"))
             end_at = datetime.fromisoformat(request.form.get("end_at"))
@@ -2284,23 +2327,26 @@ def manage_request(rid):
                 r.vehicle_id = None
                 r.status = "approved"
                 db.session.add(seg)
-                db.session.commit()
+                if not commit_if_still_free(veh_id, start_at, end_at, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                    return redirect(url_for("admin_reservations"))
                 vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
-                    try:
-                        send_mail_msmtp(
-                            "Véhicule attribué",
-                            (
-                                f"Véhicule attribué pour votre réservation :\n\n"
-                                f"Période : du {start_at.strftime('%d/%m/%Y')} au {end_at.strftime('%d/%m/%Y')}\n"
-                                f"Véhicule : {vehicle.code}"
-                                + (f" ({vehicle.label})" if vehicle.label else "")
-                            ),
-                            recipients,
-                        )
-                    except Exception:
-                        app.logger.exception("Erreur lors de l'envoi du mail")
+                    notify(
+                        "Véhicule attribué",
+                        (
+                            f"Véhicule attribué pour votre réservation :\n\n"
+                            f"Période : du {start_at.strftime('%d/%m/%Y')} au {end_at.strftime('%d/%m/%Y')}\n"
+                            f"Véhicule : {vehicle.code}"
+                            + (f" ({vehicle.label})" if vehicle.label else "")
+                        ),
+                        recipients,
+                    )
                 flash("Segment ajouté.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "reject":
@@ -2308,18 +2354,15 @@ def manage_request(rid):
             db.session.commit()
             recipients = reservation_notification_recipients(r)
             if recipients:
-                try:
-                    send_mail_msmtp(
-                        "Demande de réservation refusée",
-                        (
-                            f"Votre demande de réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
-                            f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été refusée.\n"
-                            "Veuillez contacter l'administrateur pour plus d'informations."
-                        ),
-                        recipients,
-                    )
-                except Exception:
-                    app.logger.exception("Erreur lors de l'envoi du mail")
+                notify(
+                    "Demande de réservation refusée",
+                    (
+                        f"Votre demande de réservation du {r.start_at.strftime('%d/%m/%Y %H:%M')} au "
+                        f"{r.end_at.strftime('%d/%m/%Y %H:%M')} a été refusée.\n"
+                        "Veuillez contacter l'administrateur pour plus d'informations."
+                    ),
+                    recipients,
+                )
             flash("Demande refusée.", "warning")
             return redirect(url_for("admin_reservations"))
         elif action == "delete":
@@ -2331,18 +2374,15 @@ def manage_request(rid):
             db.session.delete(r)
             db.session.commit()
             if recipients:
-                try:
-                    send_mail_msmtp(
-                        "Réservation supprimée",
-                        (
-                            f"Votre réservation du {start_str} au {end_str} "
-                            f"(véhicule : {vehicle_info}) a été supprimée par l'administrateur.\n"
-                            "Veuillez contacter l'administrateur pour plus d'informations."
-                        ),
-                        recipients,
-                    )
-                except Exception:
-                    app.logger.exception("Erreur lors de l'envoi du mail")
+                notify(
+                    "Réservation supprimée",
+                    (
+                        f"Votre réservation du {start_str} au {end_str} "
+                        f"(véhicule : {vehicle_info}) a été supprimée par l'administrateur.\n"
+                        "Veuillez contacter l'administrateur pour plus d'informations."
+                    ),
+                    recipients,
+                )
             flash("Réservation supprimée.", "info")
             return redirect(url_for("admin_reservations"))
     avail = vehicles_availability(day_start, day_end)
@@ -2381,19 +2421,16 @@ def manage_segment(sid):
                 new_vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
-                    try:
-                        send_mail_msmtp(
-                            "Véhicule attribué",
-                            (
-                                f"Véhicule attribué pour votre réservation :\n\n"
-                                f"Période : du {seg.start_at.strftime('%d/%m/%Y')} au {seg.end_at.strftime('%d/%m/%Y')}\n"
-                                f"Véhicule : {new_vehicle.code}"
-                                + (f" ({new_vehicle.label})" if new_vehicle.label else "")
-                            ),
-                            recipients,
-                        )
-                    except Exception:
-                        app.logger.exception("Erreur lors de l'envoi du mail")
+                    notify(
+                        "Véhicule attribué",
+                        (
+                            f"Véhicule attribué pour votre réservation :\n\n"
+                            f"Période : du {seg.start_at.strftime('%d/%m/%Y')} au {seg.end_at.strftime('%d/%m/%Y')}\n"
+                            f"Véhicule : {new_vehicle.code}"
+                            + (f" ({new_vehicle.label})" if new_vehicle.label else "")
+                        ),
+                        recipients,
+                    )
                 flash("Segment mis à jour.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "delete":
