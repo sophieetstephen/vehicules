@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import hashlib
 import json
 import locale
 import os
@@ -334,9 +335,40 @@ def _month_year_label(dt):
     return f"{month} {dt.year}" if month else dt.strftime("%B %Y")
 
 
+_static_versions = {}
+
+
+def static_version(filename):
+    """Empreinte du contenu d'un fichier statique, calculée une fois."""
+
+    if filename not in _static_versions:
+        chemin = os.path.join(app.static_folder, filename)
+        try:
+            with open(chemin, "rb") as fichier:
+                _static_versions[filename] = hashlib.md5(fichier.read()).hexdigest()[:8]
+        except OSError:
+            _static_versions[filename] = "0"
+    return _static_versions[filename]
+
+
+def static_url(filename):
+    """Adresse d'un fichier statique, suffixée par l'empreinte de son contenu.
+
+    Sans cela, le service worker ressert indéfiniment la version en cache :
+    une feuille de style corrigée n'atteignait jamais les navigateurs déjà
+    venus. Une modification change l'empreinte, donc l'adresse, donc le cache.
+    """
+
+    return f"{url_for('static', filename=filename)}?v={static_version(filename)}"
+
+
 @app.context_processor
 def _inject_locale_helpers():
-    return {"weekday_abbr": _weekday_abbr, "month_year_label": _month_year_label}
+    return {
+        "weekday_abbr": _weekday_abbr,
+        "month_year_label": _month_year_label,
+        "static_url": static_url,
+    }
 
 
 def delete_reservations(query):
