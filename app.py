@@ -2380,10 +2380,16 @@ def export_pdf_month():
         Reservation.start_at < end,
         Reservation.end_at > start,
     ).all()
+    segs = ReservationSegment.query.join(Reservation).filter(
+        Reservation.status == "approved",
+        ReservationSegment.start_at < end,
+        ReservationSegment.end_at > start,
+    ).all()
     html = render_template(
         "pdf_month.html",
         vehicles=vehicles,
         reservations=res,
+        segments=segs,
         start=start,
         end=end,
         slot_label=reservation_slot_label,

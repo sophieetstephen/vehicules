@@ -77,6 +77,26 @@ La page d'accueil de chaque rôle affiche :
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
 
+## Archivage annuel
+
+`tools/archive_year.py` génère un PDF par mois de l'année écoulée
+(minuteur systemd le 31 décembre à 23h55) et supprime les archives plus
+anciennes que `--keep-years`.
+
+**La base de données n'est pas purgée.** Les réservations restent dans
+l'application et le planning reste consultable ; une année pèse quelques
+centaines de kilo-octets. La suppression n'a lieu qu'avec `--purge`, à
+utiliser en connaissance de cause après vérification des PDF :
+
+```bash
+python tools/archive_year.py --year 2026 --dry-run   # simulation
+python tools/archive_year.py --year 2026 --purge     # supprime, irréversible
+```
+
+Les PDF (export mensuel comme archive annuelle) incluent les segments : une
+réservation répartie sur plusieurs véhicules a `vehicle_id = None` et serait
+sinon totalement absente du document.
+
 ## Segments et suppressions
 
 Une réservation répartie sur plusieurs véhicules est découpée en *segments*.

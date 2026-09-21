@@ -3,4 +3,6 @@ Description=Archivage annuel du planning vehicules en PDF
 
 [Service]
 Type=oneshot
+# Sans --purge : les PDF sont generes, la base reste intacte et l'historique
+# demeure consultable dans l'application.
 ExecStart=/usr/bin/docker exec vehicules python tools/archive_year.py --keep-years 2
