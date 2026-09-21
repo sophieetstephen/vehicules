@@ -614,6 +614,11 @@ p {
   max-width: 420px;
 }
 
+/* Formulaires à deux colonnes : au-delà, les champs s'étirent inutilement. */
+.max-w-720 {
+  max-width: 720px;
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   body {
