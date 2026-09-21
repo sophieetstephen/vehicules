@@ -71,12 +71,24 @@ def test_current_page_is_marked(chemin, attendu):
     assert 'aria-current="page"' in actif[0]
 
 
-def test_labels_hidden_on_small_screens():
-    """Sur téléphone la barre est étroite : les icônes suffisent."""
+def test_labels_kept_under_icons_on_phones():
+    """Une icône seule se devine mal : le libellé reste, en petit, dessous."""
     import pathlib
     css = pathlib.Path("static/custom.css").read_text(encoding="utf-8")
     petit = css.split("@media (max-width: 575.98px)")[1]
-    assert ".nav-label" in petit and "display: none" in petit
+
+    lien = petit.split(".nav-main .nav-link {")[1].split("}")[0]
+    assert "flex-direction: column" in lien, "icône au-dessus, libellé dessous"
+    # Cible tactile confortable, l'application s'utilise parfois avec des gants.
+    assert "padding: 0.5rem" in lien
+
+    libelle = petit.split(".nav-main .nav-label {")[1].split("}")[0]
+    assert "display: block" in libelle
+    assert "display: none" not in libelle
+
+    # Seul le nom de l'application disparaît, pour laisser la place.
+    marque = petit.split(".navbar-brand-custom .brand-name {")[1].split("}")[0]
+    assert "display: none" in marque
 
 
 # --- les tuiles de l'accueil restent la porte d'entrée principale -----------
