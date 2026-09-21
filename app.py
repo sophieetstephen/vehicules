@@ -336,6 +336,53 @@ def _inject_locale_helpers():
     return {"weekday_abbr": _weekday_abbr, "month_year_label": _month_year_label}
 
 
+def delete_reservations(query):
+    """Supprimer des réservations **et leurs segments**. Retourne le nombre supprimé.
+
+    ``Query.delete()`` émet un seul ordre SQL et ne déclenche pas la cascade de
+    l'ORM : les segments survivraient à leur réservation. Or un segment
+    orphelin est invisible dans le planning (qui fait une jointure sur
+    ``Reservation``) mais reste vu par ``has_conflict`` : le véhicule
+    apparaîtrait libre tout en étant impossible à attribuer, définitivement.
+    Les segments sont donc supprimés explicitement d'abord.
+    """
+
+    ids = [row[0] for row in query.with_entities(Reservation.id).all()]
+    if not ids:
+        return 0
+    # Découpage : SQLite limite le nombre de paramètres d'une requête.
+    for start in range(0, len(ids), 400):
+        chunk = ids[start:start + 400]
+        ReservationSegment.query.filter(
+            ReservationSegment.reservation_id.in_(chunk)
+        ).delete(synchronize_session=False)
+        Reservation.query.filter(Reservation.id.in_(chunk)).delete(
+            synchronize_session=False
+        )
+    return len(ids)
+
+
+def find_orphan_segments():
+    """Segments dont la réservation ou le véhicule n'existe plus."""
+
+    reservation_ids = db.session.query(Reservation.id).subquery()
+    vehicle_ids = db.session.query(Vehicle.id).subquery()
+    return (
+        ReservationSegment.query.filter(
+            or_(
+                ReservationSegment.reservation_id.notin_(
+                    db.session.query(reservation_ids.c.id)
+                ),
+                ReservationSegment.vehicle_id.notin_(
+                    db.session.query(vehicle_ids.c.id)
+                ),
+            )
+        )
+        .order_by(ReservationSegment.start_at)
+        .all()
+    )
+
+
 def purge_expired_requests():
     """Archive or delete expired reservations depending on their status.
 
@@ -350,10 +397,12 @@ def purge_expired_requests():
     pending_threshold = now - timedelta(days=2)
     final_threshold = now - timedelta(days=7)
 
-    pending_deleted = Reservation.query.filter(
-        Reservation.status == "pending",
-        Reservation.end_at < pending_threshold,
-    ).delete(synchronize_session=False)
+    pending_deleted = delete_reservations(
+        Reservation.query.filter(
+            Reservation.status == "pending",
+            Reservation.end_at < pending_threshold,
+        )
+    )
 
     archived_count = Reservation.query.filter(
         Reservation.status != "pending",
@@ -371,10 +420,12 @@ def purge_archived_reservations(max_age_days=180):
     """Permanently delete reservations archived for longer than ``max_age_days``."""
 
     cutoff = datetime.utcnow() - timedelta(days=max_age_days)
-    deleted = Reservation.query.filter(
-        Reservation.archived_at.isnot(None),
-        Reservation.archived_at < cutoff,
-    ).delete(synchronize_session=False)
+    deleted = delete_reservations(
+        Reservation.query.filter(
+            Reservation.archived_at.isnot(None),
+            Reservation.archived_at < cutoff,
+        )
+    )
 
     if deleted:
         db.session.commit()
@@ -868,6 +919,56 @@ def login():
         app.logger.warning("Échec de connexion pour '%s' depuis %s", identifier, ip)
         flash("Identifiants invalides", "danger")
     return render_template("login.html", form=form), 200
+
+
+@app.cli.command("repair-orphan-segments")
+@click.option("--dry-run", is_flag=True, help="Afficher sans rien supprimer")
+def repair_orphan_segments_command(dry_run):
+    """Supprimer les segments dont la réservation ou le véhicule n'existe plus.
+
+    Ces segments « fantômes » bloquent un véhicule sans apparaître au planning.
+    Ils ont pu être créés par les suppressions en masse d'avant ce correctif.
+    """
+
+    orphans = find_orphan_segments()
+    existing_vehicles = {v.id for v in Vehicle.query.all()}
+    dangling = Reservation.query.filter(
+        Reservation.vehicle_id.isnot(None),
+        Reservation.vehicle_id.notin_(existing_vehicles or [-1]),
+    ).all()
+
+    if not orphans and not dangling:
+        print("Aucun segment fantôme. Rien à réparer.")
+        return
+
+    for seg in orphans:
+        raison = (
+            "réservation supprimée"
+            if db.session.get(Reservation, seg.reservation_id) is None
+            else "véhicule supprimé"
+        )
+        vehicule = db.session.get(Vehicle, seg.vehicle_id)
+        print(
+            f"  segment #{seg.id} du {seg.start_at.strftime('%d/%m/%Y')} "
+            f"au {seg.end_at.strftime('%d/%m/%Y')} "
+            f"({vehicule.code if vehicule else 'véhicule inconnu'}) : {raison}"
+        )
+    for r in dangling:
+        print(f"  réservation #{r.id} pointe vers un véhicule supprimé")
+
+    if dry_run:
+        print(f"\n{len(orphans)} segment(s) et {len(dangling)} réservation(s) à corriger (simulation).")
+        return
+
+    for seg in orphans:
+        db.session.delete(seg)
+    for r in dangling:
+        r.vehicle_id = None
+    db.session.commit()
+    print(
+        f"\n{len(orphans)} segment(s) fantôme(s) supprimé(s), "
+        f"{len(dangling)} réservation(s) détachée(s) d'un véhicule supprimé."
+    )
 
 
 @app.cli.command("login-attempts")
@@ -1434,8 +1535,8 @@ def admin_user_delete(user_id):
     if target.role == User.ROLE_SUPERADMIN:
         flash("Impossible de supprimer un superadministrateur", "danger")
         return redirect(url_for("admin_users"))
-    # Suppression en cascade des réservations associées
-    Reservation.query.filter_by(user_id=target.id).delete()
+    # Suppression des réservations associées et de leurs segments.
+    delete_reservations(Reservation.query.filter_by(user_id=target.id))
     db.session.delete(target)
     db.session.commit()
     flash("Utilisateur supprimé", "info")
@@ -1575,6 +1676,19 @@ def admin_vehicle_edit(vehicle_id):
 @role_required("admin", "superadmin")
 def admin_vehicle_delete(vehicle_id):
     vehicle = db.get_or_404(Vehicle, vehicle_id)
+    # Supprimer un véhicule utilisé laisserait des réservations et des segments
+    # pointant dans le vide : on refuse et on oriente vers l'indisponibilité,
+    # qui retire le véhicule des attributions sans perdre l'historique.
+    used = Reservation.query.filter_by(vehicle_id=vehicle.id).count()
+    used += ReservationSegment.query.filter_by(vehicle_id=vehicle.id).count()
+    if used:
+        flash(
+            f"Impossible de supprimer {vehicle.code} : {used} réservation(s) l'utilisent. "
+            "Déclarez-le plutôt indisponible pour le retirer des attributions "
+            "tout en conservant l'historique.",
+            "danger",
+        )
+        return redirect(url_for("admin_vehicles"))
     db.session.delete(vehicle)
     db.session.commit()
     flash("Véhicule supprimé", "info")

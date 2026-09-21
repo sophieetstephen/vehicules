@@ -77,6 +77,27 @@ La page d'accueil de chaque rôle affiche :
   envoie un e‑mail aux administrateurs notifiés ainsi qu'aux participants.
   Une réservation terminée, refusée ou archivée ne peut plus être annulée.
 
+## Segments et suppressions
+
+Une réservation répartie sur plusieurs véhicules est découpée en *segments*.
+Toute suppression de réservation doit emporter ses segments : un segment
+orphelin est invisible dans le planning (qui fait une jointure sur la
+réservation) mais reste vu par `has_conflict`, ce qui **bloque le véhicule
+définitivement alors qu'il paraît libre**. La fonction `delete_reservations()`
+supprime toujours les segments d'abord ; elle est utilisée par la purge
+quotidienne, la purge des archives et la suppression d'un utilisateur.
+
+Un véhicule utilisé par une réservation ou un segment **ne peut pas être
+supprimé** : déclarez-le indisponible, ce qui le retire des attributions sans
+perdre l'historique.
+
+Pour nettoyer une base existante (fantômes créés avant ce correctif) :
+
+```bash
+flask repair-orphan-segments --dry-run   # afficher sans rien supprimer
+flask repair-orphan-segments             # supprimer
+```
+
 ## Lancer les tests
 
 Sur un poste de développement :
