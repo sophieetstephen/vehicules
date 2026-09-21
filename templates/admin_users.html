@@ -7,7 +7,7 @@
     <i class="fa-solid fa-users page-title-icon"></i>
     Utilisateurs
   </h1>
-  <a class="btn btn-success" href="{{ url_for('admin_user_new') }}">
+  <a class="btn btn-primary" href="{{ url_for('admin_user_new') }}">
     <i class="fa-solid fa-user-plus me-1"></i>Nouvel utilisateur
   </a>
 </div>
@@ -18,7 +18,7 @@
     <i class="fa-solid fa-search search-icon"></i>
     <input type="text" name="q" value="{{ request.args.get('q','') }}" class="form-control search-input" placeholder="Rechercher un utilisateur...">
   </div>
-  <button type="submit" class="btn btn-primary">
+  <button type="submit" class="btn btn-outline-secondary">
     <i class="fa-solid fa-search d-sm-none"></i>
     <span class="d-none d-sm-inline">Chercher</span>
   </button>

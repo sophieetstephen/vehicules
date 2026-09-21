@@ -185,7 +185,7 @@
 
           {# Bouton principal : Enregistrer/Approuver #}
           {% if reservation.status == 'pending' and not is_segment and not day %}
-            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-success btn-action">
+            <button type="submit" name="action" value="{{ save_action }}" class="btn btn-primary btn-action">
               <i class="fa-solid fa-check"></i>
               Approuver
             </button>

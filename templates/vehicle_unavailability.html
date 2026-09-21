@@ -7,7 +7,7 @@
     Indisponibilités – {{ vehicle.code }}
     <span class="text-muted fw-normal fs-6 ms-2">{{ vehicle.label }}</span>
   </h1>
-  <a class="btn btn-outline-secondary btn-sm" href="{{ url_for('admin_vehicles') }}">
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_vehicles') }}">
     <i class="fa-solid fa-arrow-left me-1"></i>Retour au parc
   </a>
 </div>
@@ -44,7 +44,7 @@
             {{ form.details.label(class="form-label") }}
             {{ form.details(class="form-control", placeholder="ex : embrayage, garage Martin, retour prévu lundi") }}
           </div>
-          {{ form.submit(class="btn btn-warning") }}
+          {{ form.submit(class="btn btn-primary") }}
         </form>
       </div>
     </div>

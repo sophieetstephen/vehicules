@@ -25,6 +25,19 @@
   --color-info: #0891b2;
   --color-info-light: #cffafe;
 
+  /* Texte des boutons en contour. Les teintes livrées par le thème tombaient
+     sous le seuil de lisibilité sur fond blanc : 1,95 mesuré sur l'orange
+     « Indisponibilités », 3,71 sur le bleu « Gérer », pour 4,5 attendus.
+     L'application se consulte parfois dehors, avec des gants. */
+  --btn-success-text: #15803d;
+  --btn-warning-text: #b45309;
+  --btn-danger-text: #dc2626;
+  /* Au survol le bouton se remplit : teinte foncée et texte blanc, dans les
+     deux thèmes. */
+  --btn-success-fill: #15803d;
+  --btn-warning-fill: #b45309;
+  --btn-danger-fill: #dc2626;
+
   /* Couleurs neutres */
   --color-text: #1e293b;
   --color-text-muted: #64748b;
@@ -88,6 +101,11 @@
   --color-warning-light: #713f12;
   --color-danger-light: #7f1d1d;
   --color-info-light: #164e63;
+
+  /* Sur fond sombre, les mêmes teintes deviennent illisibles : on éclaircit. */
+  --btn-success-text: #16a34a;
+  --btn-warning-text: #d97706;
+  --btn-danger-text: #f87171;
 }
 
 [data-theme="dark"] body {
@@ -268,6 +286,26 @@ p {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+/* ============================================
+   CONVENTION DES BOUTONS
+   ============================================
+   Un même geste recevait des couleurs différentes selon la page : « Envoyer »
+   était vert ici et bleu là, « Nouvel utilisateur » vert alors que « Nouveau
+   véhicule » était bleu. Le vert servait à la fois d'état (réservation
+   approuvée) et d'action, ce qui brouillait les deux.
+
+     btn-primary            action principale de la page, une seule par écran
+     btn-outline-primary    même action répétée sur chaque ligne d'une liste
+     btn-outline-secondary  tout le reste : Annuler, Retour, changer de vue
+     btn-danger             suppression, quand c'est l'action principale
+     btn-outline-danger     suppression proposée à côté d'autre chose
+     btn-outline-success    remettre en service : Activer, Lever
+     btn-outline-warning    restreindre : Désactiver, Refuser, Indisponibilités
+
+   Le vert et l'orange pleins ne servent plus de boutons : ils restent aux
+   badges d'état, pour que « vert » garde un seul sens.
+   ============================================ */
+
 /* --- Cartes Dashboard améliorées --- */
 .dashboard-card {
   display: flex;
@@ -293,25 +331,28 @@ p {
 }
 
 .dashboard-card:hover .dashboard-icon {
-  transform: scale(1.1);
-  color: var(--color-primary);
+  transform: scale(1.08);
+  background: var(--color-primary);
+  color: #fff;
 }
 
+/* Les icônes portaient sept teintes sans signification (bleu, vert, violet,
+   orange, cyan, gris, rouge) : six tuiles côte à côte faisaient un arc-en-ciel
+   et disputaient l'attention aux boutons. La forme de l'icône distingue déjà
+   les sections ; la couleur revient donc à l'accent de l'application. */
 .dashboard-icon {
-  font-size: 2.5rem;
-  margin-bottom: var(--spacing-md);
+  font-size: 1.6rem;
+  width: 3.25rem;
+  height: 3.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-light);
   color: var(--color-primary);
+  margin-bottom: var(--spacing-md);
   transition: all var(--transition-normal);
 }
-
-/* Couleurs des icônes dashboard */
-.dashboard-icon.icon-calendar { color: #2563eb; }
-.dashboard-icon.icon-car { color: #16a34a; }
-.dashboard-icon.icon-users { color: #7c3aed; }
-.dashboard-icon.icon-reservation { color: #ea580c; }
-.dashboard-icon.icon-mail { color: #0891b2; }
-.dashboard-icon.icon-settings { color: #64748b; }
-.dashboard-icon.icon-leaves { color: #dc2626; }
 
 .dashboard-card .card-title {
   font-size: 1rem;
@@ -709,11 +750,12 @@ p {
     min-height: 0;
   }
 
+  /* La pastille doit rester ronde : sans hauteur explicite elle s'allongeait. */
   .dashboard-icon {
-    font-size: 1.5rem;
-    width: 2rem;
+    font-size: 1.1rem;
+    width: 2.4rem;
+    height: 2.4rem;
     flex-shrink: 0;
-    text-align: center;
     margin-bottom: 0;
   }
 
@@ -844,18 +886,77 @@ p {
   text-align: center;
 }
 
-/* Le gris clair du thème rendait ces boutons presque invisibles sur fond
-   blanc : on reprend la couleur du texte courant. */
-.calendar-nav .btn-outline-secondary,
-#calendarDetail .btn-outline-secondary {
+/* Le gris très clair du thème rendait ces boutons presque illisibles sur fond
+   blanc — « Modifier » se devinait à peine. Le contour gris étant devenu la
+   classe la plus employée de la convention, la correction vaut partout. */
+.btn-outline-secondary {
   color: var(--color-text);
   border-color: var(--color-border);
 }
 
-.calendar-nav .btn-outline-secondary:hover,
-.calendar-nav .btn-outline-secondary:focus-visible,
-#calendarDetail .btn-outline-secondary:hover,
-#calendarDetail .btn-outline-secondary:focus-visible {
+/* En mode sombre l'accent s'éclaircit pour rester lisible en texte, mais du
+   blanc posé dessus retombe à 3,7 de contraste : le bouton plein garde donc
+   le bleu foncé. */
+[data-theme="dark"] .btn-primary {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.btn-outline-primary {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+}
+
+.btn-outline-primary:hover,
+.btn-outline-primary:focus-visible,
+.btn-outline-primary:active {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.btn-outline-success {
+  color: var(--btn-success-text);
+  border-color: var(--btn-success-text);
+}
+
+.btn-outline-success:hover,
+.btn-outline-success:focus-visible,
+.btn-outline-success:active {
+  background: var(--btn-success-fill);
+  border-color: var(--btn-success-fill);
+  color: #fff;
+}
+
+.btn-outline-warning {
+  color: var(--btn-warning-text);
+  border-color: var(--btn-warning-text);
+}
+
+.btn-outline-warning:hover,
+.btn-outline-warning:focus-visible,
+.btn-outline-warning:active {
+  background: var(--btn-warning-fill);
+  border-color: var(--btn-warning-fill);
+  color: #fff;
+}
+
+.btn-outline-danger {
+  color: var(--btn-danger-text);
+  border-color: var(--btn-danger-text);
+}
+
+.btn-outline-danger:hover,
+.btn-outline-danger:focus-visible,
+.btn-outline-danger:active {
+  background: var(--btn-danger-fill);
+  border-color: var(--btn-danger-fill);
+  color: #fff;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus-visible,
+.btn-outline-secondary:active {
   background: var(--color-background-alt);
   border-color: var(--color-secondary);
   color: var(--color-text);

@@ -16,29 +16,29 @@
   <div class="calendar-nav">
     {% if vue == 'semaine' %}
       <a href="{{ url_for('calendar_week', d=(start - timedelta(days=7)).strftime('%Y-%m-%d')) }}"
-         class="btn btn-outline-secondary btn-sm" title="Semaine précédente" aria-label="Semaine précédente">
+         class="btn btn-sm btn-outline-secondary" title="Semaine précédente" aria-label="Semaine précédente">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
       <span class="calendar-month-label">{{ start.strftime('%d/%m') }} – {{ fin.strftime('%d/%m') }}</span>
       <a href="{{ url_for('calendar_week', d=end.strftime('%Y-%m-%d')) }}"
-         class="btn btn-outline-secondary btn-sm" title="Semaine suivante" aria-label="Semaine suivante">
+         class="btn btn-sm btn-outline-secondary" title="Semaine suivante" aria-label="Semaine suivante">
         <i class="fa-solid fa-chevron-right"></i>
       </a>
     {% else %}
       <a href="{{ url_for('calendar_month', y=veille.year, m=veille.month) }}"
-         class="btn btn-outline-secondary btn-sm" title="Mois précédent" aria-label="Mois précédent">
+         class="btn btn-sm btn-outline-secondary" title="Mois précédent" aria-label="Mois précédent">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
       <span class="calendar-month-label">{{ month_year_label(start) }}</span>
       <a href="{{ url_for('calendar_month', y=end.year, m=end.month) }}"
-         class="btn btn-outline-secondary btn-sm" title="Mois suivant" aria-label="Mois suivant">
+         class="btn btn-sm btn-outline-secondary" title="Mois suivant" aria-label="Mois suivant">
         <i class="fa-solid fa-chevron-right"></i>
       </a>
     {% endif %}
 
     {# Après quelques allers-retours, on ne sait plus où l'on est. #}
     <a href="{{ url_for('calendar_week') if vue == 'semaine' else url_for('calendar_month') }}"
-       class="btn btn-outline-secondary btn-sm">Aujourd'hui</a>
+       class="btn btn-sm btn-outline-secondary">Aujourd'hui</a>
 
     <div class="btn-group btn-group-sm calendar-switch" role="group" aria-label="Période affichée">
       <a class="btn btn-outline-secondary{{ ' active' if vue == 'semaine' }}"

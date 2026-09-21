@@ -17,6 +17,6 @@
     <input class="form-control" type="text" name="category" value="{{ vehicle.category if vehicle else "" }}">
   </div>
   <button class="btn btn-primary" type="submit">Enregistrer</button>
-  <a class="btn btn-secondary" href="{{ url_for("admin_vehicles") }}">Annuler</a>
+  <a class="btn btn-outline-secondary" href="{{ url_for("admin_vehicles") }}">Annuler</a>
 </form>
 {% endblock %}
