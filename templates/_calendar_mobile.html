@@ -1,0 +1,53 @@
+{# Liste par jour, utilisée sur téléphone par les deux vues.
+
+   Attend ``grid`` (voir ``calendar_grid`` dans app.py) et ``vehicles``. Seuls
+   les jours occupés sont affichés : faire défiler trente cases vides n'apporte
+   rien. #}
+{% set vide = namespace(value=true) %}
+{% for jour in grid.days %}
+  {% set items = [] %}
+  {% for v in vehicles %}
+    {% for item in grid.cells[v.id][jour.key] %}
+      {% set _ = items.append(item) %}
+    {% endfor %}
+  {% endfor %}
+
+  {% if items %}
+  {% set vide.value = false %}
+  <div class="mobile-day-card{{ ' mobile-day-today' if jour.today }}">
+    <div class="mobile-day-header">
+      <span class="mobile-day-name">{{ weekday_abbr(jour.date) }}</span>
+      <span class="mobile-day-date">{{ jour.date.day }} {{ month_year_label(jour.date).split()[0] }}</span>
+    </div>
+    <div class="mobile-day-reservations">
+      {% for item in items %}
+      <div class="mobile-reservation">
+        <div class="mobile-res-vehicle">{{ item.vehicle }}</div>
+        <div class="mobile-res-details">
+          <div class="mobile-res-user">
+            {% if item.kind == 'unav' %}<span class="badge bg-dark">Indispo.</span> {% endif %}{{ item.name }}
+          </div>
+          <div class="mobile-res-slot">{{ item.period if item.kind == 'unav' else item.slot }}</div>
+          {% if item.purpose %}
+            <div class="mobile-res-purpose">{{ item.purpose }}</div>
+          {% endif %}
+        </div>
+        {% if item.url %}
+          <a href="{{ item.url }}" class="mobile-res-action" aria-label="Gérer">
+            <i class="fa-solid fa-chevron-right"></i>
+          </a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+{% if vide.value %}
+<div class="empty-state">
+  <div class="empty-state-icon"><i class="fa-solid fa-calendar-xmark"></i></div>
+  <div class="empty-state-title">Aucune réservation</div>
+  <div class="empty-state-text">Rien de prévu sur cette période</div>
+</div>
+{% endif %}

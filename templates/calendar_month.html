@@ -1,40 +1,26 @@
-
 {% extends "base.html" %}
 {% block title %}Planning mensuel – Véhicules{% endblock %}
 {% block content %}
-{# Calcul mois précédent et suivant #}
-{% set prev = start - timedelta(days=1) %}
-{% set prev_y = prev.year %}
-{% set prev_m = prev.month %}
-{% set next_y = end.year %}
-{% set next_m = end.month %}
-{% set days = (end - start).days %}
+{% set vue = 'mois' %}
+{% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
+                            unavailabilities|default([], true), start, end, user) %}
 
-<!-- En-tête avec navigation -->
-<div class="calendar-header">
-  <h1 class="calendar-title">Planning mensuel</h1>
-  <div class="calendar-nav">
-    <a href="{{ url_for('calendar_month', y=prev_y, m=prev_m) }}" class="btn btn-outline-secondary btn-sm">
-      <i class="fa-solid fa-chevron-left"></i>
-    </a>
-    <span class="calendar-month-label">{{ month_year_label(start) }}</span>
-    <a href="{{ url_for('calendar_month', y=next_y, m=next_m) }}" class="btn btn-outline-secondary btn-sm">
-      <i class="fa-solid fa-chevron-right"></i>
-    </a>
-  </div>
-</div>
+{% include "_calendar_header.html" with context %}
 
-<!-- ========== VUE DESKTOP (tableau) ========== -->
+<!-- ========== VUE ORDINATEUR (tableau) ========== -->
+{# Trente et une colonnes : impossible d'y écrire un nom. Chaque occupation se
+   résume à une pastille (M matin, A après-midi, J journée, I indisponible) ;
+   le détail s'ouvre au clic. Les colonnes sont de largeur fixe et égale, le
+   mois tient donc en entier à l'écran. #}
 <div class="calendar-desktop">
   <div class="table-responsive">
-    <table class="table table-bordered table-sm align-middle">
+    <table class="table table-bordered table-sm align-middle calendar-table calendar-table-month">
       <thead>
         <tr>
           <th class="sticky-col">Véhicule</th>
-          {% for i in range(days) %}
-            {% set day = start + timedelta(days=(i|int)) %}
-            <th class="text-center">
-              <div class="calendar-day-header">{{ weekday_abbr(day) }}<br>{{ day.day }}</div>
+          {% for jour in grid.days %}
+            <th class="text-center{{ ' cal-weekend' if jour.weekend }}{{ ' cal-today' if jour.today }}">
+              <div class="calendar-day-header">{{ weekday_abbr(jour.date) }}<br>{{ jour.date.day }}</div>
             </th>
           {% endfor %}
         </tr>
@@ -43,53 +29,21 @@
         {% for v in vehicles %}
         <tr>
           <td class="sticky-col"><strong>{{ v.code }}</strong></td>
-          {% for i in range(days) %}
-            {% set day = start + timedelta(days=(i|int)) %}
-            <td class="text-center min-w-40">
-              {% set cell_has_res = false %}
-              {% for un in unavailabilities if un.vehicle_id==v.id and un.start_at.date() <= day.date() and (un.end_at is none or day.date() <= un.end_at.date()) %}
-                {% if loop.first %}
-                  {% set cell_has_res = true %}
-                  {% if user and user.role in ['admin', 'superadmin'] %}
-                    <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=v.id) }}" class="badge bg-dark" title="{{ un.label }}">Indispo.</a>
-                  {% else %}
-                    <span class="badge bg-dark" title="{{ un.label }}">Indispo.</span>
-                  {% endif %}
-                {% endif %}
+          {% for jour in grid.days %}
+            <td class="text-center cal-cell{{ ' cal-weekend' if jour.weekend }}{{ ' cal-today' if jour.today }}">
+              {% for item in grid.cells[v.id][jour.key] %}
+                <button type="button" data-calendar-item
+                        class="cal-chip cal-chip-{{ item.kind }}"
+                        title="{% if item.kind == 'unav' %}Indispo. – {{ item.name }}{% else %}{{ item.name }} ({{ item.slot }}){% if item.purpose %} – {{ item.purpose }}{% endif %}{% endif %}"
+                        data-kind="{{ item.kind }}"
+                        data-vehicle="{{ v.code }}{% if v.label %} – {{ v.label }}{% endif %}"
+                        data-day="{{ weekday_abbr(jour.date) }} {{ jour.date.strftime('%d/%m/%Y') }}"
+                        data-name="{{ item.name }}"
+                        data-slot="{{ item.slot }}"
+                        data-period="{{ item.period }}"
+                        data-purpose="{{ item.purpose }}"
+                        {% if item.url %}data-url="{{ item.url }}"{% endif %}>{{ item.letter }}</button>
               {% endfor %}
-              {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-                {% set ns = namespace(has_seg=false) %}
-                {% for s in segments if s.reservation_id==r.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-                  {% set ns.has_seg = true %}
-                {% endfor %}
-                {% if not ns.has_seg %}
-                  {% set cell_has_res = true %}
-                  {% if user and user.role in ['admin', 'superadmin'] %}
-                    <a href="{{ url_for('manage_request', rid=r.id, day=day.strftime('%Y-%m-%d')) }}" class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})
-                    {% if r.purpose %}<br>{{ r.purpose }}{% endif %}
-                    </a>
-                  {% else %}
-                    <span class="badge bg-success">{{ r.user.name }} ({{ slot_label(r, day) }})
-                    {% if r.purpose %}<br>{{ r.purpose }}{% endif %}
-                    </span>
-                  {% endif %}
-                {% endif %}
-              {% endfor %}
-              {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-                {% set cell_has_res = true %}
-                {% if user and user.role in ['admin', 'superadmin'] %}
-                  <a href="{{ url_for('manage_segment', sid=s.id) }}" class="badge bg-success">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
-                  {% if s.reservation.purpose %}<br>{{ s.reservation.purpose }}{% endif %}
-                  </a>
-                {% else %}
-                  <span class="badge bg-success">{{ s.reservation.user.name }} ({{ slot_label(s, day) }})
-                  {% if s.reservation.purpose %}<br>{{ s.reservation.purpose }}{% endif %}
-                  </span>
-                {% endif %}
-              {% endfor %}
-              {% if not cell_has_res and user and user.role in ['admin', 'superadmin'] %}
-                <a href="{{ url_for('new_request') }}" class="d-block w-100 h-100 text-decoration-none">&nbsp;</a>
-              {% endif %}
             </td>
           {% endfor %}
         </tr>
@@ -97,109 +51,19 @@
       </tbody>
     </table>
   </div>
+
+  <div class="calendar-legend">
+    <span class="legend-item"><span class="cal-chip cal-chip-res">M</span> Matin</span>
+    <span class="legend-item"><span class="cal-chip cal-chip-res">A</span> Après-midi</span>
+    <span class="legend-item"><span class="cal-chip cal-chip-res">J</span> Journée</span>
+    <span class="legend-item"><span class="cal-chip cal-chip-unav">I</span> Indisponible</span>
+    <span class="legend-text">Cliquez sur une pastille pour voir le détail.</span>
+  </div>
 </div>
 
-<!-- ========== VUE MOBILE (liste par jour) ========== -->
+<!-- ========== VUE TÉLÉPHONE (liste par jour) ========== -->
 <div class="calendar-mobile">
-  {% for i in range(days) %}
-    {% set day = start + timedelta(days=(i|int)) %}
-    {% set day_reservations = [] %}
-    {% for v in vehicles %}
-      {% for un in unavailabilities if un.vehicle_id==v.id and un.start_at.date() <= day.date() and (un.end_at is none or day.date() <= un.end_at.date()) %}
-        {% if loop.first %}{% set _ = day_reservations.append({'type': 'unav', 'vehicle': v, 'unav': un}) %}{% endif %}
-      {% endfor %}
-    {% endfor %}
-
-    {# Collecter les réservations du jour #}
-    {% for v in vehicles %}
-      {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-        {% set ns = namespace(has_seg=false) %}
-        {% for s in segments if s.reservation_id==r.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-          {% set ns.has_seg = true %}
-        {% endfor %}
-        {% if not ns.has_seg %}
-          {% set _ = day_reservations.append({'type': 'res', 'vehicle': v, 'res': r}) %}
-        {% endif %}
-      {% endfor %}
-      {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-        {% set _ = day_reservations.append({'type': 'seg', 'vehicle': v, 'seg': s, 'res': s.reservation}) %}
-      {% endfor %}
-    {% endfor %}
-
-    {# Afficher uniquement les jours avec des réservations #}
-    {% if day_reservations %}
-    <div class="mobile-day-card">
-      <div class="mobile-day-header">
-        <span class="mobile-day-name">{{ weekday_abbr(day) }}</span>
-        <span class="mobile-day-date">{{ day.day }} {{ month_year_label(day).split()[0] }}</span>
-      </div>
-      <div class="mobile-day-reservations">
-        {% for item in day_reservations %}
-          {% if item.type == 'unav' %}
-          <div class="mobile-reservation">
-            <div class="mobile-res-vehicle">{{ item.vehicle.code }}</div>
-            <div class="mobile-res-details">
-              <div class="mobile-res-user"><span class="badge bg-dark">Indispo.</span> {{ item.unav.label }}</div>
-              <div class="mobile-res-slot">
-                {% if item.unav.end_at %}jusqu'au {{ item.unav.end_at.strftime('%d/%m') }}{% else %}jusqu'à nouvel ordre{% endif %}
-              </div>
-            </div>
-            {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=item.vehicle.id) }}" class="mobile-res-action">
-                <i class="fa-solid fa-chevron-right"></i>
-              </a>
-            {% endif %}
-          </div>
-          {% else %}
-          <div class="mobile-reservation">
-            <div class="mobile-res-vehicle">{{ item.vehicle.code }}</div>
-            <div class="mobile-res-details">
-              <div class="mobile-res-user">{{ item.res.user.name }}</div>
-              <div class="mobile-res-slot">
-                {% if item.type == 'seg' %}
-                  {{ slot_label(item.seg, day) }}
-                {% else %}
-                  {{ slot_label(item.res, day) }}
-                {% endif %}
-              </div>
-              {% if item.res.purpose %}
-                <div class="mobile-res-purpose">{{ item.res.purpose }}</div>
-              {% endif %}
-            </div>
-            {% if user and user.role in ['admin', 'superadmin'] %}
-              <a href="{% if item.type == 'seg' %}{{ url_for('manage_segment', sid=item.seg.id) }}{% else %}{{ url_for('manage_request', rid=item.res.id, day=day.strftime('%Y-%m-%d')) }}{% endif %}" class="mobile-res-action">
-                <i class="fa-solid fa-chevron-right"></i>
-              </a>
-            {% endif %}
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
-    </div>
-    {% endif %}
-  {% endfor %}
-
-  {# Message si aucune réservation dans le mois #}
-  {% set has_any = namespace(value=false) %}
-  {% for i in range(days) %}
-    {% set day = start + timedelta(days=(i|int)) %}
-    {% for v in vehicles %}
-      {% for r in reservations if r.vehicle_id==v.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-        {% set has_any.value = true %}
-      {% endfor %}
-      {% for s in segments if s.vehicle_id==v.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-        {% set has_any.value = true %}
-      {% endfor %}
-    {% endfor %}
-  {% endfor %}
-
-  {% if not has_any.value %}
-  <div class="empty-state">
-    <div class="empty-state-icon"><i class="fa-solid fa-calendar-xmark"></i></div>
-    <div class="empty-state-title">Aucune réservation</div>
-    <div class="empty-state-text">Pas de réservation ce mois-ci</div>
-  </div>
-  {% endif %}
+  {% include "_calendar_mobile.html" with context %}
 </div>
 
 {% if user and user.role in ['admin', 'superadmin'] %}
@@ -210,181 +74,5 @@
   </div>
 {% endif %}
 
-<style>
-/* ========== Styles du calendrier ========== */
-.calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--spacing-lg);
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-}
-
-.calendar-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--color-text);
-}
-
-.calendar-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-}
-
-.calendar-month-label {
-  font-weight: 600;
-  font-size: 1rem;
-  min-width: 140px;
-  text-align: center;
-}
-
-.calendar-actions {
-  margin-top: var(--spacing-lg);
-}
-
-/* ========== Vue Desktop ========== */
-.calendar-desktop {
-  display: block;
-}
-
-.calendar-mobile {
-  display: none;
-}
-
-/* ========== Vue Mobile ========== */
-@media (max-width: 768px) {
-  .calendar-desktop {
-    display: none;
-  }
-
-  .calendar-mobile {
-    display: block;
-  }
-
-  .calendar-header {
-    flex-direction: column;
-    align-items: stretch;
-    text-align: center;
-  }
-
-  .calendar-nav {
-    justify-content: center;
-  }
-}
-
-/* ========== Carte jour mobile ========== */
-.mobile-day-card {
-  background: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  margin-bottom: var(--spacing-md);
-  overflow: hidden;
-}
-
-.mobile-day-header {
-  background: var(--color-background-alt);
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--color-border);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.mobile-day-name {
-  font-weight: 600;
-  color: var(--color-primary);
-  text-transform: uppercase;
-  font-size: 0.8rem;
-}
-
-.mobile-day-date {
-  font-weight: 500;
-  color: var(--color-text);
-}
-
-.mobile-day-reservations {
-  padding: var(--spacing-sm);
-}
-
-.mobile-reservation {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-sm);
-  border-radius: var(--radius-md);
-  transition: background var(--transition-fast);
-}
-
-.mobile-reservation:not(:last-child) {
-  border-bottom: 1px solid var(--color-border-light);
-}
-
-.mobile-reservation:hover {
-  background: var(--color-background-alt);
-}
-
-.mobile-res-vehicle {
-  background: var(--color-primary);
-  color: white;
-  font-weight: 700;
-  font-size: 0.75rem;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-radius: var(--radius-md);
-  min-width: 45px;
-  text-align: center;
-}
-
-.mobile-res-details {
-  flex: 1;
-  min-width: 0;
-}
-
-.mobile-res-user {
-  font-weight: 600;
-  color: var(--color-text);
-  font-size: 0.9rem;
-}
-
-.mobile-res-slot {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.mobile-res-purpose {
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-  font-style: italic;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mobile-res-action {
-  color: var(--color-text-muted);
-  padding: var(--spacing-sm);
-  transition: color var(--transition-fast);
-}
-
-.mobile-res-action:hover {
-  color: var(--color-primary);
-}
-
-/* ========== Mode sombre mobile ========== */
-[data-theme="dark"] .mobile-day-card {
-  background: var(--color-background-alt);
-  border-color: var(--color-border);
-}
-
-[data-theme="dark"] .mobile-day-header {
-  background: var(--color-background);
-}
-
-[data-theme="dark"] .mobile-reservation:hover {
-  background: var(--color-background);
-}
-</style>
-
+{% include "_calendar_detail.html" with context %}
 {% endblock %}

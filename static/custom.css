@@ -602,10 +602,6 @@ p {
   z-index: 1;
 }
 
-.min-w-40 {
-  min-width: 40px;
-}
-
 .max-w-520 {
   max-width: 520px;
 }
@@ -807,4 +803,451 @@ p {
 .navbar-nav .dropdown-menu {
   left: auto;
   right: 0;
+}
+
+/* ============================================
+   PLANNING (vues mois et semaine)
+   ============================================ */
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-lg);
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+.calendar-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.calendar-subtitle {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.calendar-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
+}
+
+.calendar-month-label {
+  font-weight: 600;
+  font-size: 1rem;
+  min-width: 140px;
+  text-align: center;
+}
+
+/* Le gris clair du thème rendait ces boutons presque invisibles sur fond
+   blanc : on reprend la couleur du texte courant. */
+.calendar-nav .btn-outline-secondary,
+#calendarDetail .btn-outline-secondary {
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.calendar-nav .btn-outline-secondary:hover,
+.calendar-nav .btn-outline-secondary:focus-visible,
+#calendarDetail .btn-outline-secondary:hover,
+#calendarDetail .btn-outline-secondary:focus-visible {
+  background: var(--color-background-alt);
+  border-color: var(--color-secondary);
+  color: var(--color-text);
+}
+
+.calendar-switch .btn.active,
+.calendar-nav .calendar-switch .btn.active:hover {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #fff;
+}
+
+.calendar-actions {
+  margin-top: var(--spacing-lg);
+}
+
+.calendar-desktop {
+  display: block;
+}
+
+.calendar-mobile {
+  display: none;
+}
+
+/* --- Tableau : colonnes de largeur fixe et égale ---------------------------
+   Sans ``table-layout: fixed`` le navigateur élargit les colonnes chargées et
+   écrase les autres ; la fin du mois finissait hors de l'écran. */
+.calendar-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.calendar-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-background-alt);
+}
+
+.calendar-table .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: var(--color-background);
+}
+
+.calendar-table thead .sticky-col {
+  background: var(--color-background-alt);
+}
+
+.calendar-table-month .sticky-col {
+  width: 4.5rem;
+}
+
+.calendar-table-month td,
+.calendar-table-month th {
+  padding: 0.15rem 0.1rem;
+}
+
+.calendar-table-week .sticky-col {
+  width: 7rem;
+}
+
+/* Les cases d'une même colonne doivent commencer à la même hauteur, sinon une
+   journée peu chargée fait flotter sa carte au milieu du vide. */
+.calendar-table-week td {
+  vertical-align: top;
+}
+
+.calendar-vehicle-label {
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
+.calendar-day-header {
+  font-size: 0.7rem;
+  line-height: 1.15;
+  color: var(--color-text-muted);
+}
+
+.calendar-day-number {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Le week-end doit se repérer d'un coup d'œil : les réservations y sont rares
+   et une colonne occupée un samedi mérite d'être remarquée.
+   Bootstrap peint ses cellules avec une ombre interne : un simple
+   ``background`` serait recouvert, d'où la même technique ici. */
+.calendar-table .cal-weekend {
+  box-shadow: inset 0 0 0 9999px #eef2f7;
+}
+
+.calendar-table .cal-today {
+  box-shadow: inset 0 0 0 9999px var(--color-primary-light),
+              inset 0 0 0 2px var(--color-primary);
+}
+
+/* --- Pastille du mois ------------------------------------------------------
+   Une case fait une trentaine de pixels : on n'y met qu'une lettre, le détail
+   s'ouvre au clic. */
+.cal-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.cal-chip + .cal-chip {
+  margin-top: 2px;
+}
+
+.cal-chip:hover,
+.cal-chip:focus-visible {
+  transform: scale(1.15);
+  box-shadow: var(--shadow-md);
+}
+
+.cal-chip-res {
+  background: var(--color-success);
+}
+
+.cal-chip-unav {
+  background: #1e293b;
+}
+
+.cal-cell {
+  height: 2rem;
+}
+
+/* --- Carte de la semaine --------------------------------------------------- */
+.cal-card {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-left: 3px solid var(--color-success);
+  background: var(--color-success-light);
+  border-radius: var(--radius-sm);
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+  color: var(--color-text);
+  transition: filter var(--transition-fast);
+}
+
+.cal-card + .cal-card {
+  margin-top: 0.25rem;
+}
+
+.cal-card:hover,
+.cal-card:focus-visible {
+  filter: brightness(0.95);
+}
+
+.cal-card-unav {
+  border-left-color: #1e293b;
+  background: var(--color-secondary-light);
+}
+
+.cal-card-name {
+  display: block;
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-card-slot {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cal-card-purpose {
+  display: block;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Légende et fenêtre de détail ------------------------------------------ */
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-md);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.calendar-legend .legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.calendar-legend .cal-chip {
+  cursor: default;
+}
+
+.calendar-detail-list dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  margin-top: var(--spacing-sm);
+}
+
+.calendar-detail-list dd {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* --- Téléphone : liste par jour -------------------------------------------- */
+@media (max-width: 768px) {
+  .calendar-desktop {
+    display: none;
+  }
+
+  .calendar-mobile {
+    display: block;
+  }
+
+  .calendar-header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .calendar-nav {
+    justify-content: center;
+  }
+}
+
+.mobile-day-card {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+}
+
+.mobile-day-today {
+  border-color: var(--color-primary);
+}
+
+.mobile-day-header {
+  background: var(--color-background-alt);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mobile-day-name {
+  font-weight: 600;
+  color: var(--color-primary);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+}
+
+.mobile-day-date {
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.mobile-day-reservations {
+  padding: var(--spacing-sm);
+}
+
+.mobile-reservation {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+}
+
+.mobile-reservation:not(:last-child) {
+  border-bottom: 1px solid var(--color-border-light);
+}
+
+.mobile-reservation:hover {
+  background: var(--color-background-alt);
+}
+
+.mobile-res-vehicle {
+  background: var(--color-primary);
+  color: white;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-md);
+  min-width: 45px;
+  text-align: center;
+}
+
+.mobile-res-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-res-user {
+  font-weight: 600;
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.mobile-res-slot {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.mobile-res-purpose {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-res-action {
+  color: var(--color-text-muted);
+  padding: var(--spacing-sm);
+  transition: color var(--transition-fast);
+}
+
+.mobile-res-action:hover {
+  color: var(--color-primary);
+}
+
+/* --- Mode sombre ----------------------------------------------------------- */
+[data-theme="dark"] .calendar-table thead th,
+[data-theme="dark"] .calendar-table thead .sticky-col {
+  background: var(--color-background-alt);
+}
+
+[data-theme="dark"] .calendar-table .cal-weekend {
+  box-shadow: inset 0 0 0 9999px rgba(148, 163, 184, 0.1);
+}
+
+[data-theme="dark"] .calendar-table .cal-today {
+  box-shadow: inset 0 0 0 9999px rgba(37, 99, 235, 0.22),
+              inset 0 0 0 2px var(--color-primary);
+}
+
+[data-theme="dark"] .cal-card {
+  background: rgba(22, 163, 74, 0.18);
+  color: var(--color-text);
+}
+
+[data-theme="dark"] .cal-card-unav {
+  background: rgba(148, 163, 184, 0.18);
+}
+
+[data-theme="dark"] .cal-chip-unav {
+  background: #475569;
+}
+
+[data-theme="dark"] .mobile-day-card {
+  background: var(--color-background-alt);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .mobile-day-header {
+  background: var(--color-background);
+}
+
+[data-theme="dark"] .mobile-reservation:hover {
+  background: var(--color-background);
 }

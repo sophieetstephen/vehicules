@@ -368,6 +368,8 @@ def _inject_locale_helpers():
         "weekday_abbr": _weekday_abbr,
         "month_year_label": _month_year_label,
         "static_url": static_url,
+        # Défini plus bas dans le fichier : la résolution a lieu à l'appel.
+        "calendar_grid": calendar_grid,
     }
 
 
@@ -1904,6 +1906,159 @@ def local_now():
         return datetime.now()
 
 
+_SLOT_LETTERS = {"Matin": "M", "Après-midi": "A", "Journée": "J"}
+
+
+def _period_label(start, end):
+    """« le 03/09/2026 », « du 03/09 au 05/09 » ou « jusqu'à nouvel ordre »."""
+
+    if end is None:
+        return f"depuis le {start.strftime('%d/%m/%Y')}, jusqu'à nouvel ordre"
+    if start.date() == end.date():
+        return f"le {start.strftime('%d/%m/%Y')}"
+    return f"du {start.strftime('%d/%m/%Y')} au {end.strftime('%d/%m/%Y')}"
+
+
+def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end, user):
+    """Pré-calculer le contenu de chaque case du planning.
+
+    Les boucles imbriquées vivaient dans le gabarit et étaient recopiées pour
+    la vue mois puis pour la liste mobile ; une troisième vue (semaine) en
+    aurait fait une de plus. Le calcul est donc fait une seule fois ici, et
+    les gabarits se contentent d'afficher.
+
+    Retourne ``{"days": [...], "cells": {vehicle_id: {"2026-09-21": [item]}}}``
+    où chaque *item* porte de quoi remplir la case **et** la fenêtre de détail.
+    """
+
+    est_admin = bool(user) and user.role in ("admin", "superadmin")
+    unavailabilities = unavailabilities or []
+    aujourdhui = local_now().date()
+
+    days = []
+    for i in range((end - start).days):
+        moment = start + timedelta(days=i)
+        days.append(
+            {
+                "date": moment,
+                "key": moment.date().isoformat(),
+                "today": moment.date() == aujourdhui,
+                "weekend": moment.weekday() >= 5,
+            }
+        )
+
+    cells = {v.id: {j["key"]: [] for j in days} for v in vehicles}
+
+    def ajouter(vehicle_id, jour, item):
+        case = cells.get(vehicle_id)
+        if case is not None:
+            case[jour["key"]].append(item)
+
+    def item(kind, *, vehicle, name, slot, purpose, period, url):
+        return {
+            "kind": kind,
+            "vehicle": vehicle.code,
+            "name": name,
+            "slot": slot,
+            "letter": "I" if kind == "unav" else _SLOT_LETTERS.get(slot, "J"),
+            "purpose": purpose or "",
+            "period": period,
+            "url": url,
+        }
+
+    par_vehicule = {v.id: v for v in vehicles}
+
+    for un in unavailabilities:
+        vehicle = par_vehicule.get(un.vehicle_id)
+        if vehicle is None:
+            continue
+        for jour in days:
+            d = jour["date"].date()
+            if d < un.start_at.date():
+                continue
+            if un.end_at is not None and d > un.end_at.date():
+                continue
+            # Une seule pastille « indisponible » par case, même si deux
+            # périodes se chevauchent : la case ne fait que quelques pixels.
+            if any(x["kind"] == "unav" for x in cells[vehicle.id][jour["key"]]):
+                continue
+            ajouter(
+                vehicle.id,
+                jour,
+                item(
+                    "unav",
+                    vehicle=vehicle,
+                    name=un.label,
+                    slot="Indisponible",
+                    purpose="",
+                    period=_period_label(un.start_at, un.end_at),
+                    url=url_for("admin_vehicle_unavailability", vehicle_id=vehicle.id)
+                    if est_admin
+                    else None,
+                ),
+            )
+
+    # Un jour couvert par un segment appartient au segment, pas à la
+    # réservation d'origine : sans cela la case afficherait les deux.
+    couverts = set()
+    for s in segments:
+        jour = s.start_at.date()
+        while jour <= s.end_at.date():
+            couverts.add((s.reservation_id, jour))
+            jour += timedelta(days=1)
+
+    for r in reservations:
+        vehicle = par_vehicule.get(r.vehicle_id)
+        if vehicle is None:
+            continue
+        for jour in days:
+            d = jour["date"].date()
+            if not (r.start_at.date() <= d <= r.end_at.date()):
+                continue
+            if (r.id, d) in couverts:
+                continue
+            ajouter(
+                vehicle.id,
+                jour,
+                item(
+                    "res",
+                    vehicle=vehicle,
+                    name=r.user.name if r.user else "",
+                    slot=reservation_slot_label(r, jour["date"]),
+                    purpose=r.purpose,
+                    period=_period_label(r.start_at, r.end_at),
+                    url=url_for("manage_request", rid=r.id, day=jour["key"])
+                    if est_admin
+                    else None,
+                ),
+            )
+
+    for s in segments:
+        vehicle = par_vehicule.get(s.vehicle_id)
+        if vehicle is None:
+            continue
+        r = s.reservation
+        for jour in days:
+            d = jour["date"].date()
+            if not (s.start_at.date() <= d <= s.end_at.date()):
+                continue
+            ajouter(
+                vehicle.id,
+                jour,
+                item(
+                    "res",
+                    vehicle=vehicle,
+                    name=r.user.name if r and r.user else "",
+                    slot=reservation_slot_label(s, jour["date"]),
+                    purpose=r.purpose if r else "",
+                    period=_period_label(s.start_at, s.end_at),
+                    url=url_for("manage_segment", sid=s.id) if est_admin else None,
+                ),
+            )
+
+    return {"days": days, "cells": cells}
+
+
 def today_overview(now=None):
     """Return, for each vehicle, its situation at ``now``.
 
@@ -2526,13 +2681,9 @@ def export_pdf_month():
     )
 
 
-@app.route("/calendar/month")
-def calendar_month():
-    user = current_user()
-    y = int(request.args.get("y", datetime.today().year))
-    m = int(request.args.get("m", datetime.today().month))
-    start = datetime(y, m, 1)
-    end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+def calendar_payload(start, end):
+    """Tout ce qui occupe les véhicules sur la fenêtre ``[start, end)``."""
+
     vehicles = Vehicle.query.order_by(Vehicle.code).all()
     res = Reservation.query.filter(
         Reservation.status == "approved",
@@ -2551,17 +2702,45 @@ def calendar_month():
             VehicleUnavailability.end_at > start,
         ),
     ).all()
+    return {
+        "vehicles": vehicles,
+        "reservations": res,
+        "segments": segs,
+        "unavailabilities": unavailabilities,
+        "start": start,
+        "end": end,
+        "timedelta": timedelta,
+        "slot_label": reservation_slot_label,
+    }
+
+
+@app.route("/calendar/month")
+def calendar_month():
+    user = current_user()
+    y = int(request.args.get("y", datetime.today().year))
+    m = int(request.args.get("m", datetime.today().month))
+    start = datetime(y, m, 1)
+    end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
     return render_template(
-        "calendar_month.html",
-        vehicles=vehicles,
-        reservations=res,
-        segments=segs,
-        unavailabilities=unavailabilities,
-        start=start,
-        end=end,
-        user=user,
-        timedelta=timedelta,
-        slot_label=reservation_slot_label,
+        "calendar_month.html", user=user, **calendar_payload(start, end)
+    )
+
+
+@app.route("/calendar/week")
+def calendar_week():
+    """Le mois entier tient mal sur un écran : sept colonnes larges au lieu
+    de trente et une colonnes illisibles."""
+
+    user = current_user()
+    jour = request.args.get("d") or ""
+    try:
+        repere = datetime.strptime(jour, "%Y-%m-%d")
+    except ValueError:
+        repere = datetime.combine(local_now().date(), time.min)
+    start = repere - timedelta(days=repere.weekday())  # lundi
+    end = start + timedelta(days=7)
+    return render_template(
+        "calendar_week.html", user=user, **calendar_payload(start, end)
     )
 
 

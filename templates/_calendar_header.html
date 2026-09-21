@@ -1,0 +1,52 @@
+{# En-tête commun aux deux vues du planning.
+
+   Attend ``vue`` ('mois' ou 'semaine'), ``start``, ``end`` et ``timedelta``.
+   Le bouton « Semaine / Mois » existe parce que le mois entier tient mal sur
+   un écran : trente et une colonnes deviennent illisibles. #}
+{% set veille = start - timedelta(days=1) %}
+{% set fin = end - timedelta(days=1) %}
+<div class="calendar-header">
+  <div>
+    <h1 class="calendar-title">Planning {{ 'de la semaine' if vue == 'semaine' else 'mensuel' }}</h1>
+    {% if vue == 'semaine' %}
+      <div class="calendar-subtitle">{{ month_year_label(start) }}</div>
+    {% endif %}
+  </div>
+
+  <div class="calendar-nav">
+    {% if vue == 'semaine' %}
+      <a href="{{ url_for('calendar_week', d=(start - timedelta(days=7)).strftime('%Y-%m-%d')) }}"
+         class="btn btn-outline-secondary btn-sm" title="Semaine précédente" aria-label="Semaine précédente">
+        <i class="fa-solid fa-chevron-left"></i>
+      </a>
+      <span class="calendar-month-label">{{ start.strftime('%d/%m') }} – {{ fin.strftime('%d/%m') }}</span>
+      <a href="{{ url_for('calendar_week', d=end.strftime('%Y-%m-%d')) }}"
+         class="btn btn-outline-secondary btn-sm" title="Semaine suivante" aria-label="Semaine suivante">
+        <i class="fa-solid fa-chevron-right"></i>
+      </a>
+    {% else %}
+      <a href="{{ url_for('calendar_month', y=veille.year, m=veille.month) }}"
+         class="btn btn-outline-secondary btn-sm" title="Mois précédent" aria-label="Mois précédent">
+        <i class="fa-solid fa-chevron-left"></i>
+      </a>
+      <span class="calendar-month-label">{{ month_year_label(start) }}</span>
+      <a href="{{ url_for('calendar_month', y=end.year, m=end.month) }}"
+         class="btn btn-outline-secondary btn-sm" title="Mois suivant" aria-label="Mois suivant">
+        <i class="fa-solid fa-chevron-right"></i>
+      </a>
+    {% endif %}
+
+    {# Après quelques allers-retours, on ne sait plus où l'on est. #}
+    <a href="{{ url_for('calendar_week') if vue == 'semaine' else url_for('calendar_month') }}"
+       class="btn btn-outline-secondary btn-sm">Aujourd'hui</a>
+
+    <div class="btn-group btn-group-sm calendar-switch" role="group" aria-label="Période affichée">
+      <a class="btn btn-outline-secondary{{ ' active' if vue == 'semaine' }}"
+         href="{{ url_for('calendar_week', d=start.strftime('%Y-%m-%d')) }}"
+         {% if vue == 'semaine' %}aria-current="page"{% endif %}>Semaine</a>
+      <a class="btn btn-outline-secondary{{ ' active' if vue == 'mois' }}"
+         href="{{ url_for('calendar_month', y=start.year, m=start.month) }}"
+         {% if vue == 'mois' %}aria-current="page"{% endif %}>Mois</a>
+    </div>
+  </div>
+</div>

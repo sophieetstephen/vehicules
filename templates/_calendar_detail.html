@@ -1,0 +1,73 @@
+{# Fenêtre de détail ouverte au clic sur une case du planning.
+
+   Dans la vue mois une case fait une trentaine de pixels : impossible d'y
+   écrire un nom, un créneau et un motif. La case ne montre donc qu'une
+   pastille, et le détail complet s'ouvre ici. #}
+<div class="modal fade" id="calendarDetail" tabindex="-1" aria-labelledby="calendarDetailTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="calendarDetailTitle">Détail</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+      </div>
+      <div class="modal-body">
+        <dl class="calendar-detail-list">
+          <dt>Véhicule</dt><dd data-detail="vehicle"></dd>
+          <dt>Jour</dt><dd data-detail="day"></dd>
+          <dt data-label="name">Utilisateur</dt><dd data-detail="name"></dd>
+          <dt>Créneau</dt><dd data-detail="slot"></dd>
+          <dt>Période</dt><dd data-detail="period"></dd>
+          <div data-row="purpose">
+            <dt>Motif</dt><dd data-detail="purpose"></dd>
+          </div>
+        </dl>
+      </div>
+      <div class="modal-footer">
+        <a class="btn btn-primary d-none" data-detail-link href="#">
+          <i class="fa-solid fa-pen-to-square me-1"></i>Gérer
+        </a>
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fermer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const fenetre = document.getElementById('calendarDetail');
+  if (!fenetre) return;
+  // Bootstrap est chargé en fin de page : la fenêtre n'est construite qu'au
+  // premier clic, sinon ``bootstrap`` n'existe pas encore ici.
+  let modal = null;
+  const lien = fenetre.querySelector('[data-detail-link]');
+  const ligneMotif = fenetre.querySelector('[data-row="purpose"]');
+  const etiquetteNom = fenetre.querySelector('[data-label="name"]');
+
+  function remplir(cle, valeur) {
+    const cible = fenetre.querySelector('[data-detail="' + cle + '"]');
+    if (cible) cible.textContent = valeur || '—';
+  }
+
+  document.addEventListener('click', function (evenement) {
+    const pastille = evenement.target.closest('[data-calendar-item]');
+    if (!pastille || !window.bootstrap) return;
+    if (!modal) modal = new bootstrap.Modal(fenetre);
+    const d = pastille.dataset;
+    remplir('vehicle', d.vehicle);
+    remplir('day', d.day);
+    remplir('name', d.name);
+    remplir('slot', d.slot);
+    remplir('period', d.period);
+    remplir('purpose', d.purpose);
+    etiquetteNom.textContent = d.kind === 'unav' ? 'Motif de l’indisponibilité' : 'Utilisateur';
+    ligneMotif.classList.toggle('d-none', !d.purpose);
+    if (d.url) {
+      lien.href = d.url;
+      lien.classList.remove('d-none');
+    } else {
+      lien.classList.add('d-none');
+    }
+    modal.show();
+  });
+})();
+</script>
