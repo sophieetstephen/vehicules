@@ -76,6 +76,18 @@ automatiquement un identifiant pour chaque compte existant et **affiche la
 correspondance e‑mail → identifiant** dans le terminal. Les mots de passe
 existants restent valables.
 
+## Navigation
+
+La barre du haut contient trois liens permanents : **Accueil**, **Planning** et
+**Réserver**, avec la page courante mise en évidence. Auparavant elle n'en
+contenait aucun : passer d'une section à l'autre imposait de revenir à
+l'accueil par le nom de l'application, puis de cliquer une tuile, et les pages
+sans issue (formulaire, contact) n'offraient aucun autre chemin.
+
+Sur téléphone, les libellés et le nom de l'application s'effacent pour ne
+laisser que les icônes, sinon la barre passe sur deux lignes. Les tuiles de
+l'accueil restent la porte d'entrée vers les pages d'administration.
+
 ## Accueil : tableau du jour et annulation
 
 La page d'accueil de chaque rôle affiche :

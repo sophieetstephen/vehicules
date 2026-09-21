@@ -26,10 +26,33 @@
       <span class="brand-icon">
         <i class="fa-solid fa-car-side"></i>
       </span>
-      <span>Véhicules</span>
+      {# Le nom disparaît sur téléphone : sans cela la barre passe sur deux
+         lignes une fois les liens de navigation ajoutés. #}
+      <span class="brand-name">Véhicules</span>
     </a>
 
-    <div class="d-flex align-items-center gap-2">
+    {% if user %}
+    {# Navigation courte et permanente : sans elle, passer d'une section à une
+       autre imposait de revenir à l'accueil par la marque, soit deux clics.
+       Le libellé s'efface sur petit écran, l'icône suffit. #}
+    <ul class="navbar-nav nav-main flex-row align-items-center gap-1 me-auto ms-2 ms-lg-4">
+      {% set liens = [
+        ('home', 'fa-house', 'Accueil'),
+        ('calendar_month', 'fa-calendar-days', 'Planning'),
+        ('new_request', 'fa-circle-plus', 'Réserver'),
+      ] %}
+      {% for endpoint, icone, libelle in liens %}
+      <li class="nav-item">
+        <a class="nav-link{{ ' active' if request.endpoint == endpoint }}"
+           href="{{ url_for(endpoint) }}" title="{{ libelle }}"{% if request.endpoint == endpoint %} aria-current="page"{% endif %}>
+          <i class="fa-solid {{ icone }}"></i><span class="nav-label">{{ libelle }}</span>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+
+    <div class="d-flex align-items-center gap-2 ms-auto">
       <!-- Toggle mode sombre -->
       <button class="theme-toggle" id="themeToggle" type="button" title="Changer le thème">
         <i class="fa-solid fa-moon" id="themeIcon"></i>

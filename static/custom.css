@@ -619,6 +619,49 @@ p {
   max-width: 720px;
 }
 
+/* --- Navigation courte dans la barre du haut --- */
+.nav-main .nav-link {
+  color: rgba(255, 255, 255, 0.75);
+  padding: 0.4rem 0.7rem;
+  border-radius: var(--radius-md, 0.5rem);
+  white-space: nowrap;
+  transition: background-color var(--transition-fast, 0.15s), color var(--transition-fast, 0.15s);
+}
+
+.nav-main .nav-link:hover,
+.nav-main .nav-link:focus-visible {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.nav-main .nav-link.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.18);
+  font-weight: 600;
+}
+
+.nav-main .nav-label {
+  margin-left: 0.4rem;
+}
+
+/* Sur petit écran, la barre est trop étroite pour les libellés : icônes seules,
+   le title et l'aria-label restant disponibles. */
+@media (max-width: 575.98px) {
+  .nav-main .nav-label {
+    display: none;
+  }
+
+  .nav-main .nav-link {
+    padding: 0.4rem 0.55rem;
+    font-size: 1.05rem;
+  }
+
+  /* Le nom de l'application laisse la place aux liens : l'icône suffit. */
+  .navbar-brand-custom .brand-name {
+    display: none;
+  }
+}
+
 /* --- Responsive --- */
 @media (max-width: 768px) {
   body {
