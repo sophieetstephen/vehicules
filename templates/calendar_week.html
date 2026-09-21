@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Planning de la semaine – Véhicules{% endblock %}
+{% block content %}
+{% set vue = 'semaine' %}
+{% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
+                            unavailabilities|default([], true), start, end, user) %}
+
+{% include "_calendar_header.html" with context %}
+
+<!-- ========== VUE ORDINATEUR (tableau) ========== -->
+{# Sept colonnes larges : le nom, le créneau et le motif tiennent dans la case,
+   sans tooltip ni clic. #}
+<div class="calendar-desktop">
+  <table class="table table-bordered align-middle calendar-table calendar-table-week">
+    <thead>
+      <tr>
+        <th class="sticky-col">Véhicule</th>
+        {% for jour in grid.days %}
+          <th class="text-center{{ ' cal-weekend' if jour.weekend }}{{ ' cal-today' if jour.today }}">
+            <div class="calendar-day-header">
+              {{ weekday_abbr(jour.date) }}<br>
+              <span class="calendar-day-number">{{ jour.date.day }}</span>
+            </div>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in vehicles %}
+      <tr>
+        <td class="sticky-col">
+          <strong>{{ v.code }}</strong>
+          {% if v.label %}<div class="calendar-vehicle-label">{{ v.label }}</div>{% endif %}
+        </td>
+        {% for jour in grid.days %}
+          <td class="cal-cell{{ ' cal-weekend' if jour.weekend }}{{ ' cal-today' if jour.today }}">
+            {% for item in grid.cells[v.id][jour.key] %}
+              <button type="button" data-calendar-item
+                      class="cal-card cal-card-{{ item.kind }}"
+                      data-kind="{{ item.kind }}"
+                      data-vehicle="{{ v.code }}{% if v.label %} – {{ v.label }}{% endif %}"
+                      data-day="{{ weekday_abbr(jour.date) }} {{ jour.date.strftime('%d/%m/%Y') }}"
+                      data-name="{{ item.name }}"
+                      data-slot="{{ item.slot }}"
+                      data-period="{{ item.period }}"
+                      data-purpose="{{ item.purpose }}"
+                      {% if item.url %}data-url="{{ item.url }}"{% endif %}>
+                {# Le motif d'une panne tient rarement sur une ligne : la case
+                   annonce l'indisponibilité, le détail complet est au clic. #}
+                <span class="cal-card-name">
+                  {% if item.kind == 'unav' %}<i class="fa-solid fa-screwdriver-wrench me-1"></i>Indisponible{% else %}{{ item.name }}{% endif %}
+                </span>
+                <span class="cal-card-slot">{{ item.name if item.kind == 'unav' else item.slot }}</span>
+                {% if item.purpose %}<span class="cal-card-purpose">{{ item.purpose }}</span>{% endif %}
+              </button>
+            {% endfor %}
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if not vehicles %}
+  <div class="empty-state">
+    <div class="empty-state-icon"><i class="fa-solid fa-car-side"></i></div>
+    <div class="empty-state-title">Aucun véhicule</div>
+    <div class="empty-state-text">Le parc est vide pour l'instant</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ========== VUE TÉLÉPHONE (liste par jour) ========== -->
+<div class="calendar-mobile">
+  {% include "_calendar_mobile.html" with context %}
+</div>
+
+{% if user and user.role in ['admin', 'superadmin'] %}
+  <div class="calendar-actions">
+    <a class="btn btn-outline-secondary" href="{{ url_for('export_pdf_month', y=start.year, m=start.month) }}">
+      <i class="fa-solid fa-file-pdf me-1"></i>Exporter le mois en PDF
+    </a>
+  </div>
+{% endif %}
+
+{% include "_calendar_detail.html" with context %}
+{% endblock %}
