@@ -307,3 +307,78 @@ def test_pdf_badges_keep_their_colour_without_internet():
     style = gabarit.split("<style>")[1].split("</style>")[0]
     assert "text-bg-success{background-color:#02b875" in style
     assert "text-bg-dark{background-color:#343a40" in style
+
+
+# --- où atterrissent les PDF -------------------------------------------------
+#
+# Lancé par « docker compose run --rm », le script écrivait dans un conteneur
+# détruit à la fin de la commande. Il annonçait douze réussites et ne laissait
+# rien derrière lui : les vingt-quatre PDF d'archive avaient disparu.
+
+def test_archive_directory_can_be_chosen(tmp_path, monkeypatch):
+    """Sans cela, impossible de viser un dossier monté depuis l'hôte."""
+    import tools.archive_year as ay
+
+    monkeypatch.setenv("ARCHIVE_DIR", str(tmp_path / "ailleurs"))
+    import importlib
+
+    recharge = importlib.reload(ay)
+    try:
+        assert recharge.ARCHIVE_DIR == str(tmp_path / "ailleurs")
+    finally:
+        monkeypatch.delenv("ARCHIVE_DIR", raising=False)
+        importlib.reload(ay)
+
+
+def test_output_dir_option_exists():
+    import inspect
+
+    import tools.archive_year as ay
+
+    source = inspect.getsource(ay.main)
+    assert '"--output-dir"' in source
+    assert "ARCHIVE_DIR = args.output_dir" in source
+
+
+def test_volatile_destination_is_detected(tmp_path, monkeypatch):
+    """Dans un conteneur, un dossier qui n'est monté de nulle part est volatil.
+
+    ``ismount`` est neutralisé : la machine de test a ses propres montages
+    (/tmp en est un), qui n'ont rien à voir avec ceux du conteneur.
+    """
+    import tools.archive_year as ay
+
+    monkeypatch.setattr(ay.os.path, "ismount", lambda p: False)
+    cible = tmp_path / "backups" / "archives"
+    assert ay.destination_is_volatile(str(cible), in_container=True) is True
+
+
+def test_mounted_destination_is_accepted(tmp_path, monkeypatch):
+    import tools.archive_year as ay
+
+    cible = tmp_path / "monte" / "archives"
+    cible.mkdir(parents=True)
+    vrai_ismount = ay.os.path.ismount
+    monkeypatch.setattr(
+        ay.os.path, "ismount",
+        lambda p: str(p) == str(tmp_path / "monte") or vrai_ismount(p),
+    )
+    assert ay.destination_is_volatile(str(cible), in_container=True) is False
+
+
+def test_outside_a_container_nothing_is_volatile(tmp_path):
+    """Sur le Raspberry directement, le chemin relatif est parfaitement bon."""
+    import tools.archive_year as ay
+
+    assert ay.destination_is_volatile(str(tmp_path), in_container=False) is False
+
+
+def test_volatile_run_reports_failure():
+    """Le script doit sortir en erreur, pas annoncer un succès trompeur."""
+    import inspect
+
+    import tools.archive_year as ay
+
+    source = inspect.getsource(ay.main)
+    fin = source.split("if volatile:")[-1]
+    assert "return 1" in fin, "une archive perdue ne doit pas passer pour un succès"

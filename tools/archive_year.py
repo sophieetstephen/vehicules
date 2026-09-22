@@ -12,8 +12,16 @@ application so that the planning and the history remain consultable; a year of
 reservations weighs only a few hundred kilobytes. Use --purge only if you
 really want to delete them, and check the PDFs first.
 
+ATTENTION, en conteneur: les PDF sont ecrits dans le dossier indique par
+--output-dir, ARCHIVE_DIR, ou a defaut <depot>/backups/archives. Ce dernier
+appartient au conteneur. Avec "docker compose run --rm" il disparait avec lui,
+et une reconstruction de l'image emporte celui du conteneur courant. Visez un
+chemin monte depuis l'hote. Le script refuse desormais de presenter une telle
+execution comme un succes.
+
 Usage:
-    python tools/archive_year.py [--year YYYY] [--dry-run] [--keep-years N] [--purge]
+    python tools/archive_year.py [--year YYYY] [--dry-run] [--keep-years N]
+                                 [--output-dir CHEMIN] [--purge]
 
 Examples:
     # Archive the previous year (default behavior for end-of-year timer)
@@ -47,7 +55,37 @@ from app import app, WEASY_OK
 from models import db, Reservation
 
 DEFAULT_KEEP_YEARS = 2
-ARCHIVE_DIR = os.path.join(ROOT_DIR, "backups", "archives")
+
+# Destination des PDF. Le chemin par defaut est relatif au depot : lance dans
+# un conteneur jetable (docker compose run --rm), il designe un disque detruit
+# a la fin de la commande, et les archives disparaissaient sans un mot.
+# ARCHIVE_DIR ou --output-dir permettent de viser un dossier monte sur l'hote.
+DEFAULT_ARCHIVE_DIR = os.path.join(ROOT_DIR, "backups", "archives")
+ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR
+
+
+def destination_is_volatile(path: str, in_container: bool | None = None) -> bool:
+    """Les PDF vont-ils dans le disque jetable d'un conteneur ?
+
+    Un « docker compose run --rm » ecrit dans un conteneur detruit a la fin de
+    la commande. Le script annoncait alors douze reussites et ne laissait rien
+    derriere lui. Un dossier monte depuis l'hote apparait comme point de
+    montage a l'interieur du conteneur : on remonte les parents pour le voir.
+    """
+
+    if in_container is None:
+        in_container = os.path.exists("/.dockerenv")
+    if not in_container:
+        return False
+
+    # La racine est toujours un point de montage — c'est justement le disque
+    # jetable du conteneur : on remonte jusqu'a elle sans la compter.
+    chemin = os.path.abspath(path)
+    while chemin != os.path.sep:
+        if os.path.ismount(chemin):
+            return False
+        chemin = os.path.dirname(chemin)
+    return True
 
 
 def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
@@ -263,6 +301,13 @@ def main() -> int:
         help=f"Nombre d'annees d'archives a conserver (defaut: {DEFAULT_KEEP_YEARS})"
     )
     parser.add_argument(
+        "--output-dir", "-o",
+        default=None,
+        help="Dossier ou ecrire les PDF (defaut: ARCHIVE_DIR ou "
+             "<depot>/backups/archives). A l'interieur d'un conteneur, visez "
+             "un chemin monte depuis l'hote, sinon les fichiers sont perdus."
+    )
+    parser.add_argument(
         "--purge",
         action="store_true",
         help="Supprimer aussi les reservations de l'annee dans la base "
@@ -270,9 +315,23 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    global ARCHIVE_DIR
+    if args.output_dir:
+        ARCHIVE_DIR = args.output_dir
+
     print(f"=== Archivage annuel du planning ===")
     print(f"Annee: {args.year}")
     print(f"Conservation: {args.keep_years} ans")
+    # Chemin absolu affiche des le depart : sans lui, on ne savait pas ou les
+    # fichiers etaient partis.
+    print(f"Destination: {os.path.abspath(ARCHIVE_DIR)}")
+
+    volatile = destination_is_volatile(ARCHIVE_DIR)
+    if volatile:
+        print("\n  *** ATTENTION ***")
+        print("  Ce dossier n'est pas monte depuis l'hote : il appartient au")
+        print("  conteneur et disparaitra avec lui. Relancez la commande avec")
+        print("  --output-dir vers un chemin monte, sinon les PDF seront perdus.")
     if args.dry_run:
         print("Mode: DRY-RUN (aucune modification)")
 
@@ -298,6 +357,11 @@ def main() -> int:
 
     # Step 3: Cleanup old archives
     cleanup_old_archives(args.keep_years, args.dry_run)
+
+    if volatile:
+        print("\n*** Les PDF ont ete ecrits dans le conteneur et seront perdus. ***")
+        print("Relancez avec --output-dir vers un dossier monte depuis l'hote.")
+        return 1
 
     print("\n=== Archivage termine ===")
     return 0
