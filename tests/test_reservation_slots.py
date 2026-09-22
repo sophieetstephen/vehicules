@@ -44,14 +44,25 @@ def test_same_day_reservations_have_distinct_slots():
         )
     assert 'Alice (Matin)' in html
     assert 'Bob (Après-midi)' in html
-    assert 'Matin' in pdf_html
-    assert 'Après-midi' in pdf_html
+
+    # Le PDF ne decoupe plus le mois en deux quinzaines : une reservation a
+    # cheval sur le 15 n'est plus scindee entre deux tableaux, donc entre deux
+    # pages.
     tables = pdf_html.split('<table class="planning-table">')[1:]
-    assert len(tables) == 2
-    assert '<th>15</th>' in tables[0]
-    assert '<th>16</th>' in tables[1]
-    assert 'badge text-bg-success">Matin' in pdf_html
-    assert 'badge text-bg-success">Après-midi' in pdf_html
+    assert len(tables) == 1
+    grille = tables[0].split('</table>')[0]
+    # L'en-tete porte « jour<br>numero » : le mois entier y figure.
+    assert '<br>15' in grille and '<br>16' in grille and '<br>31' in grille
+
+    # Dans la grille, une case ne porte qu'une pastille : c'est ce qui garde
+    # les lignes assez basses pour qu'une page ne les coupe pas en deux.
+    assert 'Alice' not in grille and 'Matin' not in grille
+    assert grille.count('pastille-res') == 2
+
+    # Le detail est repris dessous, en toutes lettres.
+    detail = pdf_html.split('<h2>Réservations du mois</h2>')[1]
+    assert 'Alice' in detail and 'Matin' in detail
+    assert 'Bob' in detail and 'Après-midi' in detail
 
 
 def test_partial_afternoon_reservation_is_labelled_afternoon():
