@@ -338,16 +338,98 @@ sudo journalctl -u vehicules-backup.service -n 30 --no-pager
 La sauvegarde envoie vers `REMOTE_URI` la base, le `.env` et les archives PDF
 annuelles (`backups/archives` → `REMOTE_URI/archives`).
 
-### Restaurer depuis Google Drive
+### Vérifier une sauvegarde, sans risque
+
+Une sauvegarde qu'on n'a jamais restaurée n'est pas une sauvegarde. Cet
+exercice se déroule à côté de la base de production, qui n'est jamais touchée :
+on restaure dans un dossier de test, on vérifie, on efface. À refaire après
+tout changement touchant aux sauvegardes.
+
+Tout en tant qu'utilisateur applicatif, **sans `sudo`** : lancé en root, rclone
+réécrit sa configuration en root et les commandes suivantes échouent.
 
 ```bash
-# Télécharger la sauvegarde depuis Drive
-rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
+# 1. La sauvegarde la plus récente, et le .env qui va avec
+rclone lsf gdrive:vehicules-backups --include 'vehicules_*' | sort | tail -3
+rclone lsf gdrive:vehicules-backups --include 'env_*' | sort | tail -1
 
-# Décompresser puis restaurer dans SQLite
-gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db.gz
-sqlite3 instance/vehicules.db ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"  # adaptez ce chemin si nécessaire
+# 2. Télécharger dans un dossier de test, visible depuis le conteneur
+mkdir -p instance/restauration-test && cd instance/restauration-test
+rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz .
+
+# 3. Décompresser
+gzip -d vehicules_*.db.gz && mv vehicules_*.db restauration.db
+
+# 4. Le fichier est-il sain ? Attendu : « ok », et rien d'autre
+sqlite3 restauration.db "PRAGMA integrity_check;"
+
+# 5. Contient-il les mêmes données que la production ?
+for t in user vehicle reservation reservation_segment vehicle_unavailability; do
+  prod=$(sqlite3 "$DB_PATH" "select count(*) from $t")
+  copie=$(sqlite3 restauration.db "select count(*) from $t")
+  printf '%-25s production %-6s restauration %s\n' "$t" "$prod" "$copie"
+done
 ```
+
+L'étape suivante est celle qui compte vraiment : un fichier lisible par SQLite
+n'est pas forcément exploitable par l'application.
+
+```bash
+# 6. L'application sait-elle l'ouvrir ? Conteneur jetable : le service continue
+#    de tourner pendant ce temps. Noter les QUATRE barres obliques, trois
+#    donneraient un chemin relatif.
+docker compose run --rm \
+  -e DATABASE_URL=sqlite:////app/instance/restauration-test/restauration.db \
+  vehicules python -c "
+from app import app
+from models import User, Reservation, Vehicle
+with app.app_context():
+    print('utilisateurs :', User.query.count())
+    print('vehicules    :', Vehicle.query.count())
+    print('reservations :', Reservation.query.count())
+    u = User.query.filter_by(role='superadmin').first()
+    print('superadmin   :', u.username if u else 'ABSENT')
+"
+
+# 7. Effacer la copie
+cd - && rm -rf instance/restauration-test
+```
+
+Le compte superadmin doit apparaître : sans lui, la base restaurée laisserait
+l'application sans administrateur.
+
+### Restaurer pour de vrai
+
+À ne faire qu'après une perte réelle. Contrairement à l'exercice ci-dessus,
+cette procédure écrase la base en service.
+
+```bash
+# 1. Arrêter l'application : restaurer sous une base ouverte la corrompt
+docker compose stop vehicules
+
+# 2. Mettre de côté la base actuelle, même si on la croit perdue :
+#    elle contient peut-être plus que la sauvegarde
+cp "$DB_PATH" "$DB_PATH.avant-restauration"
+
+# 3. Récupérer et décompresser la sauvegarde choisie
+rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
+gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db
+
+# 4. Restaurer, puis vérifier AVANT de redémarrer
+sqlite3 "$DB_PATH" ".restore 'backups/vehicules_YYYYMMDD_HHMMSS.db'"
+sqlite3 "$DB_PATH" "PRAGMA integrity_check;"
+
+# 5. Redémarrer
+docker compose start vehicules
+```
+
+`DB_PATH` est le chemin déclaré dans `vehicules-backup.service`, par exemple
+`/opt/vehicules/app/vehicules/instance/instance/vehicules.db`.
+
+Restaurer la base ne suffit pas à repartir d'une machine neuve : il faut aussi
+le `.env` sauvegardé le même jour (`env_YYYYMMDD_HHMMSS.txt`). Il porte la
+`SECRET_KEY` — une valeur différente invalide toutes les sessions ouvertes — et
+le mot de passe d'envoi des e-mails.
 
 ## Licence
 

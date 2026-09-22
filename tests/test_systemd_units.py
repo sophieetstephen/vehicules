@@ -115,3 +115,28 @@ def test_service_does_not_hardcode_a_foreign_path(service):
         assert travail.startswith("/opt/vehicules/"), (
             f"{service.name} : WorkingDirectory {travail} hors de l'installation"
         )
+
+
+# --- la restauration doit être documentée avant d'en avoir besoin ------------
+
+def test_readme_documents_a_safe_restore_drill():
+    """Une sauvegarde qu'on n'a jamais restaurée n'est pas une sauvegarde.
+    L'exercice doit rester séparé de la restauration réelle, qui écrase."""
+    assert "### Vérifier une sauvegarde, sans risque" in README
+    assert "### Restaurer pour de vrai" in README
+
+    exercice = README.split("### Vérifier une sauvegarde")[1].split("### Restaurer pour de vrai")[0]
+    assert "PRAGMA integrity_check" in exercice, "le fichier peut être corrompu"
+    assert "restauration-test" in exercice, "l'exercice ne doit pas viser la base en service"
+    assert "sqlite:////app/" in exercice, "ouvrir la copie avec l'application elle-même"
+    assert "rm -rf instance/restauration-test" in exercice, "et nettoyer derrière soi"
+
+
+def test_real_restore_protects_the_current_database():
+    """Écraser la base en service sans copie de côté, ni arrêt préalable, la
+    corrompt ou perd ce qu'elle contenait encore."""
+    reel = README.split("### Restaurer pour de vrai")[1].split("\n## ")[0]
+    assert "docker compose stop vehicules" in reel, "restaurer sous une base ouverte la corrompt"
+    assert ".avant-restauration" in reel, "garder la base actuelle avant de l'écraser"
+    assert "PRAGMA integrity_check" in reel, "vérifier avant de redémarrer"
+    assert "env_YYYYMMDD_HHMMSS.txt" in reel, "le .env est indispensable sur une machine neuve"
