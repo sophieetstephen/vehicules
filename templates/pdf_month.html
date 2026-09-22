@@ -24,42 +24,42 @@ body{font-family:sans-serif;font-size:{{ font_size }}px}
 table{width:100%;border-collapse:collapse}
 th,td{border:1px solid #999;padding:{{ '0 0.5px' if compact_layout else '1px 2px' }};vertical-align:top;text-align:center}
 th.sticky,td.sticky{position:sticky;left:0;background:#fff}
-.badge{padding:0.15rem 0.3rem;line-height:1.1;font-weight:600}
+.badge{padding:0.15rem 0.3rem;line-height:1.1;font-weight:600;border-radius:3px}
+/* Couleurs figées ici : elles venaient de la feuille Bootstrap téléchargée au
+   moment de produire le PDF. Sans accès à Internet — ou si ce domaine est
+   bloqué sur le réseau du centre — les pastilles devenaient invisibles. Ces
+   valeurs sont celles du thème, l'aspect est inchangé. */
+.badge.text-bg-success{background-color:#02b875;color:#fff}
+.badge.text-bg-dark{background-color:#343a40;color:#fff}
 .reservation-details{line-height:1.2;margin-top:1px}
 .vehicle-info{min-width:{{ '95px' if compact_layout else '120px' }}}
 .planning-table{margin-bottom:24px;table-layout:fixed}
 .planning-table:last-of-type{margin-bottom:0}
+.unavailability-summary{margin-top:18px}
+.unavailability-summary h2{font-size:{{ font_size + 2 }}px;margin:0 0 4px}
+.unavailability-summary td,.unavailability-summary th{text-align:left;padding:2px 4px}
 </style>
-{# Une réservation répartie sur plusieurs véhicules a vehicle_id=None et porte
-   ses attributions dans des segments : sans eux, elle serait absente du PDF. #}
-{% set segments = segments|default([]) %}
-{% macro render_entry(reservation, slot_source, day) %}
-    <span class="badge text-bg-success">{{ slot_label(slot_source, day) }}</span>
-    {% set full_name = (reservation.user.first_name or '') ~ (' ' if reservation.user.first_name and reservation.user.last_name else '') ~ (reservation.user.last_name or '') %}
-    {% if full_name|trim %}
-        {% set reserver_name = full_name|trim %}
-    {% else %}
-        {% set reserver_name = reservation.user.name %}
-    {% endif %}
-    {% set purpose = reservation.purpose|default('', true)|trim %}
-    {% if not purpose %}
-        {% set purpose = 'Motif non renseigné' %}
-    {% endif %}
-    <div class="small text-muted reservation-details">{{ reserver_name }} — {{ purpose }}</div>
-{% endmacro %}
-{% macro render_day_cell(vehicle, day) %}
+{# Le contenu des cases vient du même calcul que le planning affiché.
+   Auparavant ce gabarit refaisait les boucles de son côté : les
+   indisponibilités, ajoutées plus tard à l'écran, n'y sont jamais arrivées et
+   manquaient aussi dans l'archive annuelle.
+
+   Une réservation répartie sur plusieurs véhicules a vehicle_id=None et porte
+   ses attributions dans des segments : le calcul commun les prend en compte. #}
+{% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
+                            unavailabilities|default([], true), start, end, none) %}
+{% macro render_day_cell(vehicle, jour) %}
 <td>
-    {% for r in reservations if r.vehicle_id==vehicle.id and r.start_at.date() <= day.date() <= r.end_at.date() %}
-        {% set ns = namespace(has_seg=false) %}
-        {% for s in segments if s.reservation_id==r.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-            {% set ns.has_seg = true %}
-        {% endfor %}
-        {% if not ns.has_seg %}
-            {{ render_entry(r, r, day) }}
+    {% for item in grid.cells[vehicle.id][jour.key] %}
+        {% if item.kind == 'unav' %}
+            <span class="badge text-bg-dark">Indispo.</span>
+        {% else %}
+            <span class="badge text-bg-success">{{ item.slot }}</span>
+            {% set purpose = item.purpose|default('', true)|trim %}
+            <div class="small text-muted reservation-details">
+                {{ item.full_name }} — {{ purpose if purpose else 'Motif non renseigné' }}
+            </div>
         {% endif %}
-    {% endfor %}
-    {% for s in segments if s.vehicle_id==vehicle.id and s.start_at.date() <= day.date() <= s.end_at.date() %}
-        {{ render_entry(s.reservation, s, day) }}
     {% endfor %}
 </td>
 {% endmacro %}
@@ -72,8 +72,7 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 <tr>
     <th class="sticky">Véhicule</th>
     {% for i in day_range %}
-        {% set day = start + timedelta(days=i) %}
-        <th>{{ day.strftime("%d") }}</th>
+        <th>{{ grid.days[i].date.strftime("%d") }}</th>
     {% endfor %}
 </tr>
 </thead>
@@ -82,8 +81,7 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 <tr class="vehicle-row">
     <td class="sticky vehicle-info"><strong>{{ v.code }}</strong><br>{{ v.label }}</td>
     {% for i in day_range %}
-        {% set day = start + timedelta(days=i) %}
-        {{ render_day_cell(v, day) }}
+        {{ render_day_cell(v, grid.days[i]) }}
     {% endfor %}
 </tr>
 {% endfor %}
@@ -95,4 +93,28 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
 {{ render_table(second_half) }}
 {% endif %}
 </div>
+
+{# La case ne peut afficher qu'une pastille : le motif et la période de chaque
+   indisponibilité sont récapitulés ici, sous le tableau. #}
+{% set indispos = unavailabilities|default([], true) %}
+{% if indispos %}
+<div class="unavailability-summary">
+  <h2>Indisponibilités</h2>
+  <table>
+    <thead><tr><th>Véhicule</th><th>Période</th><th>Motif</th></tr></thead>
+    <tbody>
+      {% for un in indispos %}
+      <tr>
+        <td><strong>{{ un.vehicle.code }}</strong></td>
+        <td>
+          du {{ un.start_at.strftime('%d/%m/%Y') }}
+          {% if un.end_at %}au {{ un.end_at.strftime('%d/%m/%Y') }}{% else %}jusqu'à nouvel ordre{% endif %}
+        </td>
+        <td>{{ un.label }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 </body></html>

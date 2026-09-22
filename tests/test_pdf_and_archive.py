@@ -150,3 +150,160 @@ def test_archive_year_service_has_no_purge_flag():
     for commande in commandes:
         assert "archive_year.py" in commande
         assert "--purge" not in commande, commande
+
+
+# --- indisponibilités : absentes des PDF jusqu'ici --------------------------
+#
+# Le gabarit refaisait ses propres boucles sur les réservations. Les
+# indisponibilités, ajoutées plus tard au planning affiché, ne sont jamais
+# arrivées jusqu'ici : ni l'export mensuel ni l'archive annuelle ne les
+# chargeaient. Un véhicule en panne apparaissait donc libre sur le papier.
+
+from models import VehicleUnavailability
+
+
+def _indispo(vehicle, debut, fin=None, categorie="mecanique", details=None):
+    un = VehicleUnavailability(vehicle_id=vehicle.id, start_at=debut, end_at=fin,
+                               category=categorie, details=details)
+    db.session.add(un)
+    db.session.commit()
+    return un
+
+
+def test_pdf_marks_unavailable_days(ctx):
+    _, v1, v2, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
+                  unavailabilities=list(VehicleUnavailability.query.all()))
+    # Trois jours couverts : 10, 11 et 12 mars.
+    assert html.count("Indispo.") == 3
+
+
+def test_pdf_marks_the_right_vehicle(ctx):
+    """La pastille doit tomber sur la ligne du véhicule en panne."""
+    _, v1, v2, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 10))
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
+                  unavailabilities=list(VehicleUnavailability.query.all()))
+    lignes = html.split('class="vehicle-row"')
+    ligne_v1 = [l for l in lignes if "VL1" in l][0]
+    ligne_v2 = [l for l in lignes if "VL2" in l][0]
+    assert "Indispo." in ligne_v1
+    assert "Indispo." not in ligne_v2
+
+
+def test_pdf_recaps_reason_and_period(ctx):
+    """La case ne tient qu'une pastille : le motif est récapitulé dessous."""
+    _, v1, v2, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
+                  unavailabilities=list(VehicleUnavailability.query.all()))
+    recap = html.split('class="unavailability-summary"')[1]
+    assert "Panne mécanique – embrayage" in recap
+    assert "du 10/03/2026" in recap and "au 12/03/2026" in recap
+
+
+def test_pdf_handles_open_ended_unavailability(ctx):
+    _, v1, v2, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 25), None, categorie="carrosserie")
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
+                  unavailabilities=list(VehicleUnavailability.query.all()))
+    # Du 25 au 31 mars inclus.
+    assert html.count("Indispo.") == 7
+    assert "jusqu'à nouvel ordre" in html
+
+
+def test_pdf_template_tolerates_missing_unavailabilities(ctx):
+    """Un appelant qui ne les passe pas ne doit pas planter."""
+    _, v1, v2, r = _fixture_segmentee()
+    html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[])
+    assert "Planning" in html
+    # La règle CSS porte le même nom : on vise la section, pas la feuille.
+    assert "<h2>Indisponibilités</h2>" not in html
+
+
+def _espionner_rendu(monkeypatch):
+    """Capturer les arguments passés au gabarit PDF."""
+    import flask
+    import app as app_module
+    captures = {}
+    vrai = flask.render_template
+
+    def espion(nom, **kw):
+        if nom == "pdf_month.html":
+            captures.update(kw)
+        return vrai(nom, **kw)
+
+    monkeypatch.setattr(flask, "render_template", espion)
+    monkeypatch.setattr(app_module, "render_template", espion)
+    return captures
+
+
+def test_export_route_passes_unavailabilities(ctx, monkeypatch):
+    _, v1, _, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
+    admin = User(name="Chef Alex", first_name="Alex", last_name="Chef", username="chefa",
+                 email="c@ex.fr", role=User.ROLE_ADMIN, status="active", password_hash="x")
+    db.session.add(admin)
+    db.session.commit()
+
+    captures = _espionner_rendu(monkeypatch)
+    client = app.test_client()
+    with client.session_transaction() as s:
+        s["uid"] = admin.id
+        s["pwd_stamp"] = admin.session_stamp(app.config["SECRET_KEY"])
+    reponse = client.get("/export/pdf/month?y=2026&m=3")
+
+    assert reponse.status_code == 200
+    assert reponse.mimetype == "application/pdf"
+    assert len(captures.get("unavailabilities", [])) == 1
+
+
+def test_annual_archive_passes_unavailabilities(ctx, monkeypatch, tmp_path):
+    """L'archive est la trace permanente : elle doit montrer le mois tel qu'il
+    a été vécu, pannes comprises."""
+    import tools.archive_year as ay
+
+    _, v1, _, _ = _fixture_segmentee()
+    _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
+
+    captures = _espionner_rendu(monkeypatch)
+    monkeypatch.setattr(ay, "app", app)
+    ok = ay.generate_pdf_for_month(2026, 3, str(tmp_path / "mars.pdf"))
+
+    assert ok, "le PDF d'archive n'a pas été produit"
+    assert len(captures.get("unavailabilities", [])) == 1
+
+
+def test_archive_tool_imports_match_the_application():
+    """L'outil importait « month_year_label », un nom que app.py n'a jamais
+    exporté sans tiret bas : l'archive annuelle plantait dès l'import et
+    n'avait donc jamais produit le moindre PDF."""
+    import ast
+    import inspect
+    import textwrap
+
+    import app as app_module
+    import tools.archive_year as ay
+
+    arbre = ast.parse(textwrap.dedent(inspect.getsource(ay.generate_pdf_for_month)))
+    manquants = [
+        alias.name
+        for noeud in ast.walk(arbre)
+        if isinstance(noeud, ast.ImportFrom) and noeud.module == "app"
+        for alias in noeud.names
+        if not hasattr(app_module, alias.name)
+    ]
+    assert not manquants, f"noms absents de app.py : {manquants}"
+
+
+def test_pdf_badges_keep_their_colour_without_internet():
+    """Les couleurs venaient de la feuille Bootstrap, téléchargée au moment de
+    produire le PDF : sans accès au CDN, les pastilles devenaient invisibles
+    sur le papier."""
+    import pathlib
+
+    gabarit = pathlib.Path("templates/pdf_month.html").read_text(encoding="utf-8")
+    style = gabarit.split("<style>")[1].split("</style>")[0]
+    assert "text-bg-success{background-color:#02b875" in style
+    assert "text-bg-dark{background-color:#343a40" in style

@@ -1919,6 +1919,15 @@ def _period_label(start, end):
     return f"du {start.strftime('%d/%m/%Y')} au {end.strftime('%d/%m/%Y')}"
 
 
+def _display_name(user):
+    """« Prénom Nom », ou le nom enregistré si l'un des deux manque."""
+
+    if user is None:
+        return ""
+    parties = [p for p in (user.first_name, user.last_name) if p]
+    return " ".join(parties) if parties else (user.name or "")
+
+
 def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end, user):
     """Pré-calculer le contenu de chaque case du planning.
 
@@ -1954,11 +1963,14 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
         if case is not None:
             case[jour["key"]].append(item)
 
-    def item(kind, *, vehicle, name, slot, purpose, period, url):
+    def item(kind, *, vehicle, name, slot, purpose, period, url, full_name=""):
         return {
             "kind": kind,
             "vehicle": vehicle.code,
             "name": name,
+            # Le PDF imprime « Prénom Nom », l'écran l'identifiant « Nom Prénom » :
+            # les deux formes voyagent ensemble plutôt que d'être recalculées.
+            "full_name": full_name or name,
             "slot": slot,
             "letter": "I" if kind == "unav" else _SLOT_LETTERS.get(slot, "J"),
             "purpose": purpose or "",
@@ -2024,6 +2036,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     "res",
                     vehicle=vehicle,
                     name=r.user.name if r.user else "",
+                    full_name=_display_name(r.user),
                     slot=reservation_slot_label(r, jour["date"]),
                     purpose=r.purpose,
                     period=_period_label(r.start_at, r.end_at),
@@ -2049,6 +2062,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     "res",
                     vehicle=vehicle,
                     name=r.user.name if r and r.user else "",
+                    full_name=_display_name(r.user if r else None),
                     slot=reservation_slot_label(s, jour["date"]),
                     purpose=r.purpose if r else "",
                     period=_period_label(s.start_at, s.end_at),
@@ -2651,27 +2665,9 @@ def export_pdf_month():
     m = int(request.args.get("m", datetime.today().month))
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
-    vehicles = Vehicle.query.order_by(Vehicle.code).all()
-    res = Reservation.query.filter(
-        Reservation.status == "approved",
-        Reservation.start_at < end,
-        Reservation.end_at > start,
-    ).all()
-    segs = ReservationSegment.query.join(Reservation).filter(
-        Reservation.status == "approved",
-        ReservationSegment.start_at < end,
-        ReservationSegment.end_at > start,
-    ).all()
-    html = render_template(
-        "pdf_month.html",
-        vehicles=vehicles,
-        reservations=res,
-        segments=segs,
-        start=start,
-        end=end,
-        slot_label=reservation_slot_label,
-        timedelta=timedelta,
-    )
+    # Même source que le planning affiché : le PDF oubliait les
+    # indisponibilités, qui n'étaient tout simplement pas chargées.
+    html = render_template("pdf_month.html", **calendar_payload(start, end))
     pdf = HTML(string=html).write_pdf()
     return send_file(
         BytesIO(pdf),
