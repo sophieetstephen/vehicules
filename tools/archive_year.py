@@ -61,10 +61,15 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
 
     from weasyprint import HTML
     from flask import render_template
+    from sqlalchemy import or_
     from app import (
         Vehicle, Reservation as ReservationModel,
         ReservationSegment as SegmentModel,
-        reservation_slot_label, month_year_label
+        VehicleUnavailability as UnavailabilityModel,
+        reservation_slot_label,
+        # app.py n'a jamais exporte ce nom sans tiret bas : l'import echouait,
+        # et l'archive annuelle n'a donc jamais produit le moindre PDF.
+        _month_year_label as month_year_label,
     )
 
     # Calculate month boundaries
@@ -74,7 +79,9 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
     else:
         end = datetime(year, month + 1, 1)
 
-    with app.app_context():
+    # Contexte de requete et non simple contexte d'application : le gabarit
+    # appelle url_for() pour sa feuille de style, ce qui echoue sinon.
+    with app.test_request_context("/"):
         vehicles = Vehicle.query.order_by(Vehicle.code).all()
         reservations = ReservationModel.query.filter(
             ReservationModel.status == "approved",
@@ -90,11 +97,23 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
             SegmentModel.end_at >= start
         ).all()
 
+        # Sans elles, l'archive laisse croire qu'un vehicule etait disponible
+        # alors qu'il etait en panne ou en entretien. C'est la trace
+        # permanente : elle doit refleter le mois tel qu'il a ete vecu.
+        unavailabilities = UnavailabilityModel.query.filter(
+            UnavailabilityModel.start_at < end,
+            or_(
+                UnavailabilityModel.end_at.is_(None),
+                UnavailabilityModel.end_at >= start,
+            ),
+        ).all()
+
         html_content = render_template(
             "pdf_month.html",
             vehicles=vehicles,
             reservations=reservations,
             segments=segments,
+            unavailabilities=unavailabilities,
             start=start,
             end=end,
             slot_label=reservation_slot_label,
