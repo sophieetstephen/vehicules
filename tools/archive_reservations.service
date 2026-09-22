@@ -3,5 +3,8 @@ Description=Archivage des anciennes reservations Vehicules
 
 [Service]
 Type=oneshot
-WorkingDirectory=/workspace/vehicules
-ExecStart=/workspace/vehicules/venv/bin/python tools/archive_reservations.py --days 7
+# Le script a besoin de la base et des dependances de l'application : on le
+# lance dans le conteneur, comme l'archivage annuel. Le fichier portait
+# auparavant /workspace/vehicules/venv/bin/python, chemin d'une autre machine :
+# le service aurait echoue a la premiere execution.
+ExecStart=/usr/bin/docker exec vehicules python tools/archive_reservations.py --days 7
