@@ -175,8 +175,9 @@ def test_pdf_marks_unavailable_days(ctx):
     _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
     html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
                   unavailabilities=list(VehicleUnavailability.query.all()))
+    grille = html.split("<tbody>")[1].split("</tbody>")[0]
     # Trois jours couverts : 10, 11 et 12 mars.
-    assert html.count("Indispo.") == 3
+    assert grille.count("pastille-unav") == 3
 
 
 def test_pdf_marks_the_right_vehicle(ctx):
@@ -185,11 +186,13 @@ def test_pdf_marks_the_right_vehicle(ctx):
     _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 10))
     html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
                   unavailabilities=list(VehicleUnavailability.query.all()))
-    lignes = html.split('class="vehicle-row"')
+    # Couper a </tr> : sinon la derniere ligne englobe la legende, qui porte
+    # elle aussi une pastille.
+    lignes = [bloc.split("</tr>")[0] for bloc in html.split('class="vehicle-row"')[1:]]
     ligne_v1 = [l for l in lignes if "VL1" in l][0]
     ligne_v2 = [l for l in lignes if "VL2" in l][0]
-    assert "Indispo." in ligne_v1
-    assert "Indispo." not in ligne_v2
+    assert "pastille-unav" in ligne_v1
+    assert "pastille-unav" not in ligne_v2
 
 
 def test_pdf_recaps_reason_and_period(ctx):
@@ -198,7 +201,7 @@ def test_pdf_recaps_reason_and_period(ctx):
     _indispo(v1, datetime(2026, 3, 10), datetime(2026, 3, 12), details="embrayage")
     html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
                   unavailabilities=list(VehicleUnavailability.query.all()))
-    recap = html.split('class="unavailability-summary"')[1]
+    recap = html.split("<h2>Indisponibilités</h2>")[1]
     assert "Panne mécanique – embrayage" in recap
     assert "du 10/03/2026" in recap and "au 12/03/2026" in recap
 
@@ -209,7 +212,8 @@ def test_pdf_handles_open_ended_unavailability(ctx):
     html = _rendu(vehicles=[v1, v2], reservations=[], segments=[],
                   unavailabilities=list(VehicleUnavailability.query.all()))
     # Du 25 au 31 mars inclus.
-    assert html.count("Indispo.") == 7
+    grille = html.split("<tbody>")[1].split("</tbody>")[0]
+    assert grille.count("pastille-unav") == 7
     assert "jusqu'à nouvel ordre" in html
 
 
@@ -218,7 +222,6 @@ def test_pdf_template_tolerates_missing_unavailabilities(ctx):
     _, v1, v2, r = _fixture_segmentee()
     html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[])
     assert "Planning" in html
-    # La règle CSS porte le même nom : on vise la section, pas la feuille.
     assert "<h2>Indisponibilités</h2>" not in html
 
 
@@ -305,8 +308,8 @@ def test_pdf_badges_keep_their_colour_without_internet():
 
     gabarit = pathlib.Path("templates/pdf_month.html").read_text(encoding="utf-8")
     style = gabarit.split("<style>")[1].split("</style>")[0]
-    assert "text-bg-success{background-color:#02b875" in style
-    assert "text-bg-dark{background-color:#343a40" in style
+    assert ".pastille-res{background:#15803d}" in style
+    assert ".pastille-unav{background:#343a40}" in style
 
 
 # --- où atterrissent les PDF -------------------------------------------------
@@ -382,3 +385,100 @@ def test_volatile_run_reports_failure():
     source = inspect.getsource(ay.main)
     fin = source.split("if volatile:")[-1]
     assert "return 1" in fin, "une archive perdue ne doit pas passer pour un succès"
+
+
+# --- des lignes assez basses pour qu'une page ne les coupe pas --------------
+#
+# Signalé sur un export réel : la ligne du VTP était tranchée horizontalement,
+# « VTP / Gouest » en bas d'une page et « véhicule 9 places » en haut de la
+# suivante. Les cases portaient le créneau, le nom et le motif sur quatre à
+# cinq lignes ; WeasyPrint ne sait pas garder une ligne de tableau entière, ni
+# avec break-inside ni avec page-break-inside. La seule correction fiable est
+# de raccourcir les lignes.
+
+def test_month_is_one_single_grid(ctx):
+    """Le mois était coupé en deux quinzaines, sur deux pages : une
+    réservation à cheval sur le 15 apparaissait en deux morceaux."""
+    _, v1, v2, _ = _fixture_segmentee()
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[])
+    assert html.count('<table class="planning-table">') == 1
+    grille = html.split('<table class="planning-table">')[1].split("</table>")[0]
+    for jour in ("01", "15", "16", "31"):
+        assert f"<br>{jour}" in grille, jour
+
+
+def test_grid_cell_holds_only_a_badge(ctx):
+    """C'est ce qui garde les lignes basses : aucun texte libre dans la case."""
+    u, v1, v2, _ = _fixture_segmentee()
+    r = Reservation(user_id=u.id, vehicle_id=v1.id, start_at=datetime(2026, 3, 5, 8),
+                    end_at=datetime(2026, 3, 5, 12), status="approved",
+                    purpose="Transport de materiel encombrant")
+    db.session.add(r)
+    db.session.commit()
+    html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[])
+    grille = html.split('<table class="planning-table">')[1].split("</table>")[0]
+    assert "pastille-res" in grille
+    assert "Transport de materiel encombrant" not in grille
+    assert "Dupont" not in grille
+    assert "Matin" not in grille
+
+
+def test_details_are_listed_below(ctx):
+    u, v1, v2, _ = _fixture_segmentee()
+    r = Reservation(user_id=u.id, vehicle_id=v1.id, start_at=datetime(2026, 3, 5, 8),
+                    end_at=datetime(2026, 3, 5, 12), status="approved",
+                    purpose="Transport de materiel")
+    db.session.add(r)
+    db.session.commit()
+    html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[])
+    detail = html.split("<h2>Réservations du mois</h2>")[1]
+    assert "VL1" in detail
+    assert "Jean Dupont" in detail
+    assert "le 05/03" in detail and "Matin" in detail
+    assert "Transport de materiel" in detail
+
+
+def test_consecutive_days_make_one_line(ctx):
+    """Une réservation de trois jours ne doit pas produire trois lignes."""
+    u, v1, v2, _ = _fixture_segmentee()
+    r = Reservation(user_id=u.id, vehicle_id=v1.id, start_at=datetime(2026, 3, 5, 8),
+                    end_at=datetime(2026, 3, 7, 17), status="approved", purpose="Stage")
+    db.session.add(r)
+    db.session.commit()
+    html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[])
+    detail = html.split("<h2>Réservations du mois</h2>")[1]
+    assert detail.count("Stage") == 1
+    assert "du 05/03 au 07/03" in detail
+
+
+def test_partially_reassigned_reservation_appears_on_both_vehicles(ctx):
+    """Le jour repris par un autre véhicule d'un côté, le reste de l'autre.
+
+    Une première version parcourait réservations et segments séparément et
+    perdait purement et simplement les jours non réattribués.
+    """
+    u, v1, v2, _ = _fixture_segmentee()
+    r = Reservation(user_id=u.id, vehicle_id=v1.id, start_at=datetime(2026, 3, 20, 8),
+                    end_at=datetime(2026, 3, 22, 17), status="approved", purpose="Renfort")
+    db.session.add(r)
+    db.session.commit()
+    seg = ReservationSegment(reservation_id=r.id, vehicle_id=v2.id,
+                             start_at=datetime(2026, 3, 21, 8), end_at=datetime(2026, 3, 21, 17))
+    db.session.add(seg)
+    db.session.commit()
+
+    html = _rendu(vehicles=[v1, v2], reservations=[r], segments=[seg])
+    detail = html.split("<h2>Réservations du mois</h2>")[1]
+    lignes = [l for l in detail.split("<tr>") if "Renfort" in l]
+    assert len(lignes) == 3, "le 20 sur VL1, le 21 sur VL2, le 22 sur VL1"
+    assert any("VL2" in l and "le 21/03" in l for l in lignes)
+    assert sum(1 for l in lignes if "VL1" in l) == 2
+
+
+def test_weekday_letters_are_unambiguous(ctx):
+    """Une seule initiale confondait mardi et mercredi."""
+    _, v1, v2, _ = _fixture_segmentee()
+    html = _rendu(vehicles=[v1, v2], reservations=[], segments=[])
+    entete = html.split("<thead>")[1].split("</thead>")[0]
+    for deux_lettres in ("lu", "ma", "me", "je", "ve", "sa", "di"):
+        assert f"{deux_lettres}<br>" in entete, deux_lettres

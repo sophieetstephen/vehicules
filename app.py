@@ -370,6 +370,7 @@ def _inject_locale_helpers():
         "static_url": static_url,
         # Défini plus bas dans le fichier : la résolution a lieu à l'appel.
         "calendar_grid": calendar_grid,
+        "calendar_entries": calendar_entries,
     }
 
 
@@ -1928,6 +1929,63 @@ def _display_name(user):
     return " ".join(parties) if parties else (user.name or "")
 
 
+def _source(kind, objet):
+    """Identité d'une occupation, pour regrouper ses jours consécutifs.
+
+    ``id`` vaut None tant que l'objet n'est pas enregistré : deux réservations
+    distinctes partageraient alors la même clé et seraient fondues en une.
+    """
+
+    return (kind, objet.id if objet.id is not None else id(objet))
+
+
+def calendar_entries(grid):
+    """Une ligne par occupation continue, pour la liste détaillée du PDF.
+
+    Dans la grille imprimée, une case ne porte qu'une pastille : le nom et le
+    motif y tenaient sur quatre ou cinq lignes, ce qui rendait les lignes si
+    hautes qu'une page finissait par les couper en deux. Le détail est donc
+    repris dessous, sous forme de liste.
+
+    Elle est construite à partir de la grille, donc à partir de la même source
+    de vérité que les cases : une réservation dont seuls certains jours ont été
+    réattribués à un autre véhicule apparaît correctement des deux côtés, ce
+    qu'un parcours séparé des réservations et des segments manquait.
+    """
+
+    presence = {}
+    for jour in grid["days"]:
+        for vehicle_id, cases in grid["cells"].items():
+            for element in cases[jour["key"]]:
+                if element["kind"] == "unav":
+                    continue  # récapitulées dans leur propre tableau
+                cle = (vehicle_id, element["source"])
+                suivi = presence.setdefault(cle, {"item": element, "jours": []})
+                suivi["jours"].append(jour["date"])
+
+    lignes = []
+    for suivi in presence.values():
+        element, jours = suivi["item"], suivi["jours"]
+        debut = jours[0]
+        for courant, suivant in zip(jours, jours[1:] + [None]):
+            # Une interruption d'au moins un jour ferme la periode en cours.
+            if suivant is None or (suivant - courant).days > 1:
+                lignes.append(
+                    {
+                        "vehicle": element["vehicle"],
+                        "start": debut,
+                        "end": courant,
+                        "name": element["full_name"] or element["name"],
+                        "slot": element["slot"] if debut == courant else "",
+                        "purpose": (element["purpose"] or "").strip(),
+                    }
+                )
+                debut = suivant
+
+    lignes.sort(key=lambda l: (l["start"], l["vehicle"]))
+    return lignes
+
+
 def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end, user):
     """Pré-calculer le contenu de chaque case du planning.
 
@@ -1963,9 +2021,12 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
         if case is not None:
             case[jour["key"]].append(item)
 
-    def item(kind, *, vehicle, name, slot, purpose, period, url, full_name=""):
+    def item(kind, *, vehicle, name, slot, purpose, period, url, full_name="", source=None):
         return {
             "kind": kind,
+            # De quelle occupation vient cette case : permet de regrouper les
+            # jours consecutifs sans refaire le raisonnement des segments.
+            "source": source,
             "vehicle": vehicle.code,
             "name": name,
             # Le PDF imprime « Prénom Nom », l'écran l'identifiant « Nom Prénom » :
@@ -2004,6 +2065,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     slot="Indisponible",
                     purpose="",
                     period=_period_label(un.start_at, un.end_at),
+                    source=_source("unav", un),
                     url=url_for("admin_vehicle_unavailability", vehicle_id=vehicle.id)
                     if est_admin
                     else None,
@@ -2040,6 +2102,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     slot=reservation_slot_label(r, jour["date"]),
                     purpose=r.purpose,
                     period=_period_label(r.start_at, r.end_at),
+                    source=_source("res", r),
                     url=url_for("manage_request", rid=r.id, day=jour["key"])
                     if est_admin
                     else None,
@@ -2066,6 +2129,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     slot=reservation_slot_label(s, jour["date"]),
                     purpose=r.purpose if r else "",
                     period=_period_label(s.start_at, s.end_at),
+                    source=_source("seg", s),
                     url=url_for("manage_segment", sid=s.id) if est_admin else None,
                 ),
             )

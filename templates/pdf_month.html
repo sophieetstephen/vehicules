@@ -1,107 +1,138 @@
 <!doctype html><html><head><meta charset="utf-8">
 <link href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/litera/bootstrap.min.css" rel="stylesheet">
 <link href="{{ url_for('static', filename='custom.css') }}" rel="stylesheet">
-{% set days = (end - start).days %}
-{% if days <= 28 %}
-    {% set font_size = 9 %}
-{% elif days <= 30 %}
-    {% set font_size = 8.5 %}
-{% elif days <= 31 %}
-    {% set font_size = 8 %}
-{% else %}
-    {% set font_size = 7.5 %}
-{% endif %}
-{% set first_half_limit = 15 if days > 15 else days %}
-{% set first_half = range(0, first_half_limit) %}
-{% set second_half = range(first_half_limit, days) %}
-{% set compact_layout = second_half|length > 15 %}
-{% if compact_layout %}
-    {% set font_size = 6.8 %}
-{% endif %}
 <style>
-@page{size:A3 landscape;margin:5mm}
-body{font-family:sans-serif;font-size:{{ font_size }}px}
+@page{size:A3 landscape;margin:8mm}
+body{font-family:sans-serif;font-size:9px;color:#1e293b}
+h1{font-size:15px;margin:0 0 8px}
+h2{font-size:11px;margin:14px 0 4px}
 table{width:100%;border-collapse:collapse}
-th,td{border:1px solid #999;padding:{{ '0 0.5px' if compact_layout else '1px 2px' }};vertical-align:top;text-align:center}
-th.sticky,td.sticky{position:sticky;left:0;background:#fff}
-.badge{padding:0.15rem 0.3rem;line-height:1.1;font-weight:600;border-radius:3px}
-/* Couleurs figées ici : elles venaient de la feuille Bootstrap téléchargée au
-   moment de produire le PDF. Sans accès à Internet — ou si ce domaine est
-   bloqué sur le réseau du centre — les pastilles devenaient invisibles. Ces
-   valeurs sont celles du thème, l'aspect est inchangé. */
-.badge.text-bg-success{background-color:#02b875;color:#fff}
-.badge.text-bg-dark{background-color:#343a40;color:#fff}
-.reservation-details{line-height:1.2;margin-top:1px}
-.vehicle-info{min-width:{{ '95px' if compact_layout else '120px' }}}
-.planning-table{margin-bottom:24px;table-layout:fixed}
-.planning-table:last-of-type{margin-bottom:0}
-.unavailability-summary{margin-top:18px}
-.unavailability-summary h2{font-size:{{ font_size + 2 }}px;margin:0 0 4px}
-.unavailability-summary td,.unavailability-summary th{text-align:left;padding:2px 4px}
-</style>
-{# Le contenu des cases vient du même calcul que le planning affiché.
-   Auparavant ce gabarit refaisait les boucles de son côté : les
-   indisponibilités, ajoutées plus tard à l'écran, n'y sont jamais arrivées et
-   manquaient aussi dans l'archive annuelle.
+th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:center}
 
-   Une réservation répartie sur plusieurs véhicules a vehicle_id=None et porte
-   ses attributions dans des segments : le calcul commun les prend en compte. #}
+/* --- Grille du mois -------------------------------------------------------
+   Les cases portaient le créneau, le nom et le motif : quatre à cinq lignes
+   de texte dans une colonne de quelques millimètres. Les lignes devenaient si
+   hautes qu'une page finissait par en couper une en deux — le haut sur une
+   page, le bas sur la suivante. WeasyPrint ne sait pas garder une ligne de
+   tableau entière, ni avec break-inside ni avec page-break-inside : la seule
+   correction fiable est de raccourcir les lignes.
+
+   La case ne porte donc plus qu'une pastille, et le détail est repris dans la
+   liste qui suit. Le mois entier tient alors sur une seule grille : une
+   réservation à cheval sur le 15 n'est plus scindée en deux tableaux. */
+.planning-table{table-layout:fixed}
+.planning-table thead{display:table-header-group}
+.planning-table th{font-weight:600}
+.planning-table .day-col{width:2.72%}
+.planning-table .vehicle-info{width:9%;text-align:left;line-height:1.15}
+.planning-table .vehicle-info small{color:#64748b}
+.planning-table td{height:16px}
+.weekend{background:#eef2f7}
+
+.pastille{display:inline-block;min-width:14px;padding:1px 0;border-radius:3px;
+  font-size:8px;font-weight:700;color:#fff;line-height:1.2;text-align:center}
+.pastille-res{background:#15803d}
+.pastille-unav{background:#343a40}
+
+.legende{margin-top:6px;font-size:8px;color:#64748b}
+.legende .pastille{margin-right:2px}
+.legende span{margin-right:12px}
+
+/* --- Listes ---------------------------------------------------------------
+   Des lignes d'une ou deux lignes de texte : le risque de coupure disparaît.
+   L'en-tête se répète si la liste déborde sur la page suivante. */
+.detail table{margin-top:2px}
+.detail thead{display:table-header-group}
+.detail th,.detail td{text-align:left;padding:2px 4px}
+.detail .col-vehicule{width:7%}
+.detail .col-periode{width:20%}
+.detail .col-personne{width:18%}
+.vide{color:#64748b;font-style:italic}
+</style>
+{# Le contenu des cases vient du même calcul que le planning affiché : les
+   deux ne peuvent pas diverger. #}
 {% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
                             unavailabilities|default([], true), start, end, none) %}
-{% macro render_day_cell(vehicle, jour) %}
-<td>
-    {% for item in grid.cells[vehicle.id][jour.key] %}
-        {% if item.kind == 'unav' %}
-            <span class="badge text-bg-dark">Indispo.</span>
-        {% else %}
-            <span class="badge text-bg-success">{{ item.slot }}</span>
-            {% set purpose = item.purpose|default('', true)|trim %}
-            <div class="small text-muted reservation-details">
-                {{ item.full_name }} — {{ purpose if purpose else 'Motif non renseigné' }}
-            </div>
-        {% endif %}
-    {% endfor %}
-</td>
-{% endmacro %}
+{% set entrees = calendar_entries(grid) %}
+{% set indispos = unavailabilities|default([], true) %}
 </head><body>
+
 <h1>Planning véhicules — {{ month_year_label(start) }}</h1>
-<div class="table-responsive">
-{% macro render_table(day_range) %}
+
 <table class="planning-table">
 <thead>
 <tr>
-    <th class="sticky">Véhicule</th>
-    {% for i in day_range %}
-        <th>{{ grid.days[i].date.strftime("%d") }}</th>
-    {% endfor %}
+  <th class="vehicle-info">Véhicule</th>
+  {% for jour in grid.days %}
+    <th class="day-col{{ ' weekend' if jour.weekend }}">
+      {# Deux lettres : l'initiale seule confondait mardi et mercredi. #}
+      {{ weekday_abbr(jour.date)[:2] }}<br>{{ jour.date.strftime("%d") }}
+    </th>
+  {% endfor %}
 </tr>
 </thead>
 <tbody>
 {% for v in vehicles %}
 <tr class="vehicle-row">
-    <td class="sticky vehicle-info"><strong>{{ v.code }}</strong><br>{{ v.label }}</td>
-    {% for i in day_range %}
-        {{ render_day_cell(v, grid.days[i]) }}
-    {% endfor %}
+  <td class="vehicle-info"><strong>{{ v.code }}</strong>{% if v.label %}<br><small>{{ v.label }}</small>{% endif %}</td>
+  {% for jour in grid.days %}
+    <td class="day-col{{ ' weekend' if jour.weekend }}">
+      {%- for item in grid.cells[v.id][jour.key] -%}
+        <span class="pastille pastille-{{ 'unav' if item.kind == 'unav' else 'res' }}">{{ item.letter }}</span>
+      {%- endfor -%}
+    </td>
+  {% endfor %}
 </tr>
 {% endfor %}
 </tbody>
 </table>
-{% endmacro %}
-{{ render_table(first_half) }}
-{% if second_half|length > 0 %}
-{{ render_table(second_half) }}
-{% endif %}
+
+<div class="legende">
+  <span><span class="pastille pastille-res">M</span>Matin</span>
+  <span><span class="pastille pastille-res">A</span>Après-midi</span>
+  <span><span class="pastille pastille-res">J</span>Journée</span>
+  <span><span class="pastille pastille-unav">I</span>Indisponible</span>
 </div>
 
-{# La case ne peut afficher qu'une pastille : le motif et la période de chaque
-   indisponibilité sont récapitulés ici, sous le tableau. #}
-{% set indispos = unavailabilities|default([], true) %}
-{% if indispos %}
-<div class="unavailability-summary">
+<div class="detail">
+  <h2>Réservations du mois</h2>
+  {% if entrees %}
+  <table>
+    <thead><tr>
+      <th class="col-vehicule">Véhicule</th>
+      <th class="col-periode">Période</th>
+      <th class="col-personne">Demandeur</th>
+      <th>Motif</th>
+    </tr></thead>
+    <tbody>
+      {% for e in entrees %}
+      <tr>
+        <td><strong>{{ e.vehicle }}</strong></td>
+        <td>
+          {% if e.start == e.end %}
+            le {{ e.start.strftime('%d/%m') }}{% if e.slot %} — {{ e.slot }}{% endif %}
+          {% else %}
+            du {{ e.start.strftime('%d/%m') }} au {{ e.end.strftime('%d/%m') }}
+          {% endif %}
+        </td>
+        <td>{{ e.name }}</td>
+        <td>{{ e.purpose if e.purpose else 'Motif non renseigné' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="vide">Aucune réservation ce mois-ci.</p>
+  {% endif %}
+
+  {% if indispos %}
   <h2>Indisponibilités</h2>
   <table>
-    <thead><tr><th>Véhicule</th><th>Période</th><th>Motif</th></tr></thead>
+    <thead><tr>
+      <th class="col-vehicule">Véhicule</th>
+      <th class="col-periode">Période</th>
+      <th>Motif</th>
+    </tr></thead>
     <tbody>
       {% for un in indispos %}
       <tr>
@@ -115,6 +146,7 @@ th.sticky,td.sticky{position:sticky;left:0;background:#fff}
       {% endfor %}
     </tbody>
   </table>
+  {% endif %}
 </div>
-{% endif %}
+
 </body></html>
