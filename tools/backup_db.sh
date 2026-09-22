@@ -7,6 +7,9 @@ set -euo pipefail
 #   ENV_FILE                 Path to .env file to backup (optional).
 #   COMPRESS                 Whether to gzip the backup (default: true).
 #   REMOTE_URI               rclone destination to receive the backup (optional).
+#   ARCHIVE_DIR              Directory holding the yearly PDF archives
+#                            (default: backups/archives). Copied to
+#                            REMOTE_URI/archives when REMOTE_URI is set.
 #   RCLONE_CONFIG            Path to a custom rclone configuration file (optional).
 #   GDRIVE_SERVICE_ACCOUNT   Path to a Google Drive service account JSON file (optional).
 
@@ -94,6 +97,18 @@ if [ -n "${REMOTE_URI:-}" ]; then
   if [ -n "$ENV_BACKUP" ]; then
     if ! rclone "${RCLONE_ARGS[@]}" copy "$ENV_BACKUP" "$REMOTE_URI"; then
       echo "Error: failed to copy .env backup to remote destination '$REMOTE_URI'" >&2
+      exit 1
+    fi
+  fi
+
+  # Les PDF d'archive sont la trace permanente qui justifie, a terme, de
+  # supprimer les reservations de l'annee. Ils ne partaient nulle part : une
+  # panne du SSD les emportait tous. rclone copy est incremental, seuls les
+  # fichiers nouveaux traversent le reseau.
+  ARCHIVE_DIR="${ARCHIVE_DIR:-$BACKUP_DIR/archives}"
+  if [ -d "$ARCHIVE_DIR" ]; then
+    if ! rclone "${RCLONE_ARGS[@]}" copy "$ARCHIVE_DIR" "${REMOTE_URI%/}/archives"; then
+      echo "Error: failed to copy PDF archives to '${REMOTE_URI%/}/archives'" >&2
       exit 1
     fi
   fi
