@@ -299,7 +299,44 @@ export DB_PATH=instance/vehicules.db
 # (optionnel) export GDRIVE_SERVICE_ACCOUNT=/chemin/vers/service-account.json
 ```
 
-Dans `tools/backup_db.service`, ajustez les directives `Environment=DB_PATH=…`, `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers les chemins adaptés avant de relancer le service.
+Dans `tools/vehicules-backup.service`, ajustez les directives `Environment=DB_PATH=…`, `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers les chemins adaptés avant de relancer le service.
+
+### Installer les minuteurs
+
+Les fichiers de `tools/` sont des modèles : tant qu'ils ne sont pas copiés dans
+`/etc/systemd/system/`, rien ne s'exécute automatiquement. Le nom du fichier
+devient le nom du service — gardez-le, un minuteur cherche le service de même
+nom.
+
+```bash
+sudo cp tools/vehicules-backup.service tools/vehicules-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now vehicules-backup.timer
+```
+
+Même principe pour l'archivage annuel (31 décembre à 23h55) :
+
+```bash
+sudo cp tools/archive_year.service tools/archive_year.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now archive_year.timer
+```
+
+Vérifier ce qui est réellement installé et la prochaine exécution :
+
+```bash
+systemctl list-timers --all | grep -i vehicul
+```
+
+Déclencher une sauvegarde immédiatement, sans attendre le minuteur :
+
+```bash
+sudo systemctl start vehicules-backup.service
+sudo journalctl -u vehicules-backup.service -n 30 --no-pager
+```
+
+La sauvegarde envoie vers `REMOTE_URI` la base, le `.env` et les archives PDF
+annuelles (`backups/archives` → `REMOTE_URI/archives`).
 
 ### Restaurer depuis Google Drive
 
