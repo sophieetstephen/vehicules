@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Envoi des e-mails – Véhicules{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-envelope-circle-check page-title-icon"></i>
+    Envoi des e-mails
+  </h1>
+</div>
+
+<p class="text-muted small max-w-720">
+  L'application prévient les utilisateurs par e-mail : identifiants d'un compte
+  qu'on vient de créer, réservation validée ou refusée. Cette page vérifie que
+  cet envoi fonctionne, sans avoir à ouvrir un terminal sur le Raspberry.
+</p>
+
+{% if manquants %}
+<div class="alert alert-warning max-w-720">
+  <i class="fa-solid fa-triangle-exclamation"></i>
+  <div>
+    La configuration est incomplète : il manque {{ manquants | join(', ') }}
+    dans le fichier <code>.env</code> du Raspberry.
+  </div>
+</div>
+{% endif %}
+
+<div class="card max-w-720 mb-4">
+  <div class="card-body">
+    <h2 class="h6">Configuration actuelle</h2>
+    <dl class="row mb-0 small">
+      <dt class="col-5 col-sm-4">Serveur d'envoi</dt>
+      <dd class="col-7 col-sm-8">{{ reglages.server or '—' }}</dd>
+
+      <dt class="col-5 col-sm-4">Port</dt>
+      <dd class="col-7 col-sm-8">{{ reglages.port or '—' }}{% if reglages.tls %} (chiffré){% endif %}</dd>
+
+      <dt class="col-5 col-sm-4">Compte utilisé</dt>
+      <dd class="col-7 col-sm-8">{{ reglages.username or '—' }}</dd>
+
+      <dt class="col-5 col-sm-4">Expéditeur</dt>
+      <dd class="col-7 col-sm-8">{{ reglages.sender or '—' }}</dd>
+
+      <dt class="col-5 col-sm-4">Clé d'application</dt>
+      <dd class="col-7 col-sm-8">
+        {% if reglages.password_length %}
+          enregistrée, {{ reglages.password_length }} caractères
+          {%- if reglages.password_length != 16 %}
+            <span class="text-warning">— une clé Google en compte seize</span>
+          {%- endif %}
+        {% else %}
+          <span class="text-danger">absente</span>
+        {% endif %}
+      </dd>
+    </dl>
+    {# La clé elle-même n'est jamais affichée : cette page reste consultable
+       depuis un téléphone, éventuellement devant quelqu'un. #}
+    <p class="text-muted small mt-3 mb-0">
+      La clé d'application n'est pas affichée, seulement sa longueur.
+    </p>
+  </div>
+</div>
+
+{% if resultat %}
+  {% if resultat.ok %}
+  <div class="alert alert-success max-w-720">
+    <i class="fa-solid fa-check-circle"></i>
+    <div>
+      Message de test envoyé à <strong>{{ resultat.destinataire }}</strong>.
+      Vérifiez votre boîte de réception, et les indésirables.
+    </div>
+  </div>
+  {% else %}
+  {# Un seul bloc apres l'icone : .alert est en display:flex, et chaque enfant
+     direct deviendrait une colonne etroite sur un telephone. #}
+  <div class="alert alert-danger max-w-720">
+    <i class="fa-solid fa-exclamation-circle"></i>
+    <div>
+      <strong>L'envoi a échoué.</strong>
+      {% if resultat.explication %}
+        <div class="mt-2">{{ resultat.explication }}</div>
+      {% endif %}
+      {% if resultat.detail %}
+        <details class="mt-2">
+          <summary class="small">Message technique du serveur</summary>
+          <code class="small d-block mt-1">{{ resultat.detail }}</code>
+        </details>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+{% endif %}
+
+<form method="post" class="max-w-720">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button class="btn btn-primary" type="submit">
+    <i class="fa-solid fa-paper-plane me-1"></i>Envoyer un message de test
+  </button>
+  <a class="btn btn-outline-secondary" href="{{ url_for('admin_users') }}">Retour</a>
+</form>
+
+<p class="text-muted small mt-3 max-w-720">
+  Le message part vers votre propre adresse ({{ user.email or 'aucune adresse enregistrée' }}),
+  jamais vers celle de quelqu'un d'autre.
+</p>
+
+{% endblock %}

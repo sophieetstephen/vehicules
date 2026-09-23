@@ -496,6 +496,14 @@ p {
   color: var(--color-info);
 }
 
+/* Un message technique de serveur n'a pas de mots courts : sans coupure, il
+   sortait de l'écran d'un téléphone. */
+.alert code,
+.alert pre {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 /* --- Boutons améliorés --- */
 .btn {
   font-weight: 500;

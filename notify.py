@@ -2,7 +2,7 @@ from email.message import EmailMessage
 import smtplib
 from config import Config
 
-def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "gestionvehiculestomer@gmail.com", profile: str = "gmail"):
+def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile: str = "gmail"):
     """Send an email using Gmail's SMTP service.
 
     The signature mirrors the previous msmtp-based helper to avoid breaking
@@ -15,8 +15,14 @@ def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "gestionveh
     else:
         to_list = list(to_addrs)
 
+    # L'adresse d'expediteur etait ecrite en dur alors que l'identifiant de
+    # connexion vient du .env : changer de compte Gmail sans toucher a cette
+    # ligne aurait fait refuser tous les envois.
+    expediteur = (sender or Config.MAIL_DEFAULT_SENDER or Config.MAIL_USERNAME
+                  or "gestionvehiculestomer@gmail.com")
+
     msg = EmailMessage()
-    msg["From"] = sender
+    msg["From"] = expediteur
     msg["To"] = ", ".join(to_list)
     msg["Subject"] = subject
     msg.set_content(body)
