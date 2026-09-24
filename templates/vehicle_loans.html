@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Administration – Prêts {{ vehicle.code }}{% endblock %}
+{% block content %}
+{# Prêts d'un véhicule à usage réservé. Hors prêt, il n'est attribuable à
+   aucune demande ; pendant un prêt, à n'importe laquelle. L'accord du
+   titulaire se demande de vive voix : l'application garde la trace de
+   l'administrateur qui a enregistré le prêt. #}
+<div class="page-header">
+  <h1 class="page-title">
+    <i class="fa-solid fa-user-shield page-title-icon"></i>
+    Prêts – {{ vehicle.code }}
+    <span class="text-muted fw-normal fs-6 ms-2">réservé à {{ vehicle.reserved_for }}</span>
+  </h1>
+  <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('admin_vehicles') }}">
+    <i class="fa-solid fa-arrow-left me-1"></i>Retour au parc
+  </a>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-body">
+        <h2 class="h5 mb-3">Prêter le véhicule</h2>
+        <p class="text-muted small">
+          Pendant cette période, {{ vehicle.code }} pourra être attribué à
+          n'importe quelle demande, comme un véhicule du parc. Une panne
+          déclarée l'emporte toujours. Pensez à obtenir l'accord de
+          {{ vehicle.reserved_for }} avant d'enregistrer.
+        </p>
+        <form method="post">
+          {{ form.hidden_tag() }}
+          <div class="row">
+            <div class="col-6 mb-3">
+              {{ form.start_date.label(class="form-label") }}
+              {{ form.start_date(class="form-control" + (" is-invalid" if form.start_date.errors else "")) }}
+              {% for e in form.start_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+            <div class="col-6 mb-3">
+              {{ form.end_date.label(class="form-label") }}
+              {{ form.end_date(class="form-control" + (" is-invalid" if form.end_date.errors else "")) }}
+              {% for e in form.end_date.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
+            </div>
+          </div>
+          <div class="mb-3">
+            {{ form.reason.label(class="form-label") }}
+            {{ form.reason(class="form-control", placeholder="ex : congés du chef de centre") }}
+          </div>
+          {{ form.submit(class="btn btn-primary") }}
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <h2 class="h5 mb-3">En cours et à venir</h2>
+    {% if current %}
+      {% for p in current %}
+      {% set en_cours = p.start_at <= now <= p.end_at %}
+      <div class="loan-card{{ ' loan-active' if en_cours }}">
+        <div class="loan-main">
+          <div class="loan-dates">
+            <i class="fa-solid fa-calendar-check me-1"></i>
+            Du {{ p.start_at.strftime('%d/%m/%Y') }} au {{ p.end_at.strftime('%d/%m/%Y') }}
+            {% if en_cours %}<span class="badge bg-success ms-2">En cours</span>{% endif %}
+          </div>
+          {% if p.reason %}<div class="loan-reason">{{ p.reason }}</div>{% endif %}
+          {% if p.creator %}
+          <div class="text-muted small">
+            enregistré par {{ p.creator.first_name }} {{ p.creator.last_name }}
+            {% if p.created_at %}le {{ p.created_at.strftime('%d/%m/%Y') }}{% endif %}
+          </div>
+          {% endif %}
+          {% if used.get(p.id) %}
+          <div class="small mt-2">
+            <strong>{{ used[p.id]|length }} réservation(s) sur ce prêt :</strong>
+            <ul class="mb-0 mt-1">
+              {% for r in used[p.id] %}
+              <li><a href="{{ url_for('manage_request', rid=r.id) }}">{{ r.start_at.strftime('%d/%m/%Y') }} · {{ r.user.first_name }} {{ r.user.last_name }}</a></li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('admin_vehicle_loan_delete', loan_id=p.id) }}"
+              onsubmit="return confirm('Retirer ce prêt ? Le véhicule reviendra à son usage réservé.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="btn btn-sm btn-outline-warning" type="submit">
+            <i class="fa-solid fa-rotate-left me-1"></i>Retirer
+          </button>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-muted">
+        Aucun prêt en cours ou à venir : {{ vehicle.code }} reste réservé à
+        {{ vehicle.reserved_for }} et n'est proposé à aucune demande.
+      </p>
+    {% endif %}
+
+    {% if past %}
+    <h2 class="h6 text-muted mt-4 mb-2">Historique</h2>
+    <ul class="list-unstyled small text-muted mb-0">
+      {% for p in past %}
+      <li>
+        {{ p.start_at.strftime('%d/%m/%Y') }} → {{ p.end_at.strftime('%d/%m/%Y') }}
+        {% if p.reason %}· {{ p.reason }}{% endif %}
+        {% if p.creator %}· {{ p.creator.first_name }} {{ p.creator.last_name }}{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

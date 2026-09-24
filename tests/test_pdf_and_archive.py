@@ -482,3 +482,21 @@ def test_weekday_letters_are_unambiguous(ctx):
     entete = html.split("<thead>")[1].split("</thead>")[0]
     for deux_lettres in ("lu", "ma", "me", "je", "ve", "sa", "di"):
         assert f"{deux_lettres}<br>" in entete, deux_lettres
+
+
+def test_annual_archive_passes_loans(ctx, monkeypatch, tmp_path):
+    """Sans les prêts, un véhicule à usage réservé paraîtrait réservé même
+    les jours où il était prêté — dans la trace permanente."""
+    import tools.archive_year as ay
+    from models import VehicleLoan
+
+    _, v1, _, _ = _fixture_segmentee()
+    v1.reserved_for = "Chef de centre"
+    db.session.add(VehicleLoan(vehicle_id=v1.id, start_at=datetime(2026, 3, 9),
+                               end_at=datetime(2026, 3, 13, 23, 59, 59)))
+    db.session.commit()
+
+    captures = _espionner_rendu(monkeypatch)
+    monkeypatch.setattr(ay, "app", app)
+    assert ay.generate_pdf_for_month(2026, 3, str(tmp_path / "mars.pdf"))
+    assert len(captures.get("loans", [])) == 1

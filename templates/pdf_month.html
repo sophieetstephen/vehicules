@@ -33,6 +33,7 @@ th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:cen
   font-size:8px;font-weight:700;color:#fff;line-height:1.2;text-align:center}
 .pastille-res{background:#15803d}
 .pastille-unav{background:#343a40}
+.pastille-reserved{background:#6d28d9}
 
 .legende{margin-top:6px;font-size:8px;color:#64748b}
 .legende .pastille{margin-right:2px}
@@ -52,7 +53,8 @@ th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:cen
 {# Le contenu des cases vient du même calcul que le planning affiché : les
    deux ne peuvent pas diverger. #}
 {% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
-                            unavailabilities|default([], true), start, end, none) %}
+                            unavailabilities|default([], true), start, end, none,
+                            loans|default([], true)) %}
 {% set entrees = calendar_entries(grid) %}
 {% set indispos = unavailabilities|default([], true) %}
 </head><body>
@@ -78,7 +80,7 @@ th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:cen
   {% for jour in grid.days %}
     <td class="day-col{{ ' weekend' if jour.weekend }}">
       {%- for item in grid.cells[v.id][jour.key] -%}
-        <span class="pastille pastille-{{ 'unav' if item.kind == 'unav' else 'res' }}">{{ item.letter }}</span>
+        <span class="pastille pastille-{{ item.kind }}">{{ item.letter }}</span>
       {%- endfor -%}
     </td>
   {% endfor %}
@@ -92,6 +94,7 @@ th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:cen
   <span><span class="pastille pastille-res">A</span>Après-midi</span>
   <span><span class="pastille pastille-res">J</span>Journée</span>
   <span><span class="pastille pastille-unav">I</span>Indisponible</span>
+  <span><span class="pastille pastille-reserved">R</span>Usage réservé, hors prêt</span>
 </div>
 
 <div class="detail">
@@ -123,6 +126,37 @@ th,td{border:1px solid #999;padding:2px 3px;vertical-align:middle;text-align:cen
   </table>
   {% else %}
   <p class="vide">Aucune réservation ce mois-ci.</p>
+  {% endif %}
+
+  {# Véhicules à usage réservé et leurs prêts du mois : l'archive doit dire
+     pourquoi un véhicule sans réservation n'était pas proposé. #}
+  {% set reserves = vehicles|selectattr('is_reserved')|list %}
+  {% set prets = loans|default([], true) %}
+  {% if reserves %}
+  <h2>Véhicules à usage réservé</h2>
+  <table>
+    <thead><tr>
+      <th class="col-vehicule">Véhicule</th>
+      <th class="col-periode">Réservé à</th>
+      <th>Prêts sur le mois</th>
+    </tr></thead>
+    <tbody>
+      {% for v in reserves %}
+      {% set siens = prets|selectattr('vehicle_id', 'equalto', v.id)|list %}
+      <tr>
+        <td><strong>{{ v.code }}</strong></td>
+        <td>{{ v.reserved_for }}</td>
+        <td>
+          {% for p in siens %}
+            du {{ p.start_at.strftime('%d/%m') }} au {{ p.end_at.strftime('%d/%m') }}{% if p.reason %} ({{ p.reason }}){% endif %}{{ ' ; ' if not loop.last }}
+          {% else %}
+            aucun
+          {% endfor %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
   {% endif %}
 
   {% if indispos %}

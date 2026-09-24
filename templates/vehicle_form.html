@@ -16,6 +16,16 @@
     <label class="form-label">Catégorie</label>
     <input class="form-control" type="text" name="category" value="{{ vehicle.category if vehicle else "" }}">
   </div>
+  <div class="mb-3">
+    <label class="form-label" for="reserved_for">Usage réservé à</label>
+    <input class="form-control" type="text" id="reserved_for" name="reserved_for" maxlength="80"
+           placeholder="ex : Chef de centre"
+           value="{{ vehicle.reserved_for if vehicle and vehicle.reserved_for else "" }}">
+    <div class="form-text">
+      Laisser vide pour un véhicule du parc. Renseigné, le véhicule n'est
+      attribuable à une demande que pendant un prêt.
+    </div>
+  </div>
   <button class="btn btn-primary" type="submit">Enregistrer</button>
   <a class="btn btn-outline-secondary" href="{{ url_for("admin_vehicles") }}">Annuler</a>
 </form>

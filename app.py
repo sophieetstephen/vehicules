@@ -40,12 +40,14 @@ from forms import (
     NotificationSettingsForm,
     ContactForm,
     UnavailabilityForm,
+    LoanForm,
 )
 from wtforms.validators import DataRequired, Length
 from models import (
     db,
     User,
     Vehicle,
+    VehicleLoan,
     Reservation,
     ReservationSegment,
     NotificationSettings,
@@ -2154,6 +2156,9 @@ def admin_user_delete(user_id):
     VehicleUnavailability.query.filter_by(created_by=target.id).update(
         {"created_by": None}, synchronize_session=False
     )
+    VehicleLoan.query.filter_by(created_by=target.id).update(
+        {"created_by": None}, synchronize_session=False
+    )
     db.session.delete(target)
     db.session.commit()
     flash("Utilisateur supprimé", "info")
@@ -2255,6 +2260,139 @@ def admin_vehicle_unavailability_delete(unav_id):
     return redirect(url_for("admin_vehicle_unavailability", vehicle_id=vehicle_id))
 
 
+# --- prêts des véhicules à usage réservé -----------------------------------------
+
+def occupations_on_vehicle(vehicle_id, start, end):
+    """Réservations en cours qui occupent le véhicule sur la période.
+
+    Retourne des ``(début, fin, réservation)`` : pour un segment, ce sont les
+    dates du segment, pas celles de la réservation entière.
+    """
+
+    out = []
+    directes = Reservation.query.filter(
+        Reservation.vehicle_id == vehicle_id,
+        Reservation.status.notin_(INACTIVE_STATUSES),
+        Reservation.start_at < end,
+        Reservation.end_at > start,
+    ).all()
+    out += [(r.start_at, r.end_at, r) for r in directes]
+    segments = ReservationSegment.query.join(Reservation).filter(
+        ReservationSegment.vehicle_id == vehicle_id,
+        Reservation.status.notin_(INACTIVE_STATUSES),
+        ReservationSegment.start_at < end,
+        ReservationSegment.end_at > start,
+    ).all()
+    out += [(s.start_at, s.end_at, s.reservation) for s in segments]
+    return sorted(out, key=lambda o: o[0])
+
+
+def reservations_orphaned_by_loan_removal(loan):
+    """Réservations qui ne seraient plus couvertes si l'on retirait ce prêt.
+
+    Un autre prêt peut couvrir la même période : seules les réservations
+    réellement laissées sans prêt comptent.
+    """
+
+    autres = [p for p in loans_for(loan.vehicle_id, loan.start_at, loan.end_at)
+              if p.id != loan.id]
+    orphelines = []
+    for debut, fin, reservation in occupations_on_vehicle(
+            loan.vehicle_id, loan.start_at, loan.end_at):
+        if not loans_cover(autres, debut, fin):
+            orphelines.append(reservation)
+    return orphelines
+
+
+@app.route("/admin/vehicles/<int:vehicle_id>/loans", methods=["GET", "POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_loans(vehicle_id):
+    """Prêts d'un véhicule à usage réservé : les enregistrer, les retirer."""
+
+    user = current_user()
+    vehicle = db.get_or_404(Vehicle, vehicle_id)
+    if not vehicle.is_reserved:
+        flash(f"{vehicle.code} n'est pas à usage réservé : il est déjà attribuable.", "info")
+        return redirect(url_for("admin_vehicles"))
+    form = LoanForm()
+    now = local_now()
+    if form.validate_on_submit():
+        if form.end_date.data < form.start_date.data:
+            form.end_date.errors.append("La date de fin doit être postérieure à la date de début.")
+            return _render_vehicle_loans(vehicle, form, user, now), 200
+        start_at = datetime.combine(form.start_date.data, time.min)
+        end_at = datetime.combine(form.end_date.data, time.max)
+        db.session.add(VehicleLoan(
+            vehicle_id=vehicle.id,
+            start_at=start_at,
+            end_at=end_at,
+            reason=(form.reason.data or "").strip() or None,
+            created_by=user.id,
+        ))
+        db.session.commit()
+        panne = vehicle_unavailability(vehicle.id, start_at, end_at)
+        if panne is not None:
+            # Le prêt est enregistré, mais une panne l'emporte toujours.
+            flash(
+                f"Prêt enregistré. Attention : {vehicle.code} est déclaré indisponible "
+                f"sur une partie de cette période ({panne.label}) ; il ne sera pas "
+                "attribuable ces jours-là.",
+                "warning",
+            )
+        else:
+            flash(f"Prêt enregistré : {vehicle.code} peut être attribué sur cette période.",
+                  "success")
+        return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle.id))
+    if request.method == "GET":
+        form.start_date.data = now.date()
+    return _render_vehicle_loans(vehicle, form, user, now)
+
+
+def _render_vehicle_loans(vehicle, form, user, now):
+    prets = (VehicleLoan.query.filter_by(vehicle_id=vehicle.id)
+             .order_by(VehicleLoan.start_at.desc()).all())
+    a_venir = [p for p in prets if p.end_at >= now]
+    passes = [p for p in prets if p.end_at < now][:20]
+    utilises = {p.id: [o[2] for o in occupations_on_vehicle(vehicle.id, p.start_at, p.end_at)]
+                for p in a_venir}
+    return render_template(
+        "vehicle_loans.html",
+        vehicle=vehicle,
+        form=form,
+        current=sorted(a_venir, key=lambda p: p.start_at),
+        past=passes,
+        used=utilises,
+        now=now,
+        user=user,
+        current_user=user,
+    )
+
+
+@app.route("/admin/vehicles/loans/<int:loan_id>/delete", methods=["POST"])
+@role_required("admin", "superadmin")
+def admin_vehicle_loan_delete(loan_id):
+    loan = db.get_or_404(VehicleLoan, loan_id)
+    vehicle_id = loan.vehicle_id
+    orphelines = reservations_orphaned_by_loan_removal(loan)
+    if orphelines:
+        # Retirer le prêt laisserait ces réservations sur un véhicule que plus
+        # rien n'autorise : on demande de les réattribuer d'abord.
+        noms = ", ".join(
+            f"{r.start_at.strftime('%d/%m')} ({(r.user.first_name or '')} {(r.user.last_name or '')})".strip()
+            for r in orphelines[:5]
+        )
+        flash(
+            f"Impossible de retirer ce prêt : {len(orphelines)} réservation(s) l'utilisent "
+            f"— {noms}. Réattribuez-les à un autre véhicule d'abord.",
+            "danger",
+        )
+        return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
+    db.session.delete(loan)
+    db.session.commit()
+    flash("Prêt retiré : le véhicule revient à son usage réservé.", "info")
+    return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
+
+
 @app.route("/admin/vehicles/new", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_new():
@@ -2263,6 +2401,7 @@ def admin_vehicle_new():
             code=request.form["code"].strip(),
             label=request.form["label"].strip(),
             category=request.form.get("category", "").strip() or None,
+            reserved_for=request.form.get("reserved_for", "").strip() or None,
         )
         db.session.add(v)
         db.session.commit()
@@ -2281,6 +2420,7 @@ def admin_vehicle_edit(vehicle_id):
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
         vehicle.category = request.form.get("category", "").strip() or None
+        vehicle.reserved_for = request.form.get("reserved_for", "").strip() or None
         db.session.commit()
         flash("Véhicule mis à jour", "success")
         return redirect(url_for("admin_vehicles"))
@@ -2329,6 +2469,67 @@ def vehicle_unavailability(vehicle_id, start, end):
     )
 
 
+# Deux prêts consécutifs — du 12 au 15 puis du 16 au 20 — se touchent à la
+# microseconde près (fin de journée incluse, début de la suivante).
+_LOAN_JOIN_TOLERANCE = timedelta(seconds=1)
+
+
+def loans_for(vehicle_id, start, end):
+    """Prêts du véhicule qui chevauchent [start, end), du plus ancien au plus récent."""
+
+    return (
+        VehicleLoan.query.filter(
+            VehicleLoan.vehicle_id == vehicle_id,
+            VehicleLoan.start_at < end,
+            VehicleLoan.end_at > start,
+        )
+        .order_by(VehicleLoan.start_at.asc())
+        .all()
+    )
+
+
+def loans_cover(loans, start, end):
+    """Les prêts couvrent-ils toute la période, sans trou ?
+
+    Un prêt du lundi au mercredi ne suffit pas pour une demande du lundi au
+    vendredi ; deux prêts consécutifs, si.
+    """
+
+    curseur = start
+    for pret in sorted(loans, key=lambda p: p.start_at):
+        if pret.start_at > curseur + _LOAN_JOIN_TOLERANCE:
+            return False
+        curseur = max(curseur, pret.end_at)
+        if curseur >= end:
+            return True
+    return curseur >= end
+
+
+def reserved_block_reason(vehicle, start, end):
+    """Pourquoi un véhicule à usage réservé n'est pas attribuable, ou None.
+
+    Hors prêt, il n'est proposé à aucune demande : son titulaire l'utilise
+    sans passer par l'application.
+    """
+
+    if vehicle is None or not vehicle.is_reserved:
+        return None
+    if loans_cover(loans_for(vehicle.id, start, end), start, end):
+        return None
+    return f"Usage réservé — {vehicle.reserved_for.strip()}"
+
+
+def vehicles_reserved_map(start, end):
+    """``{vehicle_id: motif}`` des véhicules réservés non prêtés sur la période."""
+
+    out = {}
+    for v in Vehicle.query.filter(Vehicle.reserved_for.isnot(None)).all():
+        motif = reserved_block_reason(v, start, end)
+        if motif:
+            out[v.id] = motif
+    return out
+
+
 def vehicles_unavailability_map(start, end):
     """Return ``{vehicle_id: unavailability}`` for vehicles blocked on the window."""
 
@@ -2342,6 +2543,9 @@ def vehicles_unavailability_map(start, end):
 
 def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     if vehicle_unavailability(vehicle_id, start, end) is not None:
+        return True
+    # Véhicule à usage réservé hors prêt : pas attribuable.
+    if reserved_block_reason(db.session.get(Vehicle, vehicle_id), start, end):
         return True
     # Le segment d'une demande refusée ou annulée ne bloque plus rien : on le
     # garde pour l'historique, mais le véhicule redevient libre. Sans cette
@@ -2511,8 +2715,8 @@ def calendar_entries(grid):
     for jour in grid["days"]:
         for vehicle_id, cases in grid["cells"].items():
             for element in cases[jour["key"]]:
-                if element["kind"] == "unav":
-                    continue  # récapitulées dans leur propre tableau
+                if element["kind"] != "res":
+                    continue  # indisponibilités et usage réservé : tableaux à part
                 cle = (vehicle_id, element["source"])
                 suivi = presence.setdefault(cle, {"item": element, "jours": []})
                 suivi["jours"].append(jour["date"])
@@ -2540,7 +2744,8 @@ def calendar_entries(grid):
     return lignes
 
 
-def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end, user):
+def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end, user,
+                  loans=None):
     """Pré-calculer le contenu de chaque case du planning.
 
     Les boucles imbriquées vivaient dans le gabarit et étaient recopiées pour
@@ -2587,7 +2792,7 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
             # les deux formes voyagent ensemble plutôt que d'être recalculées.
             "full_name": full_name or name,
             "slot": slot,
-            "letter": "I" if kind == "unav" else _SLOT_LETTERS.get(slot, "J"),
+            "letter": {"unav": "I", "reserved": "R"}.get(kind) or _SLOT_LETTERS.get(slot, "J"),
             "purpose": purpose or "",
             "period": period,
             "url": url,
@@ -2623,6 +2828,37 @@ def calendar_grid(vehicles, reservations, segments, unavailabilities, start, end
                     url=url_for("admin_vehicle_unavailability", vehicle_id=vehicle.id)
                     if est_admin
                     else None,
+                ),
+            )
+
+    # Véhicules à usage réservé : chaque jour hors prêt porte une pastille « R ».
+    # Ils étaient déclarés indisponibles comme une panne ; le planning les
+    # distingue désormais. Une panne l'emporte : pas de « R » un jour « I ».
+    prets = loans or []
+    for vehicle in vehicles:
+        if not vehicle.is_reserved:
+            continue
+        siens = [p for p in prets if p.vehicle_id == vehicle.id]
+        for jour in days:
+            d = jour["date"].date()
+            if any(p.start_at.date() <= d <= p.end_at.date() for p in siens):
+                continue
+            if any(x["kind"] == "unav" for x in cells[vehicle.id][jour["key"]]):
+                continue
+            ajouter(
+                vehicle.id,
+                jour,
+                item(
+                    "reserved",
+                    vehicle=vehicle,
+                    name=vehicle.reserved_for.strip(),
+                    slot="Usage réservé",
+                    purpose="",
+                    period="Hors période de prêt",
+                    url=url_for("admin_vehicle_loans", vehicle_id=vehicle.id)
+                    if est_admin
+                    else None,
+                    source=("reserved", vehicle.id),
                 ),
             )
 
@@ -2748,10 +2984,17 @@ def today_overview(now=None):
         )
         upcoming = [it for it in items if it["start"] > now]
         unav = vehicle_unavailability(v.id, now, now + timedelta(seconds=1))
+        # Véhicule du chef ou de l'adjoint : « Libre » induirait en erreur hors
+        # prêt, puisqu'aucune demande ne peut l'obtenir.
+        pret = None
+        if v.is_reserved:
+            pret = next(iter(loans_for(v.id, now, now + timedelta(seconds=1))), None)
         if unav is not None:
             state = "unavailable"
         elif current:
             state = "out"
+        elif v.is_reserved and pret is None:
+            state = "reserved"
         elif upcoming:
             state = "later"
         else:
@@ -2764,6 +3007,7 @@ def today_overview(now=None):
                 "next": upcoming[0] if upcoming else None,
                 "items": items,
                 "unavailability": unav,
+                "loan": pret,
             }
         )
     return overview
@@ -3126,9 +3370,19 @@ def manage_request(rid):
             flash("Journée supprimée.", "info")
             return redirect(url_for("admin_reservations"))
         if action == "approve":
-            veh_id = int(request.form.get("vehicle_id"))
-            v = db.get_or_404(Vehicle, veh_id)
-            if has_conflict(v.id, r.start_at, r.end_at, exclude_reservation_id=r.id):
+            # Même garde que les autres chemins d'attribution : un champ
+            # absent levait une erreur 500 (oubli du correctif précédent).
+            v = form_vehicle()
+            if v is None:
+                flash("Choisissez un véhicule existant.", "danger")
+                return redirect(url_for("manage_request", rid=r.id))
+            veh_id = v.id
+            reserve = reserved_block_reason(v, r.start_at, r.end_at)
+            if reserve:
+                flash(f"{v.code} : {reserve}, hors période de prêt. "
+                      "Enregistrez d'abord un prêt dans la gestion du parc.",
+                      "danger")
+            elif has_conflict(v.id, r.start_at, r.end_at, exclude_reservation_id=r.id):
                 flash(
                     "Conflit détecté sur ce véhicule pour la période.", "danger"
                 )
@@ -3245,6 +3499,7 @@ def manage_request(rid):
         reservation=r,
         availability=avail,
         unavailable=vehicles_unavailability_map(day_start, day_end),
+        reserved=vehicles_reserved_map(day_start, day_end),
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
@@ -3308,6 +3563,7 @@ def manage_segment(sid):
         reservation=r,
         availability=avail,
         unavailable=vehicles_unavailability_map(seg.start_at, seg.end_at),
+        reserved=vehicles_reserved_map(seg.start_at, seg.end_at),
         user=user,
         current_user=user,
         slot_label=reservation_slot_label,
@@ -3378,11 +3634,16 @@ def calendar_payload(start, end):
             VehicleUnavailability.end_at > start,
         ),
     ).all()
+    loans = VehicleLoan.query.filter(
+        VehicleLoan.start_at < end,
+        VehicleLoan.end_at > start,
+    ).order_by(VehicleLoan.start_at).all()
     return {
         "vehicles": vehicles,
         "reservations": res,
         "segments": segs,
         "unavailabilities": unavailabilities,
+        "loans": loans,
         "start": start,
         "end": end,
         "timedelta": timedelta,

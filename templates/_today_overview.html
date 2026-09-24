@@ -23,6 +23,8 @@
             <span class="badge bg-dark">Indisponible</span>
           {% elif entry.state == 'out' %}
             <span class="badge bg-danger">Sorti</span>
+          {% elif entry.state == 'reserved' %}
+            <span class="badge badge-reserved">Usage réservé</span>
           {% elif entry.state == 'later' %}
             <span class="badge bg-warning text-dark">Réservé plus tard</span>
           {% else %}
@@ -30,8 +32,20 @@
           {% endif %}
         </div>
         <div class="vehicle-status-label">{{ v.label }}</div>
+        {% if entry.loan %}
+          <div class="vehicle-status-loan small">
+            <i class="fa-solid fa-handshake me-1"></i>Prêté jusqu'au {{ entry.loan.end_at.strftime('%d/%m') }}
+          </div>
+        {% endif %}
         {% set it = entry.current or entry.next %}
-        {% if entry.state == 'unavailable' %}
+        {% if entry.state == 'reserved' %}
+          <div class="vehicle-status-detail">
+            <div><i class="fa-solid fa-user-shield me-1"></i>Réservé à {{ v.reserved_for }}</div>
+            {% if user and user.role in ['admin', 'superadmin'] %}
+              <a href="{{ url_for('admin_vehicle_loans', vehicle_id=v.id) }}" class="small">Prêter</a>
+            {% endif %}
+          </div>
+        {% elif entry.state == 'unavailable' %}
           {% set unav = entry.unavailability %}
           <div class="vehicle-status-detail">
             <div><i class="fa-solid fa-wrench me-1"></i>{{ unav.label }}</div>
@@ -123,6 +137,7 @@
 .vehicle-status-out { border-left-color: var(--color-danger); }
 .vehicle-status-later { border-left-color: var(--color-warning); }
 .vehicle-status-unavailable { border-left-color: #6b7280; opacity: .85; }
+.vehicle-status-reserved { border-left-color: #6d28d9; }
 .vehicle-status-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
 .vehicle-status-code { font-weight: 700; font-size: 1.1rem; color: var(--color-text); }
 .vehicle-status-label { color: var(--color-text-muted); font-size: .85rem; margin: .15rem 0 .5rem; }

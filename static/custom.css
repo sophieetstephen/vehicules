@@ -1134,6 +1134,21 @@ p {
   background: #1e293b;
 }
 
+/* Usage réservé : ni panne ni réservation. Une teinte à part pour que le
+   véhicule du chef ne se lise plus comme un véhicule en panne. */
+.cal-chip-reserved {
+  background: #6d28d9;
+}
+
+.cal-card-reserved {
+  border-left-color: #6d28d9;
+  background: #f3effd;
+}
+
+[data-theme="dark"] .cal-card-reserved {
+  background: rgba(109, 40, 217, 0.18);
+}
+
 .cal-cell {
   height: 2rem;
 }
@@ -1274,6 +1289,14 @@ p {
    l'emportait à spécificité égale et laissait la pastille bleue. */
 .mobile-res-vehicle.mobile-res-vehicle-unav {
   background: #343a40;
+}
+
+.mobile-reserved-card {
+  border-left: 4px solid #6d28d9;
+}
+
+.mobile-res-vehicle.mobile-res-vehicle-reserved {
+  background: #6d28d9;
 }
 
 /* L'ancre « Aller à aujourd'hui » ne doit pas cacher la carte sous la barre
@@ -1448,4 +1471,60 @@ p {
 
 [data-theme="dark"] .pending-banner {
   color: var(--color-text);
+}
+
+
+/* --- Prêts des véhicules à usage réservé ------------------------------------ */
+.loan-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-left: 5px solid var(--color-primary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-sm);
+}
+
+.loan-card.loan-active {
+  border-left-color: var(--btn-success-fill);
+}
+
+.loan-main {
+  flex: 1;
+  min-width: 220px;
+}
+
+.loan-dates {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.loan-reason {
+  color: var(--color-text);
+  margin-top: 0.2rem;
+}
+
+[data-theme="dark"] .loan-card {
+  background: var(--color-background-alt);
+}
+
+
+/* Accueil : véhicule à usage réservé hors prêt. Même teinte que la pastille
+   « R » du planning. */
+.badge.badge-reserved {
+  background-color: #6d28d9;
+  color: #fff;
+}
+
+.vehicle-status-loan {
+  color: #6d28d9;
+  margin-top: 0.15rem;
+}
+
+[data-theme="dark"] .vehicle-status-loan {
+  color: #c4b5fd;
 }

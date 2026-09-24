@@ -158,6 +158,10 @@
                   <span class="status-available"><i class="fa-solid fa-check"></i> Disponible</span>
                 {% elif unavailable and v.id in unavailable %}
                   <span class="status-unavailable" title="{{ unavailable[v.id].label }}"><i class="fa-solid fa-wrench"></i> Indisponible</span>
+                {% elif reserved and v.id in reserved %}
+                  {# Ni panne ni conflit : le véhicule du chef ou de l'adjoint,
+                     hors période de prêt. #}
+                  <span class="status-unavailable" title="Hors période de prêt"><i class="fa-solid fa-user-shield"></i> {{ reserved[v.id] }}</span>
                 {% else %}
                   <span class="status-unavailable"><i class="fa-solid fa-times"></i> Occupé</span>
                 {% endif %}
