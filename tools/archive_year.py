@@ -64,6 +64,16 @@ DEFAULT_ARCHIVE_DIR = os.path.join(ROOT_DIR, "backups", "archives")
 ARCHIVE_DIR = os.environ.get("ARCHIVE_DIR") or DEFAULT_ARCHIVE_DIR
 
 
+def default_archive_year(now=None) -> int:
+    """Annee archivee sans --year : celle qui vient de se terminer.
+
+    Le minuteur tourne le 1er janvier ; lance le 31 decembre, ce calcul
+    visait l'avant-derniere annee.
+    """
+
+    return (now or datetime.now()).year - 1
+
+
 def destination_is_volatile(path: str, in_container: bool | None = None) -> bool:
     """Les PDF vont-ils dans le disque jetable d'un conteneur ?
 
@@ -295,7 +305,7 @@ def main() -> int:
     parser.add_argument(
         "--year", "-y",
         type=int,
-        default=datetime.now().year - 1,  # Previous year by default
+        default=default_archive_year(),
         help="Annee a archiver (defaut: annee precedente)"
     )
     parser.add_argument(
