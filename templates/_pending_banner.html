@@ -1,0 +1,15 @@
+{# Demandes à traiter, tout en haut de l'accueil administrateur.
+
+   Le compteur était un petit bouton dans l'en-tête « Aujourd'hui », après les
+   raccourcis sur téléphone : la tâche la plus urgente de l'administrateur
+   arrivait après tout le reste. Attend ``pending_count``. #}
+{% if pending_count %}
+<a class="pending-banner" href="{{ url_for('admin_reservations') }}">
+  <span class="pending-count">{{ pending_count }}</span>
+  <span class="pending-text">
+    <strong>demande{{ 's' if pending_count > 1 }} à traiter</strong>
+    <span class="d-block small">Choisir et attribuer un véhicule</span>
+  </span>
+  <i class="fa-solid fa-chevron-right ms-auto"></i>
+</a>
+{% endif %}

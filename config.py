@@ -60,6 +60,22 @@ class Config:
     SUPERADMIN_EMAILS = ["gestionvehiculestomer@gmail.com"]
     ADMIN_EMAILS = ["alexandre.stephen@free.fr"]
     SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "30"))
+
+    # Cookie de session. Sans ces réglages il partait aussi en HTTP clair
+    # (Secure absent) et accompagnait les requêtes venues d'autres sites
+    # (SameSite absent). Le site n'est servi qu'en HTTPS derrière Caddy :
+    # Secure est donc activé par défaut. À désactiver uniquement pour un essai
+    # local en HTTP simple, sinon la connexion y échouerait sans message.
+    SESSION_COOKIE_SECURE = _env_bool("SESSION_COOKIE_SECURE", True)
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+
+    # Clés étrangères SQLite. Désactivées par défaut dans SQLite : rien
+    # n'empêchait un segment de survivre à sa réservation (les « fantômes »
+    # réparés en octobre). Activées sur chaque connexion ; SQLITE_FOREIGN_KEYS=
+    # false dans le .env les coupe sans toucher au code si un cas imprévu
+    # apparaissait en production.
+    SQLITE_FOREIGN_KEYS = _env_bool("SQLITE_FOREIGN_KEYS", True)
     # Fuseau horaire utilisé pour "maintenant" dans le tableau du jour. Les
     # créneaux de réservation (8h-12h, 13h-17h) sont exprimés en heure locale.
     APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "Europe/Paris")

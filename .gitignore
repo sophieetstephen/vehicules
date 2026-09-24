@@ -38,6 +38,11 @@ uploads/
 flask.log
 flask.pid
 backup/
+# Sauvegardes nocturnes : la base entière et une copie du .env (clé de
+# session, mot de passe d'envoi). « backup/ » au singulier ne les couvrait pas.
+backups/
+env_*.txt
+rclone.conf
 schema_*.sql
 vehicules.db.old_*
 CLAUDE.md

@@ -4,7 +4,13 @@
 {% block content %}
 <div class="card mx-auto max-w-720">
   <div class="card-body">
-    <h1 class="h4 mb-3">Demande de réservation</h1>
+    <h1 class="h4 mb-2">Demande de réservation</h1>
+    {# Rien ne disait que le véhicule n'est pas choisi ici : les liens
+       « Réserver » de l'accueil laissaient même croire le contraire. #}
+    <p class="text-muted small mb-3">
+      Vous demandez un véhicule pour une période. Un administrateur choisit
+      ensuite le véhicule et vous prévient par e-mail.
+    </p>
     <form method="post">
       {{ form.csrf_token }}
       {% if user and user.role in ['admin', 'superadmin'] %}

@@ -107,8 +107,10 @@ def test_previous_and_next_week(ctx):
     jean = _user("Jean", "Dupont", "j@ex.fr")
     _vehicles()
     html = _client_as(jean).get("/calendar/week?d=2026-09-16").data.decode()
-    assert "/calendar/week?d=2026-09-07" in html
-    assert "/calendar/week?d=2026-09-21" in html
+    # Le repère avance de sept jours : c'est lui, et non le lundi, qui
+    # voyage d'une vue à l'autre.
+    assert "/calendar/week?d=2026-09-09" in html
+    assert "/calendar/week?d=2026-09-23" in html
 
 
 # --- passer d'une vue à l'autre ---------------------------------------------
@@ -118,12 +120,38 @@ def test_each_view_offers_the_other(ctx):
     _vehicles()
     c = _client_as(jean)
 
+    # Le mois affiché contient aujourd'hui (18/09) : « Semaine » l'ouvre.
     mois = c.get("/calendar/month?y=2026&m=9").data.decode()
-    assert "/calendar/week?d=2026-09-01" in mois
+    assert "/calendar/week?d=2026-09-18" in mois
     assert "Aujourd'hui" in mois
+
+    # Sinon, la semaine du premier du mois.
+    octobre = c.get("/calendar/month?y=2026&m=10").data.decode()
+    assert "/calendar/week?d=2026-10-01" in octobre
 
     semaine = c.get("/calendar/week?d=2026-09-16").data.decode()
     assert "y=2026&amp;m=9" in semaine
+
+
+def test_round_trip_brings_back_the_same_month(ctx):
+    """Constat de l'audit : depuis septembre, « Semaine » ouvrait la semaine
+    du 31 août, puis « Mois » ramenait en août. Même piège en octobre : le
+    1er tombe un jeudi, la semaine commence le lundi 28 septembre."""
+    jean = _user("Jean", "Dupont", "j@ex.fr")
+    _vehicles()
+    c = _client_as(jean)
+    semaine = c.get("/calendar/week?d=2026-10-01").data.decode()
+    assert "28/09 – 04/10" in semaine, "la semaine commence bien en septembre"
+    assert "y=2026&amp;m=10" in semaine, "mais « Mois » ramène en octobre"
+    assert "y=2026&amp;m=9\"" not in semaine.split('calendar-switch')[1]
+
+
+def test_week_across_two_months_names_both(ctx):
+    jean = _user("Jean", "Dupont", "j@ex.fr")
+    _vehicles()
+    html = _client_as(jean).get("/calendar/week?d=2026-10-01").data.decode()
+    sous_titre = html.split('class="calendar-subtitle">')[1].split("</div>")[0]
+    assert "septembre" in sous_titre and "octobre 2026" in sous_titre
 
 
 # --- contenu des cases -------------------------------------------------------

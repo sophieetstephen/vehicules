@@ -5,6 +5,7 @@ reste vu par ``has_conflict`` : le véhicule apparaîtrait libre tout en étant
 impossible à attribuer.
 """
 
+import contextlib
 from datetime import datetime, timedelta
 
 import pytest
@@ -33,6 +34,25 @@ def ctx():
         db.create_all()
         yield
         db.drop_all()
+
+
+@contextlib.contextmanager
+def _comme_avant():
+    """Fabriquer des données comme les laissait l'ancien code.
+
+    Les clés étrangères sont désormais actives : une suppression brute qui
+    laisserait un segment sans réservation est refusée par SQLite. C'est
+    précisément la protection voulue — pour reproduire les données d'époque,
+    on les coupe le temps de la manipulation. La consigne n'a d'effet qu'hors
+    transaction, d'où le commit préalable.
+    """
+    db.session.commit()
+    db.session.execute(db.text("PRAGMA foreign_keys=OFF"))
+    try:
+        yield
+        db.session.commit()
+    finally:
+        db.session.execute(db.text("PRAGMA foreign_keys=ON"))
 
 
 def _user(role=User.ROLE_USER, email="j@ex.fr", username=None):
@@ -157,20 +177,25 @@ def test_find_and_repair_existing_orphans(ctx):
     v, v2 = _vehicle(), _vehicle("VL2")
     r = _reservation_with_segment(u, v, status="approved")
     # Fantômes fabriqués comme le faisait l'ancien code : suppression brute.
-    Reservation.query.filter_by(id=r.id).delete(synchronize_session=False)
+    with _comme_avant():
+        Reservation.query.filter_by(id=r.id).delete(synchronize_session=False)
     db.session.commit()
     orphelin_reservation = ReservationSegment.query.one()
 
     seg2 = ReservationSegment(reservation_id=orphelin_reservation.id, vehicle_id=v2.id,
                               start_at=FUTUR[0], end_at=FUTUR[1])
-    db.session.add(seg2)
-    db.session.commit()
-    Vehicle.query.filter_by(id=v2.id).delete(synchronize_session=False)
+    with _comme_avant():
+        db.session.add(seg2)
+    with _comme_avant():
+        Vehicle.query.filter_by(id=v2.id).delete(synchronize_session=False)
     db.session.commit()
 
     orphans = find_orphan_segments()
     assert len(orphans) == 2
-    assert has_conflict(v.id, *FUTUR), "le fantôme bloque bien le véhicule"
+    # Un fantôme bloquait le véhicule. Depuis que l'occupation se lit à travers
+    # la réservation (et son statut), un segment sans réservation ne bloque
+    # plus rien, même avant réparation.
+    assert not has_conflict(v.id, *FUTUR), "un fantôme ne doit plus bloquer"
 
     runner = app.test_cli_runner()
     simulation = runner.invoke(args=["repair-orphan-segments", "--dry-run"])
@@ -192,7 +217,8 @@ def test_repair_detaches_reservation_from_deleted_vehicle(ctx):
                     status="approved")
     db.session.add(r)
     db.session.commit()
-    Vehicle.query.filter_by(id=v.id).delete(synchronize_session=False)
+    with _comme_avant():
+        Vehicle.query.filter_by(id=v.id).delete(synchronize_session=False)
     db.session.commit()
 
     out = app.test_cli_runner().invoke(args=["repair-orphan-segments"]).output

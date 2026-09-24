@@ -4,16 +4,33 @@
    et rendaient le tableau illisible. « Modifier » est de loin le geste le plus
    courant : il reste visible, les autres se replient.
 
-   Attend ``u`` (l'utilisateur de la ligne), ``current_user``, ``ROLE_ADMIN`` et
-   ``ROLE_SUPERADMIN``. Le même bloc sert au tableau et aux cartes du téléphone,
-   pour qu'ils ne divergent pas. #}
-{% set est_superadmin = current_user and current_user.role == ROLE_SUPERADMIN %}
-{% set modifiable = est_superadmin and u.role != ROLE_SUPERADMIN %}
+   Seules les actions permises apparaissent, d'après la même règle que celle
+   appliquée par le serveur (``account_action_refusal`` dans app.py). Masquer un
+   bouton n'est qu'un confort : c'est le serveur qui refuse.
 
+   Attend ``u`` (l'utilisateur de la ligne) et ``current_user``. Le même bloc
+   sert au tableau et aux cartes du téléphone, pour qu'ils ne divergent pas. #}
+{% set peut = namespace(
+     edit=can_act_on_account(current_user, u, 'edit'),
+     activate=can_act_on_account(current_user, u, 'activate'),
+     deactivate=can_act_on_account(current_user, u, 'deactivate'),
+     reset=can_act_on_account(current_user, u, 'reset_password'),
+     promote=can_act_on_account(current_user, u, 'promote'),
+     demote=can_act_on_account(current_user, u, 'demote'),
+     delete=can_act_on_account(current_user, u, 'delete')) %}
+{% set actif = (u.status or '') == 'active' %}
+{% set menu = (actif and peut.deactivate) or (not actif and peut.activate)
+              or peut.reset or peut.promote or peut.demote or peut.delete %}
+
+{% if peut.edit %}
 <a class="btn btn-sm btn-outline-primary" href="{{ url_for('admin_user_edit', user_id=u.id) }}">
   <i class="fa-solid fa-pen me-1"></i>Modifier
 </a>
+{% else %}
+<span class="text-muted small">Géré par le superadministrateur</span>
+{% endif %}
 
+{% if menu %}
 <div class="dropdown d-inline-block">
   <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="dropdown"
           aria-expanded="false"
@@ -21,25 +38,27 @@
     <i class="fa-solid fa-ellipsis"></i>
   </button>
   <ul class="dropdown-menu dropdown-menu-end">
+    {% if actif and peut.deactivate %}
     <li>
-      {% if (u.status or '') == 'active' %}
       <form method="post" action="{{ url_for('admin_deactivate', user_id=u.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="dropdown-item" type="submit">
           <i class="fa-solid fa-ban"></i>Désactiver
         </button>
       </form>
-      {% else %}
+    </li>
+    {% elif not actif and peut.activate %}
+    <li>
       <form method="post" action="{{ url_for('admin_activate', user_id=u.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="dropdown-item" type="submit">
           <i class="fa-solid fa-check"></i>Activer
         </button>
       </form>
-      {% endif %}
     </li>
+    {% endif %}
 
-    {% if est_superadmin %}
+    {% if peut.reset %}
     <li>
       <form method="post" action="{{ url_for('admin_reset_password', user_id=u.id) }}"
             onsubmit="return confirm('Générer un nouveau mot de passe pour cet utilisateur ? L\'ancien ne fonctionnera plus.');">
@@ -51,25 +70,27 @@
     </li>
     {% endif %}
 
-    {% if modifiable %}
+    {% if peut.promote %}
     <li>
-      {% if u.role == ROLE_ADMIN %}
-      <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button class="dropdown-item" type="submit">
-          <i class="fa-solid fa-arrow-down"></i>Rétrograder
-        </button>
-      </form>
-      {% else %}
       <form method="post" action="{{ url_for('admin_promote', user_id=u.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button class="dropdown-item" type="submit">
           <i class="fa-solid fa-arrow-up"></i>Promouvoir
         </button>
       </form>
-    {% endif %}
     </li>
+    {% elif peut.demote %}
+    <li>
+      <form method="post" action="{{ url_for('admin_demote', user_id=u.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="dropdown-item" type="submit">
+          <i class="fa-solid fa-arrow-down"></i>Rétrograder
+        </button>
+      </form>
+    </li>
+    {% endif %}
 
+    {% if peut.delete %}
     {# La suppression est séparée du reste : on ne la clique pas par mégarde. #}
     <li><hr class="dropdown-divider"></li>
     <li>
@@ -84,3 +105,4 @@
     {% endif %}
   </ul>
 </div>
+{% endif %}

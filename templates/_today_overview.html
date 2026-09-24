@@ -7,11 +7,8 @@
       <i class="fa-solid fa-clock me-2"></i>Aujourd'hui
       <span class="today-date">{{ weekday_abbr(now) }} {{ now.strftime('%d/%m') }} · {{ now.strftime('%H:%M') }}</span>
     </h2>
-    {% if pending_count %}
-      <a class="btn btn-sm btn-warning" href="{{ url_for('admin_reservations') }}">
-        <i class="fa-solid fa-hourglass-half me-1"></i>{{ pending_count }} demande{{ 's' if pending_count > 1 }} en attente
-      </a>
-    {% endif %}
+    {# Le nombre de demandes à traiter est désormais affiché tout en haut de
+       l'accueil (_pending_banner.html), et non plus perdu dans cet en-tête. #}
   </div>
 
   {% if overview %}
@@ -63,11 +60,10 @@
             </div>
             {% if r.purpose %}<div class="text-muted"><i class="fa-solid fa-file-lines me-1"></i>{{ r.purpose }}</div>{% endif %}
           </div>
-        {% else %}
-          <div class="vehicle-status-detail">
-            <a href="{{ url_for('new_request') }}"><i class="fa-solid fa-plus me-1"></i>Réserver</a>
-          </div>
         {% endif %}
+        {# Pas de lien « Réserver » par véhicule : il laissait croire qu'on
+           réservait ce véhicule-là, alors que la demande porte sur une période
+           et que l'administrateur choisit le véhicule. #}
       </div>
     </div>
     {% endfor %}

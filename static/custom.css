@@ -1264,6 +1264,24 @@ p {
   border-color: var(--color-primary);
 }
 
+/* Les indisponibilités regroupées en tête : un liseré sombre les distingue des
+   journées, et la pastille du véhicule reprend la couleur « hors service ». */
+.mobile-unav-card {
+  border-left: 4px solid #343a40;
+}
+
+/* Double classe : la règle .mobile-res-vehicle, plus bas dans ce fichier,
+   l'emportait à spécificité égale et laissait la pastille bleue. */
+.mobile-res-vehicle.mobile-res-vehicle-unav {
+  background: #343a40;
+}
+
+/* L'ancre « Aller à aujourd'hui » ne doit pas cacher la carte sous la barre
+   de navigation. */
+.mobile-day-card[id] {
+  scroll-margin-top: 1rem;
+}
+
 .mobile-day-header {
   background: var(--color-background-alt);
   padding: var(--spacing-sm) var(--spacing-md);
@@ -1391,4 +1409,43 @@ p {
 
 [data-theme="dark"] .mobile-reservation:hover {
   background: var(--color-background);
+}
+
+
+/* --- Demandes à traiter (accueil administrateur) ------------------------- */
+.pending-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  border-radius: var(--radius-lg);
+  background: var(--color-warning-light);
+  border-left: 4px solid var(--btn-warning-text);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.pending-banner:hover,
+.pending-banner:focus-visible {
+  color: var(--color-text);
+  filter: brightness(0.97);
+}
+
+.pending-count {
+  flex-shrink: 0;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-full);
+  background: var(--btn-warning-fill);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-theme="dark"] .pending-banner {
+  color: var(--color-text);
 }

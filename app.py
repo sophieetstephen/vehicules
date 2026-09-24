@@ -14,6 +14,7 @@ from urllib.parse import quote as _urlquote
 from functools import wraps
 import click
 from collections.abc import Iterable
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import (
     Flask,
     request,
@@ -27,6 +28,7 @@ from flask import (
     send_from_directory,
     jsonify,
     has_request_context,
+    make_response,
 )
 from datetime import datetime, timedelta, time
 from io import BytesIO
@@ -53,6 +55,8 @@ from models import (
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
+from sqlalchemy import event as sa_event
+from sqlalchemy.engine import Engine
 from notify import send_mail_msmtp, check_mail_login
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
@@ -229,6 +233,18 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Derrière Caddy, l'adresse du client arrive dans X-Forwarded-For. On en
+# retenait la première valeur — celle que le client peut écrire lui-même : il
+# pouvait changer d'adresse apparente à chaque essai et contourner la limite
+# de tentatives de connexion par adresse. ProxyFix retient la valeur ajoutée
+# par le proxy, la seule fiable. PROXY_COUNT : nombre de proxys devant
+# l'application (Caddy seul : 1).
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=int(os.environ.get("PROXY_COUNT", "1")),
+    x_proto=int(os.environ.get("PROXY_COUNT", "1")),
+)
 csrf = CSRFProtect(app)
 
 _storage_root = app.instance_path
@@ -268,6 +284,24 @@ if _database_uri and _database_uri.startswith("sqlite:///"):
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{_db_path}"
 db.init_app(app)
 Migrate(app, db)
+
+
+@sa_event.listens_for(Engine, "connect")
+def _sqlite_foreign_keys(dbapi_connection, connection_record):
+    """Faire respecter les références par SQLite lui-même.
+
+    Exécuté à l'ouverture de chaque connexion, donc hors de toute transaction :
+    à l'intérieur d'une transaction, SQLite ignorerait la consigne. Les
+    migrations la retirent le temps de recréer les tables (migrations/env.py).
+    """
+
+    if not app.config.get("SQLITE_FOREIGN_KEYS", True):
+        return
+    if "sqlite" not in type(dbapi_connection).__module__:
+        return
+    curseur = dbapi_connection.cursor()
+    curseur.execute("PRAGMA foreign_keys=ON")
+    curseur.close()
 
 try:
     locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
@@ -370,6 +404,7 @@ def _inject_locale_helpers():
         "static_url": static_url,
         # Défini plus bas dans le fichier : la résolution a lieu à l'appel.
         "calendar_grid": calendar_grid,
+        "can_act_on_account": can_act_on_account,
         "calendar_entries": calendar_entries,
     }
 
@@ -544,6 +579,23 @@ def list_usernames_command():
 
     for user in User.query.order_by(User.username).all():
         print(f"{user.username or '(aucun)':20} {user.email:40} {user.role:10} {user.status}")
+
+
+def purge_expired_credentials():
+    """Effacer les mots de passe en clair dont l'affichage a expiré.
+
+    Appelée avant chaque requête. On lit d'abord : une écriture à chaque page
+    prendrait le verrou de SQLite pour rien, alors qu'il n'y a presque jamais
+    rien à effacer.
+    """
+
+    limite = datetime.utcnow() - timedelta(minutes=CredentialHandoff.MAX_AGE_MINUTES)
+    perimee = CredentialHandoff.query.filter(CredentialHandoff.created_at < limite)
+    if perimee.first() is None:
+        return 0
+    nombre = perimee.delete(synchronize_session=False)
+    db.session.commit()
+    return nombre
 
 
 def store_credentials(target, password, *, regenerated, mail_sent):
@@ -732,6 +784,19 @@ def install_guide():
 
 # --- Gestion de l'expiration de session
 @app.before_request
+def _purge_credentials():
+    # Les fichiers statiques n'y changent rien : inutile d'interroger la base.
+    if request.path.startswith("/static/"):
+        return None
+    try:
+        purge_expired_credentials()
+    except Exception:  # noqa: BLE001 - une purge ratée ne bloque pas la page
+        db.session.rollback()
+        app.logger.exception("Purge des identifiants expires impossible")
+    return None
+
+
+@app.before_request
 def _check_session_timeout():
     timeout = app.config.get("SESSION_TIMEOUT_MINUTES")
     if not timeout:
@@ -914,17 +979,13 @@ def _safe_next_url(candidate):
 
 
 def client_ip():
-    """Return the client IP, honouring the reverse proxy header (Caddy).
+    """Adresse du client, telle que transmise par Caddy.
 
-    Behind the HTTPS proxy, ``remote_addr`` is the proxy's address; the real
-    client is the first entry of ``X-Forwarded-For``.
+    ``ProxyFix`` (voir la création de l'application) a déjà remplacé
+    ``remote_addr`` par l'adresse que le proxy a vue, et non par celle que le
+    client prétend avoir.
     """
 
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first[:45]
     return (request.remote_addr or "")[:45] or None
 
 
@@ -1076,6 +1137,32 @@ def repair_orphan_segments_command(dry_run):
         f"\n{len(orphans)} segment(s) fantôme(s) supprimé(s), "
         f"{len(dangling)} réservation(s) détachée(s) d'un véhicule supprimé."
     )
+
+
+@app.cli.command("check-integrity")
+def check_integrity_command():
+    """Vérifier la base : fichier sain, aucune référence cassée.
+
+    À lancer avant et après une mise à jour. Les clés étrangères empêchent
+    désormais toute nouvelle référence cassée, mais ne corrigent pas celles
+    laissées par l'ancien code : cette commande les montre.
+    """
+
+    sain = db.session.execute(db.text("PRAGMA integrity_check")).scalar()
+    casses = db.session.execute(db.text("PRAGMA foreign_key_check")).fetchall()
+    cles = db.session.execute(db.text("PRAGMA foreign_keys")).scalar()
+
+    print(f"Fichier de base : {'sain' if sain == 'ok' else sain}")
+    print(f"Clés étrangères : {'actives' if cles else 'désactivées'}")
+    if not casses:
+        print("Références : aucune référence cassée.")
+    else:
+        print(f"Références : {len(casses)} référence(s) cassée(s) :")
+        for table, ligne, parent, _ in casses:
+            print(f"  - {table} n°{ligne} désigne un(e) {parent} qui n'existe plus")
+        print("Pour les segments, « flask repair-orphan-segments » les répare.")
+    if sain != "ok" or casses:
+        raise SystemExit(1)
 
 
 @app.cli.command("check-mail")
@@ -1814,9 +1901,14 @@ def admin_user_credentials():
     if not creds:
         return redirect(url_for("admin_users"))
     u = current_user()
-    return render_template(
+    reponse = make_response(render_template(
         "user_credentials.html", creds=creds, user=u, current_user=u
-    )
+    ))
+    # La page affiche un mot de passe : ni le navigateur ni un intermédiaire ne
+    # doivent la garder. Sans cela, le bouton « Précédent » peut la réafficher.
+    reponse.headers["Cache-Control"] = "no-store"
+    reponse.headers["Pragma"] = "no-cache"
+    return reponse
 
 
 @app.route("/admin/mail-test", methods=["GET", "POST"])
@@ -1846,19 +1938,113 @@ def admin_mail_test():
     )
 
 
+# --- droits sur les comptes ---------------------------------------------------
+#
+# Chaque route vérifiait le rôle de celui qui agit, jamais celui du compte visé :
+# un administrateur pouvait désactiver le superadministrateur ou changer son
+# adresse e-mail, et le dernier superadministrateur pouvait se retirer lui-même
+# tout accès. Masquer les boutons ne suffit pas, une requête se fabrique à la
+# main : la règle vit ici, et toutes les routes la consultent.
+
+ACCOUNT_ACTIONS = ("edit", "activate", "deactivate", "promote", "demote",
+                   "reset_password", "delete")
+
+
+def _is_last_active_superadmin(target):
+    """Le compte visé est-il le seul superadministrateur actif ?"""
+
+    if target.role != User.ROLE_SUPERADMIN or target.status != "active":
+        return False
+    autres = User.query.filter(
+        User.role == User.ROLE_SUPERADMIN,
+        User.status == "active",
+        User.id != target.id,
+    ).count()
+    return autres == 0
+
+
+def account_action_refusal(actor, target, action, new_role=None):
+    """Pourquoi ``actor`` ne peut pas faire ``action`` sur ``target``.
+
+    Retourne un message en français, ou None si l'action est permise.
+    ``new_role`` sert à la modification d'un compte qui change son rôle.
+    """
+
+    if actor is None or target is None:
+        return "Action impossible."
+
+    if actor.role == User.ROLE_ADMIN:
+        # Un administrateur gère les utilisateurs, pas ses pairs ni ses
+        # supérieurs.
+        if target.role != User.ROLE_USER:
+            return ("Seul le superadministrateur peut agir sur un compte "
+                    "administrateur ou superadministrateur.")
+        if action not in ("edit", "activate", "deactivate"):
+            return "Action réservée au superadministrateur."
+        return None
+
+    if actor.role != User.ROLE_SUPERADMIN:
+        return "Action réservée aux administrateurs."
+
+    # Superadministrateur : tout, sauf se priver de tout recours.
+    dernier = _is_last_active_superadmin(target)
+    if action == "deactivate" and dernier:
+        return ("C'est le dernier superadministrateur actif : le désactiver "
+                "retirerait à tout le monde l'accès à l'administration.")
+    if action == "delete" and target.role == User.ROLE_SUPERADMIN:
+        return "Impossible de supprimer un superadministrateur."
+    if action == "promote" and target.role != User.ROLE_USER:
+        # « Promouvoir » fait passer à administrateur : appliqué à un
+        # superadministrateur, il le rétrogradait sans le dire.
+        return "Seul un utilisateur peut être promu administrateur."
+    if action == "demote" and target.role != User.ROLE_ADMIN:
+        return "Seul un administrateur peut être rétrogradé."
+    if action == "edit" and new_role and new_role != User.ROLE_SUPERADMIN and dernier:
+        return ("C'est le dernier superadministrateur actif : il ne peut pas "
+                "perdre ce rôle.")
+    return None
+
+
+def can_act_on_account(actor, target, action):
+    """Pour les gabarits : afficher seulement les actions permises."""
+
+    return account_action_refusal(actor, target, action) is None
+
+
+def _refuse_account_action(actor, target, action, new_role=None):
+    """Signaler le refus et renvoyer vers la liste, ou None si permis."""
+
+    motif = account_action_refusal(actor, target, action, new_role=new_role)
+    if motif is None:
+        return None
+    app.logger.warning(
+        "Action %s refusee : %s sur le compte %s (%s)",
+        action, actor.username if actor else "?", target.username, target.role,
+    )
+    flash(motif, "danger")
+    return redirect(url_for("admin_users"))
+
+
 @app.route("/admin/user/<int:user_id>/edit", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_user_edit(user_id):
     target = db.get_or_404(User, user_id)
     u = current_user()
+    refus = _refuse_account_action(u, target, "edit")
+    if refus:
+        return refus
     form = UserForm(obj=target)
     if form.validate_on_submit():
+        nouveau_role = form.role.data if u.role == User.ROLE_SUPERADMIN else None
+        refus = _refuse_account_action(u, target, "edit", new_role=nouveau_role)
+        if refus:
+            return refus
         target.first_name = form.first_name.data
         target.last_name = form.last_name.data
         target.name = f"{form.last_name.data} {form.first_name.data}"
         target.email = form.email.data.lower()
-        if current_user().role == User.ROLE_SUPERADMIN:
-            target.role = form.role.data
+        if nouveau_role:
+            target.role = nouveau_role
         db.session.commit()
         flash("Utilisateur mis à jour", "success")
         return redirect(url_for("admin_users"))
@@ -1875,6 +2061,9 @@ def admin_user_edit(user_id):
 @role_required("superadmin")
 def admin_promote(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "promote")
+    if refus:
+        return refus
     target.role = User.ROLE_ADMIN
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
@@ -1885,6 +2074,9 @@ def admin_promote(user_id):
 @role_required("superadmin")
 def admin_demote(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "demote")
+    if refus:
+        return refus
     target.role = User.ROLE_USER
     db.session.commit()
     flash("Utilisateur rétrogradé", "info")
@@ -1895,6 +2087,9 @@ def admin_demote(user_id):
 @role_required("admin", "superadmin")
 def admin_activate(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "activate")
+    if refus:
+        return refus
     target.status = "active"
     db.session.commit()
     subject = "Votre compte est activé"
@@ -1911,6 +2106,9 @@ def admin_activate(user_id):
 @role_required("admin", "superadmin")
 def admin_deactivate(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "deactivate")
+    if refus:
+        return refus
     target.status = "inactive"
     db.session.commit()
     flash("Utilisateur désactivé", "warning")
@@ -1927,6 +2125,9 @@ def admin_reset_password(user_id):
     """
 
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "reset_password")
+    if refus:
+        return refus
     if not target.username:
         target.assign_username()
     password = target.set_random_password()
@@ -1940,11 +2141,19 @@ def admin_reset_password(user_id):
 @role_required("superadmin")
 def admin_user_delete(user_id):
     target = db.get_or_404(User, user_id)
-    if target.role == User.ROLE_SUPERADMIN:
-        flash("Impossible de supprimer un superadministrateur", "danger")
-        return redirect(url_for("admin_users"))
+    refus = _refuse_account_action(current_user(), target, "delete")
+    if refus:
+        return refus
     # Suppression des réservations associées et de leurs segments.
     delete_reservations(Reservation.query.filter_by(user_id=target.id))
+    # Deux autres tables le désignent. Sans clés étrangères la suppression
+    # laissait ces références pendantes ; avec elles, elle échouerait.
+    CredentialHandoff.query.filter_by(user_id=target.id).delete(
+        synchronize_session=False
+    )
+    VehicleUnavailability.query.filter_by(created_by=target.id).update(
+        {"created_by": None}, synchronize_session=False
+    )
     db.session.delete(target)
     db.session.commit()
     flash("Utilisateur supprimé", "info")
@@ -2134,8 +2343,12 @@ def vehicles_unavailability_map(start, end):
 def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     if vehicle_unavailability(vehicle_id, start, end) is not None:
         return True
-    q_seg = ReservationSegment.query.filter(
+    # Le segment d'une demande refusée ou annulée ne bloque plus rien : on le
+    # garde pour l'historique, mais le véhicule redevient libre. Sans cette
+    # jointure, le planning le montrait libre et l'attribution le disait pris.
+    q_seg = ReservationSegment.query.join(Reservation).filter(
         ReservationSegment.vehicle_id == vehicle_id,
+        Reservation.status.notin_(INACTIVE_STATUSES),
         ReservationSegment.end_at > start,
         ReservationSegment.start_at < end,
     )
@@ -2156,6 +2369,47 @@ def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     return q_res.first() is not None
 
 
+def form_vehicle(field="vehicle_id"):
+    """Le véhicule désigné par un formulaire, ou None.
+
+    ``int()`` sur un champ absent levait une erreur 500, et un identifiant
+    inexistant produisait un segment pointant dans le vide.
+    """
+
+    try:
+        vehicle_id = int(request.form.get(field, ""))
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(Vehicle, vehicle_id)
+
+
+def segment_period_error(reservation, start, end):
+    """Pourquoi la période d'un segment est invalide, ou None.
+
+    Un segment dont la fin précédait le début, ou qui débordait de la
+    réservation, était accepté tel quel et faussait le planning.
+    """
+
+    if start is None or end is None:
+        return "Indiquez le début et la fin de la période."
+    if start >= end:
+        return "La fin doit être après le début."
+    if start < reservation.start_at or end > reservation.end_at:
+        return (
+            "La période doit rester dans celle de la réservation, du "
+            f"{reservation.start_at.strftime('%d/%m/%Y %Hh%M')} au "
+            f"{reservation.end_at.strftime('%d/%m/%Y %Hh%M')}."
+        )
+    return None
+
+
+def _form_datetime(field):
+    try:
+        return datetime.fromisoformat(request.form.get(field, ""))
+    except (TypeError, ValueError):
+        return None
+
+
 def commit_if_still_free(vehicle_id, start, end, reservation_id):
     """Enregistrer l'attribution en cours, sauf si le véhicule vient d'être pris.
 
@@ -2174,10 +2428,18 @@ def commit_if_still_free(vehicle_id, start, end, reservation_id):
     return True
 
 
-def vehicles_availability(start, end):
+def vehicles_availability(start, end, exclude_reservation_id=None):
+    """Chaque véhicule et sa disponibilité sur la période.
+
+    ``exclude_reservation_id`` : la réservation qu'on est en train de gérer ne
+    doit pas se bloquer elle-même. Sans cela son propre véhicule apparaissait
+    « Occupé », coché mais désactivé — donc jamais envoyé par le formulaire.
+    """
+
     out = []
     for v in Vehicle.query.order_by(Vehicle.code).all():
-        conflict = has_conflict(v.id, start, end)
+        conflict = has_conflict(v.id, start, end,
+                                exclude_reservation_id=exclude_reservation_id)
         out.append((v, not conflict))
     return out
 
@@ -2702,7 +2964,15 @@ def manage_request(rid):
     day_str = request.args.get("day")
     day = None
     if day_str:
-        day = datetime.strptime(day_str, "%Y-%m-%d")
+        # Un jour mal formé levait une erreur 500 ; un jour hors de la
+        # réservation fabriquait un segment dont la fin précédait le début.
+        try:
+            day = datetime.strptime(day_str, "%Y-%m-%d")
+        except ValueError:
+            day = None
+        if day is None or not (r.start_at.date() <= day.date() <= r.end_at.date()):
+            flash("Ce jour ne fait pas partie de la réservation.", "warning")
+            return redirect(url_for("manage_request", rid=r.id))
         label = reservation_slot_label(r, day)
         if label == "Matin":
             day_start = datetime.combine(day.date(), time(8, 0))
@@ -2723,7 +2993,11 @@ def manage_request(rid):
     if request.method == "POST":
         action = request.form.get("action")
         if action == "segment_day" and day:
-            veh_id = int(request.form.get("vehicle_id"))
+            vehicule = form_vehicle()
+            if vehicule is None:
+                flash("Choisissez un véhicule existant.", "danger")
+                return redirect(url_for("manage_request", rid=r.id, day=day_str))
+            veh_id = vehicule.id
             if has_conflict(
                 veh_id, day_start, day_end, exclude_reservation_id=r.id
             ):
@@ -2737,7 +3011,15 @@ def manage_request(rid):
                 if existing:
                     old_vehicle = db.session.get(Vehicle, existing.vehicle_id)
                     existing.vehicle_id = veh_id
-                    db.session.commit()
+                    if not commit_if_still_free(
+                        veh_id, existing.start_at, existing.end_at, r.id
+                    ):
+                        flash(
+                            "Ce véhicule vient d'être attribué par un autre "
+                            "administrateur. Choisissez-en un autre.",
+                            "danger",
+                        )
+                        return redirect(url_for("admin_reservations"))
                     new_vehicle = db.session.get(Vehicle, veh_id)
                     recipients = reservation_notification_recipients(r)
                     if recipients:
@@ -2786,7 +3068,13 @@ def manage_request(rid):
                         current_date += timedelta(days=1)
                     r.vehicle_id = None
                 r.status = "approved"
-                db.session.commit()
+                if not commit_if_still_free(veh_id, day_start, day_end, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                    return redirect(url_for("admin_reservations"))
                 vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
@@ -2869,9 +3157,17 @@ def manage_request(rid):
                     flash("Demande approuvée et véhicule attribué.", "success")
                     return redirect(url_for("admin_reservations"))
         elif action == "segment":
-            start_at = datetime.fromisoformat(request.form.get("start_at"))
-            end_at = datetime.fromisoformat(request.form.get("end_at"))
-            veh_id = int(request.form.get("vehicle_id"))
+            start_at = _form_datetime("start_at")
+            end_at = _form_datetime("end_at")
+            vehicule = form_vehicle()
+            erreur = segment_period_error(r, start_at, end_at)
+            if erreur is None and vehicule is None:
+                erreur = "Choisissez un véhicule existant."
+            if erreur:
+                # Refusé avant toute écriture.
+                flash(erreur, "danger")
+                return redirect(url_for("manage_request", rid=r.id))
+            veh_id = vehicule.id
             if has_conflict(veh_id, start_at, end_at, exclude_reservation_id=r.id):
                 flash("Conflit détecté lors de la création du segment.", "danger")
             else:
@@ -2942,7 +3238,7 @@ def manage_request(rid):
                 )
             flash("Réservation supprimée.", "info")
             return redirect(url_for("admin_reservations"))
-    avail = vehicles_availability(day_start, day_end)
+    avail = vehicles_availability(day_start, day_end, exclude_reservation_id=r.id)
     user = current_user()
     return render_template(
         "manage_reservation.html",
@@ -2966,7 +3262,11 @@ def manage_segment(sid):
     if request.method == "POST":
         action = request.form.get("action")
         if action == "update":
-            veh_id = int(request.form.get("vehicle_id"))
+            vehicule = form_vehicle()
+            if vehicule is None:
+                flash("Choisissez un véhicule existant.", "danger")
+                return redirect(url_for("manage_segment", sid=seg.id))
+            veh_id = vehicule.id
             if has_conflict(
                 veh_id, seg.start_at, seg.end_at, exclude_reservation_id=r.id
             ):
@@ -2974,7 +3274,13 @@ def manage_segment(sid):
             else:
                 old_vehicle = seg.vehicle
                 seg.vehicle_id = veh_id
-                db.session.commit()
+                if not commit_if_still_free(veh_id, seg.start_at, seg.end_at, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                    return redirect(url_for("admin_reservations"))
                 new_vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
@@ -2995,7 +3301,7 @@ def manage_segment(sid):
             db.session.commit()
             flash("Segment supprimé.", "info")
             return redirect(url_for("admin_reservations"))
-    avail = vehicles_availability(seg.start_at, seg.end_at)
+    avail = vehicles_availability(seg.start_at, seg.end_at, exclude_reservation_id=r.id)
     user = current_user()
     return render_template(
         "manage_reservation.html",
@@ -3011,14 +3317,32 @@ def manage_segment(sid):
     )
 
 
+def month_from_args():
+    """Année et mois demandés dans l'adresse, ou le mois en cours.
+
+    « ?m=13 » ou « ?y=abc » levaient une erreur 500. Une adresse abîmée —
+    tronquée par une messagerie, modifiée à la main — ramène désormais au mois
+    en cours plutôt qu'à une page d'erreur.
+    """
+
+    aujourdhui = local_now()
+    try:
+        y = int(request.args.get("y", aujourdhui.year))
+        m = int(request.args.get("m", aujourdhui.month))
+    except (TypeError, ValueError):
+        return aujourdhui.year, aujourdhui.month
+    if not (1 <= m <= 12) or not (2000 <= y <= 2100):
+        return aujourdhui.year, aujourdhui.month
+    return y, m
+
+
 @app.route("/export/pdf/month")
 @role_required("admin", "superadmin")
 def export_pdf_month():
     if not WEASY_OK:
         flash("WeasyPrint non installé.", "warning")
         return redirect(url_for("calendar_month"))
-    y = int(request.args.get("y", datetime.today().year))
-    m = int(request.args.get("m", datetime.today().month))
+    y, m = month_from_args()
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
     # Même source que le planning affiché : le PDF oubliait les
@@ -3069,12 +3393,16 @@ def calendar_payload(start, end):
 @app.route("/calendar/month")
 def calendar_month():
     user = current_user()
-    y = int(request.args.get("y", datetime.today().year))
-    m = int(request.args.get("m", datetime.today().month))
+    y, m = month_from_args()
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+    # Passer en vue semaine ouvre la semaine d'aujourd'hui si le mois affiché
+    # la contient, sinon celle du premier du mois.
+    aujourdhui = datetime.combine(local_now().date(), time.min)
+    pivot = aujourdhui if start <= aujourdhui < end else start
     return render_template(
-        "calendar_month.html", user=user, **calendar_payload(start, end)
+        "calendar_month.html", user=user, pivot=pivot,
+        **calendar_payload(start, end)
     )
 
 
@@ -3091,8 +3419,12 @@ def calendar_week():
         repere = datetime.combine(local_now().date(), time.min)
     start = repere - timedelta(days=repere.weekday())  # lundi
     end = start + timedelta(days=7)
+    # Le repère voyage avec la navigation : semaine suivante ou précédente,
+    # puis retour au mois, ramènent au mois d'où l'on venait. On reprenait le
+    # lundi affiché — pour la semaine du 31 août, « Mois » menait en août.
     return render_template(
-        "calendar_week.html", user=user, **calendar_payload(start, end)
+        "calendar_week.html", user=user, pivot=repere,
+        **calendar_payload(start, end)
     )
 
 

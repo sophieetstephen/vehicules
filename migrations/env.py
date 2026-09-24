@@ -97,6 +97,20 @@ def run_migrations_online():
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        # SQLite modifie une table en la recréant : copie, suppression de
+        # l'ancienne, renommage. Avec les clés étrangères actives, supprimer
+        # une table encore désignée par une autre échouerait. On les coupe le
+        # temps de la migration — avant toute transaction, sinon SQLite ignore
+        # la consigne — puis on vérifie qu'aucune référence n'a été cassée.
+        sqlite = connection.dialect.name == "sqlite"
+        if sqlite:
+            connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            # Indispensable : la commande ci-dessus ouvre une transaction.
+            # Laissée ouverte, Alembic la croit gérée par l'appelant, ne la
+            # valide jamais, et elle est annulée à la fermeture — toutes les
+            # migrations s'affichaient « appliquées » sans l'être.
+            connection.commit()
+
         context.configure(
             connection=connection,
             target_metadata=get_metadata(),
@@ -105,6 +119,16 @@ def run_migrations_online():
 
         with context.begin_transaction():
             context.run_migrations()
+
+        if sqlite:
+            casses = connection.exec_driver_sql("PRAGMA foreign_key_check").fetchall()
+            if casses:
+                logger.warning(
+                    "%d référence(s) cassée(s) après migration : lancer "
+                    "« flask check-integrity » pour le détail.", len(casses)
+                )
+            connection.exec_driver_sql("PRAGMA foreign_keys=ON")
+            connection.commit()
 
 
 if context.is_offline_mode():
