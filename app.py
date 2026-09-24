@@ -2379,18 +2379,22 @@ def occupations_on_vehicle(vehicle_id, start, end):
     return sorted(out, key=lambda o: o[0])
 
 
-def reservations_orphaned_by_loan_removal(loan):
+def reservations_orphaned_by_loan_removal(loan, depuis=None):
     """Réservations qui ne seraient plus couvertes si l'on retirait ce prêt.
+
+    ``depuis`` : seule la fin du prêt est retirée, à partir de ce moment
+    (prêt en cours qu'on termine).
 
     Un autre prêt peut couvrir la même période : seules les réservations
     réellement laissées sans prêt comptent.
     """
 
-    autres = [p for p in loans_for(loan.vehicle_id, loan.start_at, loan.end_at)
+    debut_retire = max(loan.start_at, depuis) if depuis else loan.start_at
+    autres = [p for p in loans_for(loan.vehicle_id, debut_retire, loan.end_at)
               if p.id != loan.id]
     orphelines = []
     for debut, fin, reservation in occupations_on_vehicle(
-            loan.vehicle_id, loan.start_at, loan.end_at):
+            loan.vehicle_id, debut_retire, loan.end_at):
         if not loans_cover(autres, debut, fin):
             orphelines.append(reservation)
     return orphelines
@@ -2486,25 +2490,41 @@ def _render_vehicle_loans(vehicle, form, user, now):
 @app.route("/admin/vehicles/loans/<int:loan_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_loan_delete(loan_id):
+    """Retirer un prêt à venir, ou terminer maintenant un prêt en cours.
+
+    Un prêt passé ne se retire pas : il dit qui a eu le véhicule, et quand.
+    Retirer un prêt en cours effaçait aussi les jours déjà écoulés.
+    """
+
     loan = db.get_or_404(VehicleLoan, loan_id)
     vehicle_id = loan.vehicle_id
-    orphelines = reservations_orphaned_by_loan_removal(loan)
+    now = local_now()
+    if loan.end_at < now:
+        flash("Ce prêt est terminé : il reste dans l'historique du véhicule.", "info")
+        return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
+    en_cours = loan.start_at <= now
+    orphelines = reservations_orphaned_by_loan_removal(
+        loan, depuis=now if en_cours else None)
     if orphelines:
         # Retirer le prêt laisserait ces réservations sur un véhicule que plus
         # rien n'autorise : on demande de les réattribuer d'abord.
-        noms = ", ".join(
-            f"{r.start_at.strftime('%d/%m')} ({(r.user.first_name or '')} {(r.user.last_name or '')})".strip()
-            for r in orphelines[:5]
-        )
+        noms = ", ".join(_reservation_brief(r) for r in orphelines[:5])
         flash(
-            f"Impossible de retirer ce prêt : {len(orphelines)} réservation(s) l'utilisent "
+            f"Impossible de {'terminer' if en_cours else 'retirer'} ce prêt : "
+            f"{len(orphelines)} réservation(s) l'utilisent "
             f"— {noms}. Réattribuez-les à un autre véhicule d'abord.",
             "danger",
         )
         return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
-    db.session.delete(loan)
-    db.session.commit()
-    flash("Prêt retiré : le véhicule revient à son usage réservé.", "info")
+    if en_cours:
+        loan.end_at = now
+        db.session.commit()
+        flash("Prêt terminé : le véhicule revient à son usage réservé. "
+              "Les jours déjà écoulés restent dans l'historique.", "info")
+    else:
+        db.session.delete(loan)
+        db.session.commit()
+        flash("Prêt retiré : le véhicule revient à son usage réservé.", "info")
     return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
 
 

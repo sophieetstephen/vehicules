@@ -81,11 +81,21 @@
           </div>
           {% endif %}
         </div>
+        {# Un prêt en cours se termine : les jours écoulés restent dans
+           l'historique. Seul un prêt à venir se retire entièrement. #}
         <form method="post" action="{{ url_for('admin_vehicle_loan_delete', loan_id=p.id) }}"
-              onsubmit="return confirm('Retirer ce prêt ? Le véhicule reviendra à son usage réservé.');">
+              {% if en_cours %}
+              onsubmit="return confirm('Terminer ce prêt maintenant ? Le véhicule reviendra à son usage réservé ; les jours écoulés restent dans l’historique.');"
+              {% else %}
+              onsubmit="return confirm('Retirer ce prêt ? Le véhicule reviendra à son usage réservé.');"
+              {% endif %}>
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button class="btn btn-sm btn-outline-warning" type="submit">
+            {% if en_cours %}
+            <i class="fa-solid fa-flag-checkered me-1"></i>Terminer
+            {% else %}
             <i class="fa-solid fa-rotate-left me-1"></i>Retirer
+            {% endif %}
           </button>
         </form>
       </div>

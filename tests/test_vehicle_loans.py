@@ -246,19 +246,82 @@ def test_removing_a_loan_is_refused_for_a_segment_too(parc):
     assert VehicleLoan.query.count() == 1
 
 
+# Prêts à venir (NOW est le 7 octobre) : ceux-là se retirent entièrement.
+LUNDI_MATIN = (datetime(2026, 10, 13, 8), datetime(2026, 10, 13, 12))
+
+
 def test_removing_a_loan_covered_by_another_is_allowed(parc):
-    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
-    _pret(parc["vl1"], date(2026, 10, 6), date(2026, 10, 8))
-    _demande(parc, *MATIN, vehicule=parc["vl1"], statut="approved")
+    pret = _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    _pret(parc["vl1"], date(2026, 10, 13), date(2026, 10, 14))
+    _demande(parc, *LUNDI_MATIN, vehicule=parc["vl1"], statut="approved")
     _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
     assert VehicleLoan.query.count() == 1
 
 
 def test_refused_reservation_does_not_hold_a_loan(parc):
-    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
-    _demande(parc, *MATIN, vehicule=parc["vl1"], statut="rejected")
+    pret = _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    _demande(parc, *LUNDI_MATIN, vehicule=parc["vl1"], statut="rejected")
     _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
     assert VehicleLoan.query.count() == 0
+
+
+# --- la trace des prêts --------------------------------------------------------
+#
+# Relevé par le second audit : retirer un prêt l'effaçait, même quand il avait
+# déjà servi. On perdait « qui a eu le VL1 tel jour ».
+
+def test_past_loan_cannot_be_removed(parc):
+    pret = _pret(parc["vl1"], date(2026, 9, 1), date(2026, 9, 5))
+    reponse = _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete",
+                                            follow_redirects=True)
+    assert VehicleLoan.query.count() == 1
+    assert "reste dans l'historique" in html_module.unescape(reponse.data.decode())
+
+
+def test_ongoing_loan_is_ended_not_erased(parc):
+    """Les jours écoulés restent ; seule la suite du prêt disparaît."""
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
+
+    db.session.expire_all()
+    garde = db.session.get(VehicleLoan, pret.id)
+    assert garde is not None
+    assert garde.start_at == datetime(2026, 10, 5)
+    assert garde.end_at == NOW
+    assert has_conflict(parc["vl1"].id, datetime(2026, 10, 8, 8), datetime(2026, 10, 8, 12)), \
+        "après la fin du prêt, le véhicule redevient réservé"
+
+
+def test_ending_a_loan_ignores_reservations_already_past(parc):
+    """Une réservation d'avant-hier sur ce prêt n'empêche pas de le terminer :
+    elle reste couverte par la partie conservée."""
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _demande(parc, datetime(2026, 10, 5, 8), datetime(2026, 10, 5, 12),
+             vehicule=parc["vl1"], statut="approved")
+    _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
+    db.session.expire_all()
+    assert db.session.get(VehicleLoan, pret.id).end_at == NOW
+
+
+def test_ending_a_loan_is_refused_when_a_later_reservation_uses_it(parc):
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _demande(parc, datetime(2026, 10, 8, 8), datetime(2026, 10, 8, 12),
+             vehicule=parc["vl1"], statut="approved")
+    reponse = _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete",
+                                            follow_redirects=True)
+    db.session.expire_all()
+    assert db.session.get(VehicleLoan, pret.id).end_at == datetime.combine(
+        date(2026, 10, 9), datetime.max.time())
+    assert "Impossible de terminer ce prêt" in html_module.unescape(reponse.data.decode())
+
+
+def test_loans_page_offers_to_end_an_ongoing_loan(parc):
+    _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    page = html_module.unescape(
+        _client(parc["adjoint"]).get(f"/admin/vehicles/{parc['vl1'].id}/loans").data.decode())
+    assert page.count(">Terminer") == 1
+    assert page.count(">Retirer") == 1
 
 
 def test_vehicle_form_sets_and_clears_the_holder(parc):
