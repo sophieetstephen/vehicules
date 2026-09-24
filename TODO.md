@@ -75,4 +75,4 @@
 - **Stack** : Flask, SQLAlchemy, SQLite, WeasyPrint (PDF)
 - **Timers systemd** :
   - `archive_reservations.timer` : quotidien à 2h
-  - `archive_year.timer` : 31 décembre à 23:55
+  - `archive_year.timer` : 1er janvier à 00:30 (archive l'année écoulée)

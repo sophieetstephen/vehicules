@@ -140,3 +140,41 @@ def test_real_restore_protects_the_current_database():
     assert ".avant-restauration" in reel, "garder la base actuelle avant de l'écraser"
     assert "PRAGMA integrity_check" in reel, "vérifier avant de redémarrer"
     assert "env_YYYYMMDD_HHMMSS.txt" in reel, "le .env est indispensable sur une machine neuve"
+
+
+# --- archivage annuel : date de déclenchement et année archivée ---------------
+
+def _date_du_minuteur(nom):
+    """(mois, jour, heure, minute) d'un OnCalendar « *-MM-JJ HH:MM:SS »."""
+    valeur = _directive(TOOLS / nom, "OnCalendar")
+    date, heure = valeur.split()
+    _, mois, jour = date.split("-")
+    h, m, _ = heure.split(":")
+    return int(mois), int(jour), int(h), int(m)
+
+
+def test_annual_archive_archives_the_year_that_just_ended():
+    """Déclenché le 31 décembre à 23h55, le minuteur archivait l'avant-
+    dernière année : le script vise par défaut l'année précédente. On
+    reconstitue le jour du déclenchement et on vérifie l'année visée."""
+    from datetime import datetime
+
+    import tools.archive_year as ay
+
+    mois, jour, h, m = _date_du_minuteur("archive_year.timer")
+    declenchement = datetime(2027, mois, jour, h, m)
+    annee_terminee = 2027 - 1 if mois == 1 else 2027
+    assert ay.default_archive_year(declenchement) == annee_terminee == 2026
+
+
+def test_annual_archive_runs_after_midnight_backup():
+    """Après la sauvegarde de minuit, pas pendant."""
+    mois, jour, h, m = _date_du_minuteur("archive_year.timer")
+    assert (mois, jour) == (1, 1)
+    assert (h, m) > (0, 0)
+
+
+def test_readme_installs_the_archive_timers():
+    """Aucun des deux n'était installé : sans commande documentée, ils ne le
+    seront jamais."""
+    assert "archive_year.timer archive_reservations.timer" in README

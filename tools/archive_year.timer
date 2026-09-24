@@ -1,8 +1,13 @@
 [Unit]
-Description=Archivage annuel du planning le 31 decembre
+Description=Archivage annuel du planning, le 1er janvier
 
 [Timer]
-OnCalendar=*-12-31 23:55:00
+# Le 1er janvier, pas le 31 decembre : le script archive par defaut l'annee
+# precedente. Declenche le 31/12 a 23h55, il archivait donc l'avant-derniere
+# annee (2025 au lieu de 2026), et la journee du 31 n'etait pas terminee.
+# 00h30 : apres la sauvegarde de minuit ; les PDF partent sur Drive la nuit
+# suivante. Persistent : si le Raspberry etait eteint, rattrape au demarrage.
+OnCalendar=*-01-01 00:30:00
 Persistent=true
 
 [Install]

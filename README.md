@@ -106,7 +106,7 @@ La page d'accueil de chaque rôle affiche :
 ## Archivage annuel
 
 `tools/archive_year.py` génère un PDF par mois de l'année écoulée
-(minuteur systemd le 31 décembre à 23h55) et supprime les archives plus
+(minuteur systemd le 1er janvier à 0h30) et supprime les archives plus
 anciennes que `--keep-years`.
 
 **La base de données n'est pas purgée.** Les réservations restent dans
@@ -314,13 +314,20 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now vehicules-backup.timer
 ```
 
-Même principe pour l'archivage annuel (31 décembre à 23h55) :
+Même principe pour l'archivage annuel (1er janvier à 0h30, qui archive
+l'année qui vient de se terminer) et pour l'archivage quotidien des
+réservations terminées depuis plus de 7 jours, qui les retire de la liste de
+gestion sans les effacer — elles restent sur le planning et dans la base :
 
 ```bash
-sudo cp tools/archive_year.service tools/archive_year.timer /etc/systemd/system/
+sudo cp tools/archive_year.service tools/archive_year.timer \
+        tools/archive_reservations.service tools/archive_reservations.timer \
+        /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable --now archive_year.timer
+sudo systemctl enable --now archive_year.timer archive_reservations.timer
 ```
+
+Tous deux s'exécutent dans le conteneur nommé `vehicules`.
 
 Vérifier ce qui est réellement installé et la prochaine exécution :
 

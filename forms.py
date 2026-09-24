@@ -25,7 +25,16 @@ class LoginForm(FlaskForm):
         validators=[DataRequired(), Length(max=60)],
         render_kw={"autocomplete": "username", "autocapitalize": "none"},
     )
-    password = PasswordField("Mot de passe", validators=[DataRequired()])
+    # current-password : le téléphone propose d'enregistrer le mot de passe,
+    # précieux quand personne ne choisit le sien. Les trois autres empêchent
+    # qu'un clavier de téléphone ne « corrige » le mot de passe une fois
+    # affiché en clair par le bouton œil.
+    password = PasswordField(
+        "Mot de passe",
+        validators=[DataRequired()],
+        render_kw={"autocomplete": "current-password", "autocapitalize": "none",
+                   "autocorrect": "off", "spellcheck": "false"},
+    )
     submit = SubmitField("Se connecter")
 
 

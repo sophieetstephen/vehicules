@@ -64,7 +64,18 @@
           <label class="form-label" for="password">
             <i class="fa-solid fa-lock me-1 text-muted"></i>Mot de passe
           </label>
-          {{ form.password(class="form-control", type="password", placeholder="••••••••", required=True, id="password") }}
+          {# Le bouton œil : les mots de passe sont aléatoires, pénibles à taper
+             sur un téléphone, et chaque faute rapproche du blocage. Voir ce
+             qu'on a saisi avant de valider évite l'erreur. #}
+          <div class="input-group">
+            {{ form.password(class="form-control", type="password", placeholder="••••••••", required=True, id="password") }}
+            <button class="btn btn-outline-secondary password-toggle" type="button" id="passwordToggle"
+                    aria-controls="password" aria-pressed="false" aria-label="Afficher le mot de passe"
+                    title="Afficher le mot de passe">
+              <i class="fa-solid fa-eye" aria-hidden="true"></i>
+            </button>
+          </div>
+          <div class="form-text">Majuscules et minuscules comptent. Les tirets font partie du mot de passe.</div>
         </div>
 
         <button class="btn btn-primary" type="submit">
@@ -75,8 +86,7 @@
 
     <div class="login-footer">
       <span class="text-muted">
-        Pas de compte ou mot de passe oublié ? Adressez-vous au responsable du centre :
-        les comptes sont créés et les mots de passe régénérés par un administrateur.
+        Pas de compte ou mot de passe oublié ? Demandez-le au responsable du centre.
       </span>
       <div class="mt-2">
         <a href="{{ url_for('install_guide') }}"><i class="fa-solid fa-mobile-screen-button me-1"></i>Installer l'application sur votre téléphone</a>
@@ -84,6 +94,30 @@
     </div>
   </div>
 </div>
+
+<script>
+// Afficher / masquer le mot de passe.
+(function () {
+  const champ = document.getElementById('password');
+  const bouton = document.getElementById('passwordToggle');
+  if (!champ || !bouton) return;
+  const icone = bouton.querySelector('i');
+  bouton.addEventListener('click', function () {
+    const visible = champ.type === 'password';
+    champ.type = visible ? 'text' : 'password';
+    bouton.setAttribute('aria-pressed', visible ? 'true' : 'false');
+    const libelle = visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe';
+    bouton.setAttribute('aria-label', libelle);
+    bouton.title = libelle;
+    icone.classList.toggle('fa-eye', !visible);
+    icone.classList.toggle('fa-eye-slash', visible);
+    champ.focus();
+  });
+  // Ne jamais laisser un mot de passe affiché partir dans l'historique du
+  // formulaire du navigateur : on le remasque à l'envoi.
+  champ.form.addEventListener('submit', function () { champ.type = 'password'; });
+})();
+</script>
 
 <script>
 // Support du mode sombre sur la page de login
