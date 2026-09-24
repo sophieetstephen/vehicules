@@ -10,6 +10,7 @@ nouvel ordre », comme une panne. Règles convenues :
   étant demandé de vive voix ; on garde la trace de qui l'a enregistré.
 """
 
+import html as html_module
 import importlib
 from datetime import datetime, date
 
@@ -351,3 +352,70 @@ def test_pdf_explains_reserved_vehicles(parc):
     assert "pastille-reserved" in html
     tableau = html.split("<h2>Véhicules à usage réservé</h2>")[1].split("</table>")[0]
     assert "Chef de centre" in tableau and "du 12/10 au 16/10 (congés)" in tableau
+
+
+# --- passage en usage réservé d'un véhicule déjà réservé ------------------------
+#
+# Relevé par le second audit : rien ne signalait les réservations accordées
+# avant, qui restaient sur un véhicule que plus aucun prêt n'autorisait.
+
+def _passer_en_reserve(client, v):
+    return client.post(f"/admin/vehicles/{v.id}/edit", data={
+        "code": v.code, "label": v.label, "category": "", "reserved_for": "Chef de centre",
+    }, follow_redirects=True)
+
+
+def _reservation_sur(v, jean, debut, fin, segment=False):
+    r = Reservation(user_id=jean.id, start_at=debut, end_at=fin, status="approved",
+                    vehicle_id=None if segment else v.id)
+    db.session.add(r)
+    db.session.flush()
+    if segment:
+        db.session.add(ReservationSegment(reservation_id=r.id, vehicle_id=v.id,
+                                          start_at=debut, end_at=fin))
+    db.session.commit()
+    return r
+
+
+def test_becoming_reserved_lists_upcoming_reservations(ctx):
+    chef, jean = _user("Chef", User.ROLE_ADMIN), _user()
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+    _reservation_sur(v, jean, datetime(2026, 10, 12, 8), datetime(2026, 10, 12, 17))
+    _reservation_sur(v, jean, datetime(2026, 10, 14, 8), datetime(2026, 10, 14, 12), segment=True)
+    _reservation_sur(v, jean, datetime(2026, 9, 1, 8), datetime(2026, 9, 1, 17))  # passée
+
+    reponse = _passer_en_reserve(_client(chef), v)
+    page = html_module.unescape(reponse.data.decode())
+
+    assert db.session.get(Vehicle, v.id).reserved_for == "Chef de centre", "le changement est fait"
+    assert reponse.request.path == f"/admin/vehicles/{v.id}/loans", "on arrive sur les prêts"
+    assert "2 réservation(s) à venir l'utilisent déjà" in page
+    assert "12/10 (Jean X)" in page and "14/10 (Jean X)" in page
+    assert "Enregistrez un prêt" in page
+
+
+def test_no_warning_when_a_loan_covers_them(ctx):
+    chef, jean = _user("Chef", User.ROLE_ADMIN), _user()
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+    _reservation_sur(v, jean, datetime(2026, 10, 12, 8), datetime(2026, 10, 12, 17))
+    db.session.add(VehicleLoan(vehicle_id=v.id, start_at=datetime(2026, 10, 12),
+                               end_at=datetime(2026, 10, 13), created_by=chef.id))
+    db.session.commit()
+
+    page = html_module.unescape(_passer_en_reserve(_client(chef), v).data.decode())
+    assert "l'utilisent déjà" not in page
+
+
+def test_no_warning_without_upcoming_reservations(ctx):
+    chef = _user("Chef", User.ROLE_ADMIN)
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+
+    page = html_module.unescape(_passer_en_reserve(_client(chef), v).data.decode())
+    assert "Véhicule mis à jour" in page
+    assert "l'utilisent déjà" not in page

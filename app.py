@@ -2390,6 +2390,29 @@ def reservations_orphaned_by_loan_removal(loan):
     return orphelines
 
 
+def reservations_outside_loans(vehicle):
+    """Réservations à venir qui occupent ce véhicule hors de tout prêt.
+
+    Sert au passage d'un véhicule en usage réservé : celles accordées avant
+    restaient en place sans que rien ne le signale.
+    """
+
+    maintenant = local_now().replace(tzinfo=None)
+    fin = datetime.max
+    prets = loans_for(vehicle.id, maintenant, fin)
+    vues, out = set(), []
+    for debut, fin_occ, reservation in occupations_on_vehicle(vehicle.id, maintenant, fin):
+        if reservation.id not in vues and not loans_cover(prets, debut, fin_occ):
+            vues.add(reservation.id)
+            out.append(reservation)
+    return out
+
+
+def _reservation_brief(r):
+    nom = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip()
+    return f"{r.start_at.strftime('%d/%m')} ({nom})" if nom else r.start_at.strftime("%d/%m")
+
+
 @app.route("/admin/vehicles/<int:vehicle_id>/loans", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_loans(vehicle_id):
@@ -2506,9 +2529,25 @@ def admin_vehicle_edit(vehicle_id):
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
         vehicle.category = request.form.get("category", "").strip() or None
+        devient_reserve = (not vehicle.is_reserved
+                           and request.form.get("reserved_for", "").strip())
         vehicle.reserved_for = request.form.get("reserved_for", "").strip() or None
         db.session.commit()
         flash("Véhicule mis à jour", "success")
+        if devient_reserve:
+            hors_pret = reservations_outside_loans(vehicle)
+            if hors_pret:
+                # On n'annule rien : ces réservations ont été accordées. Mais
+                # plus aucun prêt ne les autorise, et rien ne le montrait.
+                flash(
+                    f"{vehicle.code} est maintenant à usage réservé, mais "
+                    f"{len(hors_pret)} réservation(s) à venir l'utilisent déjà — "
+                    + ", ".join(_reservation_brief(r) for r in hors_pret[:5])
+                    + ". Enregistrez un prêt couvrant ces dates, ou "
+                    "réattribuez-les à un autre véhicule.",
+                    "warning",
+                )
+                return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle.id))
         return redirect(url_for("admin_vehicles"))
     return render_template(
         "vehicle_form.html", vehicle=vehicle, user=current_user()
