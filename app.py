@@ -1499,6 +1499,12 @@ _MAIL_ERROR_HINTS = (
     (("name or service not known", "getaddrinfo", "nodename nor servname"),
      "Le nom du serveur d'envoi est introuvable. Vérifiez MAIL_SERVER dans le "
      "fichier .env : pour Gmail, c'est smtp.gmail.com."),
+    # Avant la règle « ssl » ci-dessous, que ce message contient aussi.
+    (("certificate verify failed", "certificate_verify_failed"),
+     "Le certificat présenté par le serveur d'envoi n'a pas pu être vérifié. "
+     "Soit le conteneur n'a pas les certificats racine (paquet "
+     "ca-certificates), soit quelqu'un s'intercale entre le Raspberry et "
+     "Gmail. Aucun mot de passe n'a été transmis."),
     (("wrong version number", "ssl", "starttls"),
      "Le port et le mode de chiffrement ne s'accordent pas. Pour Gmail : port "
      "587 avec MAIL_USE_TLS=true, ou port 465 avec MAIL_USE_TLS=false."),

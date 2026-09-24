@@ -361,7 +361,7 @@ def test_real_send_has_a_timeout(monkeypatch):
     vus = {}
 
     class FauxSMTP:
-        def __init__(self, serveur, port, timeout=None):
+        def __init__(self, serveur, port, timeout=None, **_):
             vus["timeout"] = timeout
             raise OSError("arret du test")
 
@@ -370,3 +370,80 @@ def test_real_send_has_a_timeout(monkeypatch):
     ok, _ = notify.send_mail_msmtp("Sujet", "Corps", ["a@ex.fr"])
     assert ok is False
     assert vus["timeout"] and vus["timeout"] <= 30
+
+
+# --- certificat du serveur d'envoi ---------------------------------------------
+#
+# Sans contexte, la connexion était chiffrée mais le certificat jamais vérifié :
+# un serveur qui se faisait passer pour Gmail recevait la clé d'application.
+# On monte ce faux serveur, avec un certificat qu'aucune autorité n'a signé.
+
+@pytest.fixture
+def faux_gmail(tmp_path, monkeypatch):
+    import shutil
+    import socket
+    import ssl
+    import subprocess
+    import threading
+
+    import notify
+
+    if shutil.which("openssl") is None:
+        pytest.skip("openssl est nécessaire pour fabriquer le certificat")
+    cle, cert = tmp_path / "cle.pem", tmp_path / "cert.pem"
+    subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                    "-keyout", str(cle), "-out", str(cert), "-days", "1",
+                    "-subj", "/CN=smtp.gmail.com"], check=True, capture_output=True)
+
+    contexte = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    contexte.load_cert_chain(cert, cle)
+    ecoute = socket.socket()
+    ecoute.bind(("127.0.0.1", 0))
+    ecoute.listen(1)
+    recu = []
+
+    def servir():
+        conn, _ = ecoute.accept()
+        try:
+            with contexte.wrap_socket(conn, server_side=True) as tls:
+                tls.sendall(b"220 faux gmail\r\n")
+                recu.append(tls.recv(1024))
+        except (ssl.SSLError, OSError):
+            pass  # le client a refusé la poignée de main : c'est le but
+
+    fil = threading.Thread(target=servir, daemon=True)
+    fil.start()
+    monkeypatch.setattr(notify.Config, "MAIL_SERVER", "127.0.0.1")
+    monkeypatch.setattr(notify.Config, "MAIL_PORT", ecoute.getsockname()[1])
+    monkeypatch.setattr(notify.Config, "MAIL_USE_TLS", False)
+    monkeypatch.setattr(notify.Config, "MAIL_USERNAME", "compte@gmail.com")
+    monkeypatch.setattr(notify.Config, "MAIL_PASSWORD", "cle-application")
+    yield recu
+    fil.join(timeout=5)
+    ecoute.close()
+
+
+def test_impostor_server_is_refused_before_login(faux_gmail):
+    import notify
+
+    ok, detail = notify.check_mail_login(timeout=5)
+    assert ok is False
+    assert "certificate verify failed" in detail.lower()
+    assert faux_gmail == [], "le client a parlé à un serveur non vérifié"
+
+
+def test_impostor_server_never_receives_a_message(faux_gmail):
+    import notify
+
+    ok, detail = notify.send_mail_msmtp("Sujet", "Corps", ["a@ex.fr"])
+    assert ok is False
+    assert faux_gmail == []
+
+
+def test_certificate_error_is_explained():
+    """Le message contient « ssl » : sans règle dédiée, il était pris pour un
+    mauvais réglage de port."""
+    explication = app_module.explain_mail_error(
+        "smtp error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+    assert "certificat" in explication
+    assert "port" not in explication
