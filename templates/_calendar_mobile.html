@@ -16,7 +16,7 @@
   {% if jour.today %}{% set repere.dans_la_periode = true %}{% endif %}
   {% if repere.dans_la_periode and repere.cle is none %}
     {% for v in vehicles %}
-      {% for item in grid.cells[v.id][jour.key] if item.kind != 'unav' %}
+      {% for item in grid.cells[v.id][jour.key] if item.kind == 'res' %}
         {% if repere.cle is none %}{% set repere.cle = jour.key %}{% endif %}
       {% endfor %}
     {% endfor %}
@@ -57,11 +57,47 @@
 </div>
 {% endif %}
 
+{# Véhicules à usage réservé : une ligne chacun, avec leurs prêts sur la
+   période. Répéter « réservé » chaque jour reproduirait le défaut corrigé pour
+   les indisponibilités. #}
+{% set reserves = vehicles|selectattr('is_reserved')|list %}
+{% set prets = loans|default([], true) %}
+{% if reserves %}
+<div class="mobile-day-card mobile-reserved-card">
+  <div class="mobile-day-header">
+    <span class="mobile-day-name">Usage réservé</span>
+  </div>
+  <div class="mobile-day-reservations">
+    {% for v in reserves %}
+    {% set siens = prets|selectattr('vehicle_id', 'equalto', v.id)|list %}
+    <div class="mobile-reservation">
+      <div class="mobile-res-vehicle mobile-res-vehicle-reserved">{{ v.code }}</div>
+      <div class="mobile-res-details">
+        <div class="mobile-res-user">{{ v.reserved_for }}</div>
+        <div class="mobile-res-slot">
+          {% if siens %}
+            Prêté {% for p in siens %}du {{ p.start_at.strftime('%d/%m') }} au {{ p.end_at.strftime('%d/%m') }}{{ ', ' if not loop.last }}{% endfor %}
+          {% else %}
+            Aucun prêt sur la période
+          {% endif %}
+        </div>
+      </div>
+      {% if admin %}
+        <a href="{{ url_for('admin_vehicle_loans', vehicle_id=v.id) }}" class="mobile-res-action" aria-label="Prêts">
+          <i class="fa-solid fa-chevron-right"></i>
+        </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% set vide = namespace(value=true) %}
 {% for jour in grid.days %}
   {% set items = [] %}
   {% for v in vehicles %}
-    {% for item in grid.cells[v.id][jour.key] if item.kind != 'unav' %}
+    {% for item in grid.cells[v.id][jour.key] if item.kind == 'res' %}
       {% set _ = items.append(item) %}
     {% endfor %}
   {% endfor %}

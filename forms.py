@@ -112,6 +112,15 @@ class UserForm(FlaskForm):
     submit = SubmitField("Enregistrer")
 
 
+class LoanForm(FlaskForm):
+    """Prêt d'un véhicule à usage réservé, accordé de vive voix par son titulaire."""
+
+    start_date = DateField("Du", format="%Y-%m-%d", validators=[DataRequired()])
+    end_date = DateField("Au (inclus)", format="%Y-%m-%d", validators=[DataRequired()])
+    reason = StringField("Motif", validators=[Optional(), Length(max=200)])
+    submit = SubmitField("Enregistrer le prêt")
+
+
 class UnavailabilityForm(FlaskForm):
     """Déclaration d'une indisponibilité de véhicule par un administrateur."""
 

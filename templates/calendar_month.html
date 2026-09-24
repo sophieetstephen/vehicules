@@ -3,7 +3,8 @@
 {% block content %}
 {% set vue = 'mois' %}
 {% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
-                            unavailabilities|default([], true), start, end, user) %}
+                            unavailabilities|default([], true), start, end, user,
+                            loans|default([], true)) %}
 
 {% include "_calendar_header.html" with context %}
 
@@ -34,7 +35,7 @@
               {% for item in grid.cells[v.id][jour.key] %}
                 <button type="button" data-calendar-item
                         class="cal-chip cal-chip-{{ item.kind }}"
-                        title="{% if item.kind == 'unav' %}Indispo. – {{ item.name }}{% else %}{{ item.name }} ({{ item.slot }}){% if item.purpose %} – {{ item.purpose }}{% endif %}{% endif %}"
+                        title="{% if item.kind == 'unav' %}Indispo. – {{ item.name }}{% elif item.kind == 'reserved' %}Usage réservé – {{ item.name }}, hors prêt{% else %}{{ item.name }} ({{ item.slot }}){% if item.purpose %} – {{ item.purpose }}{% endif %}{% endif %}"
                         data-kind="{{ item.kind }}"
                         data-vehicle="{{ v.code }}{% if v.label %} – {{ v.label }}{% endif %}"
                         data-day="{{ weekday_abbr(jour.date) }} {{ jour.date.strftime('%d/%m/%Y') }}"
@@ -57,6 +58,7 @@
     <span class="legend-item"><span class="cal-chip cal-chip-res">A</span> Après-midi</span>
     <span class="legend-item"><span class="cal-chip cal-chip-res">J</span> Journée</span>
     <span class="legend-item"><span class="cal-chip cal-chip-unav">I</span> Indisponible</span>
+    <span class="legend-item"><span class="cal-chip cal-chip-reserved">R</span> Usage réservé, hors prêt</span>
     <span class="legend-text">Cliquez sur une pastille pour voir le détail.</span>
   </div>
 </div>

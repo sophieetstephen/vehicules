@@ -29,14 +29,14 @@ import textwrap
 import pytest
 
 RACINE = pathlib.Path(__file__).resolve().parents[1]
-TETE = "e2a3b4c5d6f7"
+TETE = "f3b4c5d6e7a8"
 # Crée reservation_segment ; la migration suivante recrée reservation.
 AVANT_RECREATION = "3f78231a732c"
 
 TABLES_ATTENDUES = {
     "alembic_version", "user", "vehicle", "reservation", "reservation_segment",
     "vehicle_unavailability", "login_attempt", "credential_handoff",
-    "notification_settings",
+    "notification_settings", "vehicle_loan",
 }
 
 

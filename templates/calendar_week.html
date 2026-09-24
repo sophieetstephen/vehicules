@@ -3,7 +3,8 @@
 {% block content %}
 {% set vue = 'semaine' %}
 {% set grid = calendar_grid(vehicles, reservations, segments|default([], true),
-                            unavailabilities|default([], true), start, end, user) %}
+                            unavailabilities|default([], true), start, end, user,
+                            loans|default([], true)) %}
 
 {% include "_calendar_header.html" with context %}
 
@@ -48,9 +49,9 @@
                 {# Le motif d'une panne tient rarement sur une ligne : la case
                    annonce l'indisponibilité, le détail complet est au clic. #}
                 <span class="cal-card-name">
-                  {% if item.kind == 'unav' %}<i class="fa-solid fa-screwdriver-wrench me-1"></i>Indisponible{% else %}{{ item.name }}{% endif %}
+                  {% if item.kind == 'unav' %}<i class="fa-solid fa-screwdriver-wrench me-1"></i>Indisponible{% elif item.kind == 'reserved' %}<i class="fa-solid fa-user-shield me-1"></i>Usage réservé{% else %}{{ item.name }}{% endif %}
                 </span>
-                <span class="cal-card-slot">{{ item.name if item.kind == 'unav' else item.slot }}</span>
+                <span class="cal-card-slot">{{ item.name if item.kind in ('unav', 'reserved') else item.slot }}</span>
                 {% if item.purpose %}<span class="cal-card-purpose">{{ item.purpose }}</span>{% endif %}
               </button>
             {% endfor %}

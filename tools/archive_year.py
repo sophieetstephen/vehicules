@@ -104,6 +104,7 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
         Vehicle, Reservation as ReservationModel,
         ReservationSegment as SegmentModel,
         VehicleUnavailability as UnavailabilityModel,
+        VehicleLoan as LoanModel,
         reservation_slot_label,
         # app.py n'a jamais exporte ce nom sans tiret bas : l'import echouait,
         # et l'archive annuelle n'a donc jamais produit le moindre PDF.
@@ -146,12 +147,20 @@ def generate_pdf_for_month(year: int, month: int, output_path: str) -> bool:
             ),
         ).all()
 
+        # Sans eux, un vehicule a usage reserve paraitrait reserve meme les
+        # jours ou il etait prete.
+        loans = LoanModel.query.filter(
+            LoanModel.start_at < end,
+            LoanModel.end_at >= start,
+        ).all()
+
         html_content = render_template(
             "pdf_month.html",
             vehicles=vehicles,
             reservations=reservations,
             segments=segments,
             unavailabilities=unavailabilities,
+            loans=loans,
             start=start,
             end=end,
             slot_label=reservation_slot_label,

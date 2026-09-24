@@ -90,6 +90,15 @@ class Vehicle(db.Model):
     label = db.Column(db.String(120), nullable=False)
     seats = db.Column(db.Integer, default=5)
     category = db.Column(db.String(50), nullable=True)
+    # « Chef de centre », « Adjoint »… Renseigné, le véhicule n'est attribuable
+    # à une demande que pendant un prêt (VehicleLoan). Ces véhicules étaient
+    # déclarés « indisponibles jusqu'à nouvel ordre », comme une panne : le
+    # planning ne distinguait plus un usage réservé d'un véhicule hors service.
+    reserved_for = db.Column(db.String(80), nullable=True)
+
+    @property
+    def is_reserved(self):
+        return bool((self.reserved_for or "").strip())
 
 class Reservation(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -179,6 +188,33 @@ class VehicleUnavailability(db.Model):
 
     def is_active_at(self, moment):
         return self.start_at <= moment and (self.end_at is None or self.end_at > moment)
+
+
+class VehicleLoan(db.Model):
+    """Mise à disposition temporaire d'un véhicule à usage réservé.
+
+    Pendant la période, le véhicule est attribuable à n'importe quelle demande,
+    comme un véhicule du parc. Une panne l'emporte toujours : un véhicule prêté
+    mais indisponible reste non attribuable. L'accord du titulaire est demandé
+    de vive voix ; l'application garde la trace de l'administrateur qui a
+    enregistré le prêt.
+
+    ``end_at`` est inclus (fin de journée), comme pour les indisponibilités.
+    """
+
+    id = db.Column(db.Integer, primary_key=True)
+    vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'), nullable=False)
+    start_at = db.Column(db.DateTime, nullable=False)
+    end_at = db.Column(db.DateTime, nullable=False)
+    reason = db.Column(db.String(200), nullable=True)
+    created_by = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    vehicle = db.relationship(
+        "Vehicle",
+        backref=db.backref("loans", cascade="all, delete-orphan"),
+    )
+    creator = db.relationship("User")
 
 
 class CredentialHandoff(db.Model):
