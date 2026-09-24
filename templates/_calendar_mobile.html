@@ -1,22 +1,76 @@
 {# Liste par jour, utilisée sur téléphone par les deux vues.
 
-   Attend ``grid`` (voir ``calendar_grid`` dans app.py) et ``vehicles``. Seuls
-   les jours occupés sont affichés : faire défiler trente cases vides n'apporte
-   rien. #}
+   Attend ``grid`` (voir ``calendar_grid`` dans app.py), ``vehicles`` et
+   ``unavailabilities``. Seuls les jours avec des réservations sont affichés :
+   faire défiler trente cases vides n'apporte rien.
+
+   Les indisponibilités sont regroupées en tête, une ligne chacune. Répétées
+   jour par jour, trois véhicules en panne « jusqu'à nouvel ordre » occupaient
+   à eux seuls toute la fin du mois et noyaient les réservations. #}
+{% set indispos = unavailabilities|default([], true) %}
+{% set admin = user and user.role in ['admin', 'superadmin'] %}
+
+{# Premier jour occupé à partir d'aujourd'hui : c'est là qu'on veut arriver. #}
+{% set repere = namespace(cle=none, dans_la_periode=false) %}
+{% for jour in grid.days %}
+  {% if jour.today %}{% set repere.dans_la_periode = true %}{% endif %}
+  {% if repere.dans_la_periode and repere.cle is none %}
+    {% for v in vehicles %}
+      {% for item in grid.cells[v.id][jour.key] if item.kind != 'unav' %}
+        {% if repere.cle is none %}{% set repere.cle = jour.key %}{% endif %}
+      {% endfor %}
+    {% endfor %}
+  {% endif %}
+{% endfor %}
+
+{% if repere.cle %}
+<a class="btn btn-sm btn-outline-secondary w-100 mb-3" href="#jour-{{ repere.cle }}">
+  <i class="fa-solid fa-arrow-down me-1"></i>Aller à aujourd'hui
+</a>
+{% endif %}
+
+{% if indispos %}
+<div class="mobile-day-card mobile-unav-card">
+  <div class="mobile-day-header">
+    <span class="mobile-day-name">Véhicules indisponibles</span>
+  </div>
+  <div class="mobile-day-reservations">
+    {% for un in indispos %}
+    <div class="mobile-reservation">
+      <div class="mobile-res-vehicle mobile-res-vehicle-unav">{{ un.vehicle.code }}</div>
+      <div class="mobile-res-details">
+        <div class="mobile-res-user"><span class="badge bg-dark">Indispo.</span> {{ un.label }}</div>
+        <div class="mobile-res-slot">
+          du {{ un.start_at.strftime('%d/%m') }}
+          {% if un.end_at %}au {{ un.end_at.strftime('%d/%m') }}{% else %}jusqu'à nouvel ordre{% endif %}
+        </div>
+      </div>
+      {% if admin %}
+        <a href="{{ url_for('admin_vehicle_unavailability', vehicle_id=un.vehicle_id) }}"
+           class="mobile-res-action" aria-label="Gérer">
+          <i class="fa-solid fa-chevron-right"></i>
+        </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 {% set vide = namespace(value=true) %}
 {% for jour in grid.days %}
   {% set items = [] %}
   {% for v in vehicles %}
-    {% for item in grid.cells[v.id][jour.key] %}
+    {% for item in grid.cells[v.id][jour.key] if item.kind != 'unav' %}
       {% set _ = items.append(item) %}
     {% endfor %}
   {% endfor %}
 
   {% if items %}
   {% set vide.value = false %}
-  <div class="mobile-day-card{{ ' mobile-day-today' if jour.today }}">
+  <div class="mobile-day-card{{ ' mobile-day-today' if jour.today }}" id="jour-{{ jour.key }}">
     <div class="mobile-day-header">
-      <span class="mobile-day-name">{{ weekday_abbr(jour.date) }}</span>
+      <span class="mobile-day-name">{{ weekday_abbr(jour.date) }}{% if jour.today %} · aujourd'hui{% endif %}</span>
       <span class="mobile-day-date">{{ jour.date.day }} {{ month_year_label(jour.date).split()[0] }}</span>
     </div>
     <div class="mobile-day-reservations">
@@ -24,10 +78,8 @@
       <div class="mobile-reservation">
         <div class="mobile-res-vehicle">{{ item.vehicle }}</div>
         <div class="mobile-res-details">
-          <div class="mobile-res-user">
-            {% if item.kind == 'unav' %}<span class="badge bg-dark">Indispo.</span> {% endif %}{{ item.name }}
-          </div>
-          <div class="mobile-res-slot">{{ item.period if item.kind == 'unav' else item.slot }}</div>
+          <div class="mobile-res-user">{{ item.name }}</div>
+          <div class="mobile-res-slot">{{ item.slot }}</div>
           {% if item.purpose %}
             <div class="mobile-res-purpose">{{ item.purpose }}</div>
           {% endif %}

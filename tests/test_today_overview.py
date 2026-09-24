@@ -134,9 +134,12 @@ def test_home_shows_overview_and_my_reservations(ctx, role):
     assert "21/09/2026" in html and "Réunion" in html
     assert f"/reservation/{mine.id}/cancel" in html
     if role == User.ROLE_USER:
-        assert "en attente" not in html.split("Mes réservations")[0]
+        assert "pending-banner" not in html
     else:
-        assert "2 demandes en attente" in html
+        # Tout en haut, avant le tableau du jour : c'est la tâche urgente.
+        assert 'class="pending-count">2<' in html
+        assert "demandes à traiter" in html
+        assert html.index("pending-banner") < html.index("today-section")
 
 
 def test_home_without_reservations(ctx):

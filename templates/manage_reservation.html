@@ -151,7 +151,10 @@
               <div class="vehicle-code">{{ v.code }}</div>
               <div class="vehicle-label">{{ v.label or '' }}</div>
               <div class="vehicle-status">
-                {% if free %}
+                {% if free and v.id == current_vehicle_id %}
+                  {# Distinguer le véhicule déjà attribué d'un véhicule libre. #}
+                  <span class="status-available"><i class="fa-solid fa-circle-check"></i> Attribué à cette réservation</span>
+                {% elif free %}
                   <span class="status-available"><i class="fa-solid fa-check"></i> Disponible</span>
                 {% elif unavailable and v.id in unavailable %}
                   <span class="status-unavailable" title="{{ unavailable[v.id].label }}"><i class="fa-solid fa-wrench"></i> Indisponible</span>

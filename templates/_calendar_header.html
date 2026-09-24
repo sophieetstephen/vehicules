@@ -1,26 +1,40 @@
 {# En-tête commun aux deux vues du planning.
 
-   Attend ``vue`` ('mois' ou 'semaine'), ``start``, ``end`` et ``timedelta``.
-   Le bouton « Semaine / Mois » existe parce que le mois entier tient mal sur
-   un écran : trente et une colonnes deviennent illisibles. #}
+   Attend ``vue`` ('mois' ou 'semaine'), ``start``, ``end``, ``timedelta`` et
+   ``pivot``. Le bouton « Semaine / Mois » existe parce que le mois entier tient
+   mal sur un écran : trente et une colonnes deviennent illisibles.
+
+   ``pivot`` est la date de référence qui voyage d'une vue à l'autre. On
+   reprenait le premier jour affiché : depuis septembre, « Semaine » ouvrait la
+   semaine du 31 août, et « Mois » ramenait alors en août. Les tests sans
+   pivot (rendu direct du gabarit) retombent sur ``start``. #}
+{% set pivot = pivot if pivot is defined and pivot else start %}
 {% set veille = start - timedelta(days=1) %}
 {% set fin = end - timedelta(days=1) %}
 <div class="calendar-header">
   <div>
     <h1 class="calendar-title">Planning {{ 'de la semaine' if vue == 'semaine' else 'mensuel' }}</h1>
     {% if vue == 'semaine' %}
-      <div class="calendar-subtitle">{{ month_year_label(start) }}</div>
+      {# Une semaine à cheval sur deux mois affichait seulement le premier. #}
+      <div class="calendar-subtitle">
+        {% if start.month != fin.month %}
+          {{ month_year_label(start).split()[0] }}{% if start.year != fin.year %} {{ start.year }}{% endif %}
+          – {{ month_year_label(fin) }}
+        {% else %}
+          {{ month_year_label(start) }}
+        {% endif %}
+      </div>
     {% endif %}
   </div>
 
   <div class="calendar-nav">
     {% if vue == 'semaine' %}
-      <a href="{{ url_for('calendar_week', d=(start - timedelta(days=7)).strftime('%Y-%m-%d')) }}"
+      <a href="{{ url_for('calendar_week', d=(pivot - timedelta(days=7)).strftime('%Y-%m-%d')) }}"
          class="btn btn-sm btn-outline-secondary" title="Semaine précédente" aria-label="Semaine précédente">
         <i class="fa-solid fa-chevron-left"></i>
       </a>
       <span class="calendar-month-label">{{ start.strftime('%d/%m') }} – {{ fin.strftime('%d/%m') }}</span>
-      <a href="{{ url_for('calendar_week', d=end.strftime('%Y-%m-%d')) }}"
+      <a href="{{ url_for('calendar_week', d=(pivot + timedelta(days=7)).strftime('%Y-%m-%d')) }}"
          class="btn btn-sm btn-outline-secondary" title="Semaine suivante" aria-label="Semaine suivante">
         <i class="fa-solid fa-chevron-right"></i>
       </a>
@@ -42,10 +56,10 @@
 
     <div class="btn-group btn-group-sm calendar-switch" role="group" aria-label="Période affichée">
       <a class="btn btn-outline-secondary{{ ' active' if vue == 'semaine' }}"
-         href="{{ url_for('calendar_week', d=start.strftime('%Y-%m-%d')) }}"
+         href="{{ url_for('calendar_week', d=pivot.strftime('%Y-%m-%d')) }}"
          {% if vue == 'semaine' %}aria-current="page"{% endif %}>Semaine</a>
       <a class="btn btn-outline-secondary{{ ' active' if vue == 'mois' }}"
-         href="{{ url_for('calendar_month', y=start.year, m=start.month) }}"
+         href="{{ url_for('calendar_month', y=pivot.year, m=pivot.month) }}"
          {% if vue == 'mois' %}aria-current="page"{% endif %}>Mois</a>
     </div>
   </div>

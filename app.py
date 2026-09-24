@@ -2428,10 +2428,18 @@ def commit_if_still_free(vehicle_id, start, end, reservation_id):
     return True
 
 
-def vehicles_availability(start, end):
+def vehicles_availability(start, end, exclude_reservation_id=None):
+    """Chaque véhicule et sa disponibilité sur la période.
+
+    ``exclude_reservation_id`` : la réservation qu'on est en train de gérer ne
+    doit pas se bloquer elle-même. Sans cela son propre véhicule apparaissait
+    « Occupé », coché mais désactivé — donc jamais envoyé par le formulaire.
+    """
+
     out = []
     for v in Vehicle.query.order_by(Vehicle.code).all():
-        conflict = has_conflict(v.id, start, end)
+        conflict = has_conflict(v.id, start, end,
+                                exclude_reservation_id=exclude_reservation_id)
         out.append((v, not conflict))
     return out
 
@@ -3230,7 +3238,7 @@ def manage_request(rid):
                 )
             flash("Réservation supprimée.", "info")
             return redirect(url_for("admin_reservations"))
-    avail = vehicles_availability(day_start, day_end)
+    avail = vehicles_availability(day_start, day_end, exclude_reservation_id=r.id)
     user = current_user()
     return render_template(
         "manage_reservation.html",
@@ -3293,7 +3301,7 @@ def manage_segment(sid):
             db.session.commit()
             flash("Segment supprimé.", "info")
             return redirect(url_for("admin_reservations"))
-    avail = vehicles_availability(seg.start_at, seg.end_at)
+    avail = vehicles_availability(seg.start_at, seg.end_at, exclude_reservation_id=r.id)
     user = current_user()
     return render_template(
         "manage_reservation.html",
@@ -3388,8 +3396,13 @@ def calendar_month():
     y, m = month_from_args()
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
+    # Passer en vue semaine ouvre la semaine d'aujourd'hui si le mois affiché
+    # la contient, sinon celle du premier du mois.
+    aujourdhui = datetime.combine(local_now().date(), time.min)
+    pivot = aujourdhui if start <= aujourdhui < end else start
     return render_template(
-        "calendar_month.html", user=user, **calendar_payload(start, end)
+        "calendar_month.html", user=user, pivot=pivot,
+        **calendar_payload(start, end)
     )
 
 
@@ -3406,8 +3419,12 @@ def calendar_week():
         repere = datetime.combine(local_now().date(), time.min)
     start = repere - timedelta(days=repere.weekday())  # lundi
     end = start + timedelta(days=7)
+    # Le repère voyage avec la navigation : semaine suivante ou précédente,
+    # puis retour au mois, ramènent au mois d'où l'on venait. On reprenait le
+    # lundi affiché — pour la semaine du 31 août, « Mois » menait en août.
     return render_template(
-        "calendar_week.html", user=user, **calendar_payload(start, end)
+        "calendar_week.html", user=user, pivot=repere,
+        **calendar_payload(start, end)
     )
 
 
