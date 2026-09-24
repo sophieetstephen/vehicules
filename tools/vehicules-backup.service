@@ -12,6 +12,8 @@ Group=pi
 # Adapter les chemins à l'installation (exemple : Raspberry Pi, déploiement Docker).
 WorkingDirectory=/opt/vehicules/app/vehicules
 Environment=DB_PATH=/opt/vehicules/app/vehicules/instance/instance/vehicules.db
-Environment=REMOTE_URI=gdrive:vehicules-backups
+# Destination chiffree (remote rclone de type crypt, voir le README) : le
+# .env n'est jamais envoye vers une destination en clair.
+Environment=REMOTE_URI=gdrive-chiffre:sauvegardes
 Environment=RCLONE_CONFIG=/home/pi/.config/rclone/rclone.conf
 ExecStart=/usr/bin/env bash tools/backup_db.sh

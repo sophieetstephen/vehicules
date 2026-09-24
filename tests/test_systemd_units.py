@@ -178,3 +178,25 @@ def test_readme_installs_the_archive_timers():
     """Aucun des deux n'était installé : sans commande documentée, ils ne le
     seront jamais."""
     assert "archive_year.timer archive_reservations.timer" in README
+
+
+def test_backups_go_to_an_encrypted_remote():
+    """La destination livrée est le remote chiffré ; plus aucune commande
+    documentée ne lit ni n'écrit l'ancien dossier en clair."""
+    service = (TOOLS / "vehicules-backup.service").read_text(encoding="utf-8")
+    assert "Environment=REMOTE_URI=gdrive-chiffre:sauvegardes" in service
+    assert "gdrive:vehicules-backups" not in README
+    assert "rclone config create gdrive-chiffre crypt" in README
+    # « rclone config create » attend des phrases déjà « obscurcies » dans les
+    # versions anciennes : sans --obscure, la clé enregistrée ne serait pas
+    # celle qu'on a recopiée sur papier.
+    assert "--obscure" in README
+
+
+def test_restore_listing_ignores_the_archives_folder():
+    """« rclone lsf --include » liste aussi les dossiers : sans --files-only,
+    « archives/ » était proposé comme sauvegarde à restaurer quand il y en
+    avait peu. Constaté avec rclone 1.60, la version de Debian."""
+    for ligne in README.splitlines():
+        if ligne.startswith("rclone lsf "):
+            assert "--files-only" in ligne, ligne

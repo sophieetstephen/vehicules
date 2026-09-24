@@ -31,6 +31,19 @@ cp "$1" "$cible"
 """
 
 
+# Faux rclone : note chaque copie ; à « listremotes --long », décrit un remote
+# Drive en clair (gdrive) et un remote chiffré (gdrive-chiffre).
+FAUX_RCLONE = """#!/usr/bin/env bash
+if [ "$1" = "listremotes" ] || [ "$3" = "listremotes" ]; then
+  echo "gdrive:         drive"
+  echo "gdrive-chiffre: crypt"
+  exit 0
+fi
+echo "$@" >> "{journal}"
+exit 0
+"""
+
+
 @pytest.fixture
 def atelier(tmp_path):
     """Une base, un .env, deux PDF d'archive et un rclone en trompe-l'œil."""
@@ -47,12 +60,7 @@ def atelier(tmp_path):
     journal = tmp_path / "rclone.log"
     faux = tmp_path / "bin"
     faux.mkdir()
-    (faux / "rclone").write_text(
-        "#!/usr/bin/env bash\n"
-        f'echo "$@" >> "{journal}"\n'
-        "exit 0\n",
-        encoding="utf-8",
-    )
+    (faux / "rclone").write_text(FAUX_RCLONE.format(journal=journal), encoding="utf-8")
     (faux / "rclone").chmod(0o755)
 
     (faux / "sqlite3").write_text(FAUX_SQLITE3, encoding="utf-8")
@@ -64,7 +72,8 @@ def _lancer(atelier, **surcharges):
     tmp_path, base, journal, faux = atelier
     env = dict(os.environ)
     env["PATH"] = f"{faux}{os.pathsep}{env['PATH']}"
-    env.update({"DB_PATH": str(base), "COMPRESS": "false", "REMOTE_URI": "gdrive:sauvegardes"})
+    env.update({"DB_PATH": str(base), "COMPRESS": "false",
+                "REMOTE_URI": "gdrive-chiffre:sauvegardes"})
     env.update(surcharges)
     resultat = subprocess.run(["bash", SCRIPT], cwd=tmp_path, env=env,
                               capture_output=True, text=True)
@@ -78,7 +87,7 @@ def test_archives_are_sent_off_the_raspberry(atelier):
     assert resultat.returncode == 0, resultat.stderr
     envois = [c for c in copies if "archives" in c]
     assert envois, "les archives ne sont pas copiées"
-    assert envois[0].endswith("gdrive:sauvegardes/archives"), envois[0]
+    assert envois[0].endswith("gdrive-chiffre:sauvegardes/archives"), envois[0]
 
 
 def test_database_and_env_are_still_sent(atelier):
@@ -131,3 +140,40 @@ def test_remote_failure_is_reported(atelier):
     resultat, _ = _lancer(atelier)
     assert resultat.returncode != 0
     assert "archives" in resultat.stderr
+
+
+
+# --- chiffrement ------------------------------------------------------------------
+#
+# Le .env porte la clé de session : avec elle et la base, déposées au même
+# endroit, on peut se connecter en superadministrateur sans aucun mot de passe.
+# Il ne part que vers une destination chiffrée.
+
+def test_env_is_sent_to_an_encrypted_remote(atelier):
+    resultat, copies = _lancer(atelier)
+    assert resultat.returncode == 0, resultat.stderr
+    assert any("env_" in c for c in copies)
+    assert "Attention" not in resultat.stderr
+
+
+def test_env_never_leaves_in_clear(atelier):
+    """Une destination en clair — un réglage oublié — ne doit pas recevoir
+    les secrets. La base part quand même, avec un avertissement : une
+    sauvegarde en clair vaut mieux que pas de sauvegarde."""
+    resultat, copies = _lancer(atelier, REMOTE_URI="gdrive:vehicules-backups")
+    assert resultat.returncode == 0, resultat.stderr
+    assert not any("env_" in c for c in copies), "le .env est parti en clair"
+    assert any("vehicules_" in c for c in copies), "la base doit partir quand même"
+    assert "n'est pas une destination chiffree" in resultat.stderr
+
+
+def test_unknown_remote_is_treated_as_clear(atelier):
+    resultat, copies = _lancer(atelier, REMOTE_URI="inconnu:dossier")
+    assert not any("env_" in c for c in copies)
+
+
+def test_works_without_optional_rclone_arguments(atelier):
+    """Sans RCLONE_CONFIG ni compte de service, le tableau d'options est vide :
+    bash avant 4.4 (macOS) échouait sous « set -u ». Relevé par l'audit."""
+    resultat, _ = _lancer(atelier, RCLONE_CONFIG="", GDRIVE_SERVICE_ACCOUNT="")
+    assert resultat.returncode == 0, resultat.stderr
