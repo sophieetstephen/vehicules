@@ -209,6 +209,13 @@
               <i class="fa-solid fa-ban"></i>
               Refuser
             </button>
+          {% elif day %}
+            {# Ne retire que le véhicule de ce jour : la réservation reste. #}
+            <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-danger btn-action-secondary"
+                    onclick="return confirm('Retirer le véhicule pour ce jour seulement ?');">
+              <i class="fa-solid fa-calendar-minus"></i>
+              Retirer ce jour
+            </button>
           {% else %}
             <button type="submit" name="action" value="{{ delete_action }}" class="btn btn-outline-danger btn-action-secondary"
                     onclick="return confirm('Supprimer cette réservation ?');">
