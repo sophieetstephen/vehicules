@@ -53,7 +53,7 @@ from models import (
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
-from notify import send_mail_msmtp
+from notify import send_mail_msmtp, check_mail_login
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
 from utils import reservation_slot_label
@@ -817,6 +817,13 @@ def home():
             Reservation.status == "pending",
             Reservation.archived_at.is_(None),
         ).count()
+    alerte_mail = None
+    if u.role in (User.ROLE_ADMIN, User.ROLE_SUPERADMIN):
+        # Au plus une fois par semaine, et seulement pour un administrateur :
+        # une simple authentification, sans envoi. Aucun minuteur a installer,
+        # donc rien a oublier d'activer.
+        refresh_mail_health_if_due()
+        alerte_mail = mail_alert()
     return render_template(
         template,
         user=u,
@@ -825,6 +832,7 @@ def home():
         overview=today_overview(now),
         my_reservations=my_upcoming_reservations(u, now),
         pending_count=pending_count,
+        alerte_mail=alerte_mail,
         slot_label=reservation_slot_label,
         vehicle_codes=reservation_vehicle_codes,
     )
@@ -1070,6 +1078,34 @@ def repair_orphan_segments_command(dry_run):
     )
 
 
+@app.cli.command("check-mail")
+@click.option("--force", is_flag=True,
+              help="Vérifier même si le dernier contrôle est récent")
+def check_mail_command(force):
+    """Vérifier que le compte d'envoi des e-mails est toujours accepté.
+
+    L'application fait déjà ce contrôle toute seule, au plus une fois par
+    semaine, quand un administrateur ouvre son accueil. Cette commande sert à
+    le déclencher à la demande, ou à le planifier.
+    """
+
+    manquants = missing_mail_settings()
+    if manquants:
+        print("Configuration incomplete : il manque " + ", ".join(manquants) + ".")
+        raise SystemExit(1)
+
+    etat = refresh_mail_health_if_due(force=True)
+    if etat and etat["ok"]:
+        print("Envoi des e-mails : compte accepte.")
+        return
+    detail = (etat or {}).get("detail", "")
+    print(f"Envoi des e-mails : REFUSE. {detail}")
+    explication = explain_mail_error(detail)
+    if explication:
+        print(explication)
+    raise SystemExit(1)
+
+
 @app.cli.command("login-attempts")
 @click.option("--hours", default=24, show_default=True, help="Période à afficher")
 @click.option("--all", "show_all", is_flag=True, help="Inclure les connexions réussies")
@@ -1120,6 +1156,125 @@ def _mail_result_ok(result):
         detail = str(result[1]) if len(result) > 1 else ""
         return bool(result[0]), detail
     return bool(result), ""
+
+
+# --- santé de l'envoi -------------------------------------------------------
+#
+# La clé d'application Gmail a été révoquée sans prévenir, et la panne a duré
+# jusqu'à ce qu'une création de compte la révèle. L'état de l'envoi est donc
+# suivi en continu : chaque envoi réel met l'état à jour, et une vérification
+# d'authentification a lieu au plus une fois par semaine.
+#
+# L'état vit dans un fichier du dossier ``instance``, monté depuis l'hôte : il
+# survit aux reconstructions d'image, n'alourdit pas la base ni ses
+# sauvegardes, et évite une migration pour une donnée purement technique.
+
+MAIL_HEALTH_FILE = "mail_health.json"
+MAIL_CHECK_INTERVAL_DAYS = 7
+
+
+def _mail_health_path():
+    # Surchargeable : sans cela les tests écriraient dans le dossier
+    # ``instance`` réel, et un état laissé par un test en ferait échouer un
+    # autre selon l'ordre d'exécution.
+    return app.config.get("MAIL_HEALTH_PATH") or os.path.join(
+        _storage_root, MAIL_HEALTH_FILE
+    )
+
+
+def read_mail_health():
+    """Dernier état connu de l'envoi, ou None si rien n'a encore été observé."""
+
+    try:
+        with open(_mail_health_path(), encoding="utf-8") as fichier:
+            brut = json.load(fichier)
+    except (OSError, ValueError):
+        return None
+
+    def _date(valeur):
+        try:
+            return datetime.fromisoformat(valeur) if valeur else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "ok": bool(brut.get("ok")),
+        "detail": brut.get("detail") or "",
+        "checked_at": _date(brut.get("checked_at")),
+        "failing_since": _date(brut.get("failing_since")),
+    }
+
+
+def write_mail_health(ok, detail="", *, checked_at=None):
+    """Enregistrer l'état observé, en gardant la date du début de panne."""
+
+    checked_at = checked_at or local_now()
+    precedent = read_mail_health()
+    if ok:
+        failing_since = None
+    elif precedent and not precedent["ok"] and precedent["failing_since"]:
+        failing_since = precedent["failing_since"]
+    else:
+        failing_since = checked_at
+
+    donnees = {
+        "ok": bool(ok),
+        "detail": str(detail or "")[:500],
+        "checked_at": checked_at.isoformat(),
+        "failing_since": failing_since.isoformat() if failing_since else None,
+    }
+    chemin = _mail_health_path()
+    try:
+        # Écriture puis remplacement : plusieurs ouvriers gunicorn peuvent
+        # écrire en même temps, on ne veut pas d'un fichier à moitié écrit.
+        temporaire = f"{chemin}.{os.getpid()}.tmp"
+        with open(temporaire, "w", encoding="utf-8") as fichier:
+            json.dump(donnees, fichier)
+        os.replace(temporaire, chemin)
+    except OSError:
+        app.logger.warning("Impossible d'enregistrer l'état de l'envoi des e-mails")
+    return donnees
+
+
+def refresh_mail_health_if_due(force=False):
+    """Vérifier l'authentification si le dernier contrôle date de trop.
+
+    Sans cela une clé révoquée passe inaperçue tant que personne n'envoie
+    d'e-mail — c'est exactement ce qui s'est produit.
+    """
+
+    if missing_mail_settings():
+        return read_mail_health()
+
+    etat = read_mail_health()
+    if not force and etat and etat["checked_at"]:
+        age = local_now() - etat["checked_at"]
+        if age < timedelta(days=MAIL_CHECK_INTERVAL_DAYS):
+            return etat
+
+    ok, detail = check_mail_login()
+    if not ok:
+        app.logger.error("Verification de l'envoi des e-mails : %s", detail)
+    write_mail_health(ok, detail)
+    return read_mail_health()
+
+
+def mail_alert():
+    """Ce qu'il faut afficher aux administrateurs, ou None si tout va bien."""
+
+    manquants = missing_mail_settings()
+    if manquants:
+        return {"raison": "configuration", "manquants": manquants, "since": None}
+
+    etat = read_mail_health()
+    if not etat or etat["ok"]:
+        return None
+    return {
+        "raison": "refus",
+        "manquants": [],
+        "since": etat["failing_since"],
+        "explication": explain_mail_error(etat["detail"]),
+    }
 
 
 def mail_settings_summary():
@@ -1218,9 +1373,11 @@ def try_mail(recipient):
                                    corps, [recipient])
     except Exception as exc:  # noqa: BLE001 - on veut tous les échecs
         app.logger.exception("Test d'envoi vers %s", recipient)
+        write_mail_health(False, str(exc))
         return False, str(exc), explain_mail_error(str(exc))
 
     envoye, detail = _mail_result_ok(resultat)
+    write_mail_health(envoye, detail)
     if envoye:
         return True, detail, None
     app.logger.error("Test d'envoi vers %s : %s", recipient, detail)
@@ -1252,6 +1409,9 @@ def notify(subject, body, recipients, *, about=""):
             app.logger.error(
                 "Echec d'envoi (%s) vers %s : %s", sujet_log, cible, detail
             )
+    # Chaque envoi reel renseigne l'etat : une panne est connue immediatement,
+    # sans attendre la verification hebdomadaire.
+    write_mail_health(envoye, detail)
     if not envoye and has_request_context():
         flash(
             f"L'e-mail « {subject} » n'a pas pu être envoyé à {cible}. "

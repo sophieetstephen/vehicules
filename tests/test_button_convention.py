@@ -183,3 +183,14 @@ def test_dark_mode_primary_button_is_not_washed_out():
     bloc = CSS.split('[data-theme="dark"] .btn-primary {')[1].split("}")[0]
     couleur = bloc.split("background-color:")[1].split(";")[0].strip()
     assert _contraste(couleur, "#ffffff") >= SEUIL, couleur
+
+
+def test_button_inside_an_alert_stays_legible():
+    """Mesuré à 1,22 de contraste : un bouton posé dans une alerte héritait
+    d'un texte blanc sur fond pâle. Fond franc et texte sombre, quelle que soit
+    la couleur de l'alerte."""
+    bloc = CSS.split(".alert .btn-outline-secondary {")[1].split("}")[0]
+    assert "background: var(--color-background)" in bloc
+    assert "color: var(--color-text)" in bloc
+    # Texte sombre sur fond blanc : très au-dessus du seuil.
+    assert _contraste("#1e293b", "#ffffff") >= SEUIL

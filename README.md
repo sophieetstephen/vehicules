@@ -338,6 +338,37 @@ sudo journalctl -u vehicules-backup.service -n 30 --no-pager
 La sauvegarde envoie vers `REMOTE_URI` la base, le `.env` et les archives PDF
 annuelles (`backups/archives` → `REMOTE_URI/archives`).
 
+### Surveillance de l'envoi des e-mails
+
+La clé d'application Gmail est invalidée par Google dès que le mot de passe du
+compte change ou que la double authentification est reconfigurée. Plus aucun
+utilisateur ne reçoit alors ses identifiants, et rien ne le signale.
+
+L'application suit donc l'état de l'envoi, sans rien à installer :
+
+* chaque envoi réel, réussi ou non, met l'état à jour ;
+* quand un administrateur ouvre son accueil et que le dernier contrôle date de
+  plus d'une semaine, l'application s'authentifie auprès du serveur — sans
+  envoyer de message — pour vérifier que le compte est toujours accepté ;
+* en cas de refus, un bandeau apparaît sur l'accueil des administrateurs, avec
+  la date de début de panne et la marche à suivre. Pas d'alerte par e-mail :
+  c'est justement l'e-mail qui ne fonctionne plus.
+
+L'état est conservé dans `instance/mail_health.json`, hors de la base.
+
+Le superadministrateur dispose en plus d'une page **Envoi des e-mails**, qui
+montre la configuration (jamais la clé, seulement sa longueur) et déclenche un
+envoi de test vers sa propre adresse.
+
+Pour contrôler à la demande, ou pour planifier le contrôle :
+
+```bash
+docker compose run --rm vehicules flask check-mail --force
+```
+
+Elle sort en erreur si le compte est refusé, ce qui permet à un minuteur
+systemd de signaler la panne.
+
 ### Vérifier une sauvegarde, sans risque
 
 Une sauvegarde qu'on n'a jamais restaurée n'est pas une sauvegarde. Cet

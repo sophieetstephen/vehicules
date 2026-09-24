@@ -43,3 +43,32 @@ def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile
         return True, "sent"
     except Exception as e:
         return False, f"smtp error: {e}"
+
+
+def check_mail_login(timeout: int = 6):
+    """Vérifier que le compte d'envoi est toujours accepté, sans rien envoyer.
+
+    On se connecte et on s'authentifie, puis on referme. C'est exactement ce
+    qui échoue quand Google révoque une clé d'application, et personne ne
+    reçoit de message inutile.
+
+    Le délai est court : ce contrôle a lieu pendant l'affichage de l'accueil
+    d'un administrateur, qui ne doit pas rester bloqué sur un serveur muet.
+
+    Retourne ``(ok, détail)``.
+    """
+
+    server = Config.MAIL_SERVER or "smtp.gmail.com"
+    port = Config.MAIL_PORT or (465 if not Config.MAIL_USE_TLS else 587)
+
+    try:
+        if Config.MAIL_USE_TLS:
+            with smtplib.SMTP(server, port, timeout=timeout) as smtp:
+                smtp.starttls()
+                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+        else:
+            with smtplib.SMTP_SSL(server, port, timeout=timeout) as smtp:
+                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+        return True, "login ok"
+    except Exception as e:
+        return False, f"smtp error: {e}"

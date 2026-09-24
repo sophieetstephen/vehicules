@@ -222,3 +222,130 @@ def test_technical_message_wraps():
     css = pathlib.Path("static/custom.css").read_text(encoding="utf-8")
     bloc = css.split(".alert code,")[1].split("}")[0]
     assert "overflow-wrap: anywhere" in bloc
+
+
+# --- alerte préventive -------------------------------------------------------
+#
+# La clé d'application avait été révoquée sans prévenir : plus personne ne
+# recevait ses identifiants, et la panne n'a été découverte qu'en créant un
+# compte. L'état de l'envoi est désormais suivi, et signalé sur l'accueil.
+
+from datetime import datetime, timedelta
+
+
+def _etat(ok, *, il_y_a_jours=0, detail=""):
+    """Poser un état de départ, daté."""
+    quand = app_module.local_now() - timedelta(days=il_y_a_jours)
+    return app_module.write_mail_health(ok, detail, checked_at=quand)
+
+
+def test_a_real_send_records_the_state(ctx, messagerie, monkeypatch):
+    """L'information la plus fraîche est le résultat d'un envoi réel."""
+    monkeypatch.setattr(app_module, "send_mail_msmtp", lambda *a, **k: (True, "sent"))
+    with app.test_request_context("/"):
+        app_module.notify("Sujet", "Corps", "jean@ex.fr")
+    assert app_module.read_mail_health()["ok"] is True
+
+    monkeypatch.setattr(app_module, "send_mail_msmtp", lambda *a, **k: (False, "535 refused"))
+    with app.test_request_context("/"):
+        app_module.notify("Sujet", "Corps", "jean@ex.fr")
+    etat = app_module.read_mail_health()
+    assert etat["ok"] is False
+    assert etat["failing_since"] is not None
+
+
+def test_failure_start_date_is_kept(ctx, messagerie):
+    """« Depuis le … » doit désigner le début de la panne, pas le dernier
+    contrôle."""
+    _etat(False, il_y_a_jours=3, detail="535 refused")
+    debut = app_module.read_mail_health()["failing_since"]
+    app_module.write_mail_health(False, "535 refused")
+    assert app_module.read_mail_health()["failing_since"] == debut
+
+
+def test_recovery_clears_the_alert(ctx, messagerie):
+    _etat(False, il_y_a_jours=3, detail="535 refused")
+    app_module.write_mail_health(True, "sent")
+    etat = app_module.read_mail_health()
+    assert etat["ok"] is True and etat["failing_since"] is None
+    assert app_module.mail_alert() is None
+
+
+def test_check_runs_at_most_once_a_week(ctx, messagerie, monkeypatch):
+    """Une authentification à chaque ouverture de l'accueil serait inutile."""
+    appels = []
+    monkeypatch.setattr(app_module, "check_mail_login",
+                        lambda *a, **k: appels.append(1) or (True, "login ok"))
+
+    _etat(True, il_y_a_jours=2)
+    app_module.refresh_mail_health_if_due()
+    assert appels == [], "contrôle récent : rien à refaire"
+
+    _etat(True, il_y_a_jours=8)
+    app_module.refresh_mail_health_if_due()
+    assert len(appels) == 1, "au-delà d'une semaine, on revérifie"
+
+
+def test_check_does_not_send_anything(ctx, messagerie, monkeypatch):
+    """On s'authentifie et on referme : personne ne reçoit de message inutile."""
+    envois = []
+    monkeypatch.setattr(app_module, "send_mail_msmtp",
+                        lambda *a, **k: envois.append(1) or (True, "sent"))
+    monkeypatch.setattr(app_module, "check_mail_login", lambda *a, **k: (True, "login ok"))
+    app_module.refresh_mail_health_if_due(force=True)
+    assert envois == []
+
+
+def test_banner_appears_for_admins(ctx, messagerie, monkeypatch):
+    monkeypatch.setattr(app_module, "check_mail_login", lambda *a, **k: (False, "535 refused"))
+    for role in (User.ROLE_ADMIN, User.ROLE_SUPERADMIN):
+        db.session.query(User).delete()
+        db.session.commit()
+        html = _texte(_client_as(_user(role=role, email=f"{role}@ex.fr")).get("/"))
+        assert "Les e-mails ne partent plus" in html, role
+        assert "Google a refusé" in html, role
+
+
+def test_banner_is_not_shown_to_a_regular_user(ctx, messagerie, monkeypatch):
+    """Ce n'est pas son affaire, et il ne peut rien y faire."""
+    monkeypatch.setattr(app_module, "check_mail_login", lambda *a, **k: (False, "535 refused"))
+    app_module.write_mail_health(False, "535 refused")
+    html = _texte(_client_as(_user(role=User.ROLE_USER, email="jean@ex.fr")).get("/"))
+    assert "Les e-mails ne partent plus" not in html
+
+
+def test_no_banner_when_everything_works(ctx, messagerie, monkeypatch):
+    monkeypatch.setattr(app_module, "check_mail_login", lambda *a, **k: (True, "login ok"))
+    html = _texte(_client_as(_user()).get("/"))
+    assert "Les e-mails ne partent plus" not in html
+
+
+def test_banner_names_the_missing_settings(ctx, monkeypatch):
+    for cle in ("MAIL_SERVER", "MAIL_USERNAME", "MAIL_PASSWORD"):
+        monkeypatch.setitem(app.config, cle, "")
+    html = _texte(_client_as(_user()).get("/"))
+    assert "Les e-mails ne partent plus" in html
+    assert "MAIL_PASSWORD" in html
+
+
+def test_banner_says_since_when(ctx, messagerie, monkeypatch):
+    monkeypatch.setattr(app_module, "check_mail_login", lambda *a, **k: (False, "535 refused"))
+    _etat(False, il_y_a_jours=4, detail="535 refused")
+    html = _texte(_client_as(_user()).get("/"))
+    attendu = (app_module.local_now() - timedelta(days=4)).strftime("%d/%m/%Y")
+    assert f"Depuis le {attendu}" in html
+
+
+def test_unreadable_state_file_is_survivable(ctx, messagerie, tmp_path):
+    """Un fichier tronqué ne doit pas empêcher l'accueil de s'afficher."""
+    chemin = tmp_path / "casse.json"
+    chemin.write_text("{ ceci n'est pas du json", encoding="utf-8")
+    app.config["MAIL_HEALTH_PATH"] = str(chemin)
+    assert app_module.read_mail_health() is None
+    assert app_module.mail_alert() is None
+
+
+def test_state_file_stays_out_of_the_instance_folder_in_tests():
+    """Le piège déjà rencontré avec la base : écrire dans le dossier réel."""
+    assert app.config.get("MAIL_HEALTH_PATH"), "conftest doit isoler ce fichier"
+    assert "vehicules/instance" not in app.config["MAIL_HEALTH_PATH"]
