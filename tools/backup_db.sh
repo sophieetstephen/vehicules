@@ -81,6 +81,9 @@ if [ -f "$ENV_FILE" ]; then
 fi
 
 if [ -n "${REMOTE_URI:-}" ]; then
+  # ${RCLONE_ARGS[@]+...} plutot que "${RCLONE_ARGS[@]}" : sous « set -u »,
+  # un tableau vide fait echouer bash avant 4.4 (celui de macOS, releve par
+  # l'audit).
   RCLONE_ARGS=()
   if [ -n "${RCLONE_CONFIG:-}" ]; then
     RCLONE_ARGS+=("--config" "$RCLONE_CONFIG")
@@ -89,13 +92,27 @@ if [ -n "${REMOTE_URI:-}" ]; then
     RCLONE_ARGS+=("--drive-service-account-file" "$GDRIVE_SERVICE_ACCOUNT")
   fi
 
-  if ! rclone "${RCLONE_ARGS[@]}" copy "$DB_FILE" "$REMOTE_URI"; then
+  # La destination chiffre-t-elle ce qu'on lui envoie ? Le .env porte la cle
+  # de session : avec elle et la base, deposees au meme endroit, on peut se
+  # connecter en superadministrateur sans connaitre aucun mot de passe. Il ne
+  # part donc que vers un remote rclone de type « crypt ».
+  REMOTE_NAME="${REMOTE_URI%%:*}"
+  REMOTE_TYPE=""
+  if [ "$REMOTE_NAME" != "$REMOTE_URI" ]; then
+    REMOTE_TYPE="$(rclone ${RCLONE_ARGS[@]+"${RCLONE_ARGS[@]}"} listremotes --long 2>/dev/null \
+      | awk -v nom="${REMOTE_NAME}:" '$1 == nom { print $2 }')"
+  fi
+  if [ "$REMOTE_TYPE" != "crypt" ]; then
+    echo "Attention : '$REMOTE_URI' n'est pas une destination chiffree ; la base y part en clair et le .env n'y sera pas envoye." >&2
+  fi
+
+  if ! rclone ${RCLONE_ARGS[@]+"${RCLONE_ARGS[@]}"} copy "$DB_FILE" "$REMOTE_URI"; then
     echo "Error: failed to copy backup to remote destination '$REMOTE_URI'" >&2
     exit 1
   fi
 
-  if [ -n "$ENV_BACKUP" ]; then
-    if ! rclone "${RCLONE_ARGS[@]}" copy "$ENV_BACKUP" "$REMOTE_URI"; then
+  if [ -n "$ENV_BACKUP" ] && [ "$REMOTE_TYPE" = "crypt" ]; then
+    if ! rclone ${RCLONE_ARGS[@]+"${RCLONE_ARGS[@]}"} copy "$ENV_BACKUP" "$REMOTE_URI"; then
       echo "Error: failed to copy .env backup to remote destination '$REMOTE_URI'" >&2
       exit 1
     fi
@@ -107,7 +124,7 @@ if [ -n "${REMOTE_URI:-}" ]; then
   # fichiers nouveaux traversent le reseau.
   ARCHIVE_DIR="${ARCHIVE_DIR:-$BACKUP_DIR/archives}"
   if [ -d "$ARCHIVE_DIR" ]; then
-    if ! rclone "${RCLONE_ARGS[@]}" copy "$ARCHIVE_DIR" "${REMOTE_URI%/}/archives"; then
+    if ! rclone ${RCLONE_ARGS[@]+"${RCLONE_ARGS[@]}"} copy "$ARCHIVE_DIR" "${REMOTE_URI%/}/archives"; then
       echo "Error: failed to copy PDF archives to '${REMOTE_URI%/}/archives'" >&2
       exit 1
     fi

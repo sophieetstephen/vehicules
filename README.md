@@ -293,13 +293,47 @@ Notez ensuite le chemin du fichier afin de l'exposer via les variables d'environ
 
 ```bash
 export RCLONE_CONFIG=/home/user/.config/rclone/rclone.conf
-export REMOTE_URI=gdrive:vehicules-backups
+export REMOTE_URI=gdrive-chiffre:sauvegardes
 # Indiquez le chemin réel de la base SQLite si différent
 export DB_PATH=instance/vehicules.db
 # (optionnel) export GDRIVE_SERVICE_ACCOUNT=/chemin/vers/service-account.json
 ```
 
 Dans `tools/vehicules-backup.service`, ajustez les directives `Environment=DB_PATH=…`, `Environment=RCLONE_CONFIG=…` (et `Environment=GDRIVE_SERVICE_ACCOUNT=…` si vous utilisez un compte de service) pour pointer vers les chemins adaptés avant de relancer le service.
+
+### Chiffrer les sauvegardes
+
+Sans chiffrement, le Drive contient la base (noms et adresses de tout le
+personnel) et le `.env`, dont la clé de session : avec les deux, on peut se
+connecter en superadministrateur sans connaître aucun mot de passe. Qui accède
+au Drive accède alors à l'administration.
+
+Un remote rclone de type `crypt` chiffre tout ce qui y est déposé. Les noms de
+fichiers restent lisibles — on voit dans Google Drive qu'une sauvegarde arrive
+chaque nuit — mais leur contenu ne l'est plus. Le script de sauvegarde refuse
+d'envoyer le `.env` vers une destination qui n'est pas de type `crypt`.
+
+À faire une fois, **en tant qu'utilisateur applicatif, sans `sudo`** :
+
+```bash
+# Deux phrases secrètes aléatoires. Les RECOPIER avant d'aller plus loin :
+# perdues, elles rendent TOUTES les sauvegardes chiffrées irrécupérables.
+P1=$(openssl rand -hex 16); P2=$(openssl rand -hex 16)
+echo "Phrase 1 : $P1"; echo "Phrase 2 : $P2"
+
+rclone config create gdrive-chiffre crypt \
+  remote=gdrive:vehicules-chiffre \
+  filename_encryption=off directory_name_encryption=false \
+  password="$P1" password2="$P2" --obscure
+unset P1 P2
+```
+
+Les deux phrases se conservent **hors du Raspberry**, à deux endroits : par
+exemple sur papier dans le coffre du centre et dans un gestionnaire de mots de
+passe. Sur une machine neuve, on recrée le remote avec la même commande et les
+mêmes phrases pour relire les sauvegardes.
+
+Puis, dans `vehicules-backup.service` : `Environment=REMOTE_URI=gdrive-chiffre:sauvegardes`.
 
 ### Installer les minuteurs
 
@@ -387,13 +421,14 @@ Tout en tant qu'utilisateur applicatif, **sans `sudo`** : lancé en root, rclone
 réécrit sa configuration en root et les commandes suivantes échouent.
 
 ```bash
-# 1. La sauvegarde la plus récente, et le .env qui va avec
-rclone lsf gdrive:vehicules-backups --include 'vehicules_*' | sort | tail -3
-rclone lsf gdrive:vehicules-backups --include 'env_*' | sort | tail -1
+# 1. La sauvegarde la plus récente, et le .env qui va avec. --files-only :
+#    sans lui le dossier « archives/ » apparaît dans la liste, filtre ou non.
+rclone lsf gdrive-chiffre:sauvegardes --files-only --include 'vehicules_*' | sort | tail -3
+rclone lsf gdrive-chiffre:sauvegardes --files-only --include 'env_*' | sort | tail -1
 
 # 2. Télécharger dans un dossier de test, visible depuis le conteneur
 mkdir -p instance/restauration-test && cd instance/restauration-test
-rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz .
+rclone copy gdrive-chiffre:sauvegardes/vehicules_YYYYMMDD_HHMMSS.db.gz .
 
 # 3. Décompresser
 gzip -d vehicules_*.db.gz && mv vehicules_*.db restauration.db
@@ -450,7 +485,7 @@ docker compose stop vehicules
 cp "$DB_PATH" "$DB_PATH.avant-restauration"
 
 # 3. Récupérer et décompresser la sauvegarde choisie
-rclone copy gdrive:vehicules-backups/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
+rclone copy gdrive-chiffre:sauvegardes/vehicules_YYYYMMDD_HHMMSS.db.gz backups/
 gzip -d backups/vehicules_YYYYMMDD_HHMMSS.db
 
 # 4. Restaurer, puis vérifier AVANT de redémarrer
