@@ -54,6 +54,8 @@ from models import (
 )
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import or_, case
+from sqlalchemy import event as sa_event
+from sqlalchemy.engine import Engine
 from notify import send_mail_msmtp, check_mail_login
 from flask_migrate import Migrate
 from flask_wtf.csrf import CSRFProtect
@@ -269,6 +271,24 @@ if _database_uri and _database_uri.startswith("sqlite:///"):
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{_db_path}"
 db.init_app(app)
 Migrate(app, db)
+
+
+@sa_event.listens_for(Engine, "connect")
+def _sqlite_foreign_keys(dbapi_connection, connection_record):
+    """Faire respecter les références par SQLite lui-même.
+
+    Exécuté à l'ouverture de chaque connexion, donc hors de toute transaction :
+    à l'intérieur d'une transaction, SQLite ignorerait la consigne. Les
+    migrations la retirent le temps de recréer les tables (migrations/env.py).
+    """
+
+    if not app.config.get("SQLITE_FOREIGN_KEYS", True):
+        return
+    if "sqlite" not in type(dbapi_connection).__module__:
+        return
+    curseur = dbapi_connection.cursor()
+    curseur.execute("PRAGMA foreign_keys=ON")
+    curseur.close()
 
 try:
     locale.setlocale(locale.LC_TIME, "fr_FR.UTF-8")
@@ -1108,6 +1128,32 @@ def repair_orphan_segments_command(dry_run):
         f"\n{len(orphans)} segment(s) fantôme(s) supprimé(s), "
         f"{len(dangling)} réservation(s) détachée(s) d'un véhicule supprimé."
     )
+
+
+@app.cli.command("check-integrity")
+def check_integrity_command():
+    """Vérifier la base : fichier sain, aucune référence cassée.
+
+    À lancer avant et après une mise à jour. Les clés étrangères empêchent
+    désormais toute nouvelle référence cassée, mais ne corrigent pas celles
+    laissées par l'ancien code : cette commande les montre.
+    """
+
+    sain = db.session.execute(db.text("PRAGMA integrity_check")).scalar()
+    casses = db.session.execute(db.text("PRAGMA foreign_key_check")).fetchall()
+    cles = db.session.execute(db.text("PRAGMA foreign_keys")).scalar()
+
+    print(f"Fichier de base : {'sain' if sain == 'ok' else sain}")
+    print(f"Clés étrangères : {'actives' if cles else 'désactivées'}")
+    if not casses:
+        print("Références : aucune référence cassée.")
+    else:
+        print(f"Références : {len(casses)} référence(s) cassée(s) :")
+        for table, ligne, parent, _ in casses:
+            print(f"  - {table} n°{ligne} désigne un(e) {parent} qui n'existe plus")
+        print("Pour les segments, « flask repair-orphan-segments » les répare.")
+    if sain != "ok" or casses:
+        raise SystemExit(1)
 
 
 @app.cli.command("check-mail")
@@ -2091,6 +2137,14 @@ def admin_user_delete(user_id):
         return refus
     # Suppression des réservations associées et de leurs segments.
     delete_reservations(Reservation.query.filter_by(user_id=target.id))
+    # Deux autres tables le désignent. Sans clés étrangères la suppression
+    # laissait ces références pendantes ; avec elles, elle échouerait.
+    CredentialHandoff.query.filter_by(user_id=target.id).delete(
+        synchronize_session=False
+    )
+    VehicleUnavailability.query.filter_by(created_by=target.id).update(
+        {"created_by": None}, synchronize_session=False
+    )
     db.session.delete(target)
     db.session.commit()
     flash("Utilisateur supprimé", "info")
@@ -2280,8 +2334,12 @@ def vehicles_unavailability_map(start, end):
 def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     if vehicle_unavailability(vehicle_id, start, end) is not None:
         return True
-    q_seg = ReservationSegment.query.filter(
+    # Le segment d'une demande refusée ou annulée ne bloque plus rien : on le
+    # garde pour l'historique, mais le véhicule redevient libre. Sans cette
+    # jointure, le planning le montrait libre et l'attribution le disait pris.
+    q_seg = ReservationSegment.query.join(Reservation).filter(
         ReservationSegment.vehicle_id == vehicle_id,
+        Reservation.status.notin_(INACTIVE_STATUSES),
         ReservationSegment.end_at > start,
         ReservationSegment.start_at < end,
     )
@@ -2300,6 +2358,47 @@ def has_conflict(vehicle_id, start, end, exclude_reservation_id=None):
     if exclude_reservation_id is not None:
         q_res = q_res.filter(Reservation.id != exclude_reservation_id)
     return q_res.first() is not None
+
+
+def form_vehicle(field="vehicle_id"):
+    """Le véhicule désigné par un formulaire, ou None.
+
+    ``int()`` sur un champ absent levait une erreur 500, et un identifiant
+    inexistant produisait un segment pointant dans le vide.
+    """
+
+    try:
+        vehicle_id = int(request.form.get(field, ""))
+    except (TypeError, ValueError):
+        return None
+    return db.session.get(Vehicle, vehicle_id)
+
+
+def segment_period_error(reservation, start, end):
+    """Pourquoi la période d'un segment est invalide, ou None.
+
+    Un segment dont la fin précédait le début, ou qui débordait de la
+    réservation, était accepté tel quel et faussait le planning.
+    """
+
+    if start is None or end is None:
+        return "Indiquez le début et la fin de la période."
+    if start >= end:
+        return "La fin doit être après le début."
+    if start < reservation.start_at or end > reservation.end_at:
+        return (
+            "La période doit rester dans celle de la réservation, du "
+            f"{reservation.start_at.strftime('%d/%m/%Y %Hh%M')} au "
+            f"{reservation.end_at.strftime('%d/%m/%Y %Hh%M')}."
+        )
+    return None
+
+
+def _form_datetime(field):
+    try:
+        return datetime.fromisoformat(request.form.get(field, ""))
+    except (TypeError, ValueError):
+        return None
 
 
 def commit_if_still_free(vehicle_id, start, end, reservation_id):
@@ -2848,7 +2947,15 @@ def manage_request(rid):
     day_str = request.args.get("day")
     day = None
     if day_str:
-        day = datetime.strptime(day_str, "%Y-%m-%d")
+        # Un jour mal formé levait une erreur 500 ; un jour hors de la
+        # réservation fabriquait un segment dont la fin précédait le début.
+        try:
+            day = datetime.strptime(day_str, "%Y-%m-%d")
+        except ValueError:
+            day = None
+        if day is None or not (r.start_at.date() <= day.date() <= r.end_at.date()):
+            flash("Ce jour ne fait pas partie de la réservation.", "warning")
+            return redirect(url_for("manage_request", rid=r.id))
         label = reservation_slot_label(r, day)
         if label == "Matin":
             day_start = datetime.combine(day.date(), time(8, 0))
@@ -2869,7 +2976,11 @@ def manage_request(rid):
     if request.method == "POST":
         action = request.form.get("action")
         if action == "segment_day" and day:
-            veh_id = int(request.form.get("vehicle_id"))
+            vehicule = form_vehicle()
+            if vehicule is None:
+                flash("Choisissez un véhicule existant.", "danger")
+                return redirect(url_for("manage_request", rid=r.id, day=day_str))
+            veh_id = vehicule.id
             if has_conflict(
                 veh_id, day_start, day_end, exclude_reservation_id=r.id
             ):
@@ -2883,7 +2994,15 @@ def manage_request(rid):
                 if existing:
                     old_vehicle = db.session.get(Vehicle, existing.vehicle_id)
                     existing.vehicle_id = veh_id
-                    db.session.commit()
+                    if not commit_if_still_free(
+                        veh_id, existing.start_at, existing.end_at, r.id
+                    ):
+                        flash(
+                            "Ce véhicule vient d'être attribué par un autre "
+                            "administrateur. Choisissez-en un autre.",
+                            "danger",
+                        )
+                        return redirect(url_for("admin_reservations"))
                     new_vehicle = db.session.get(Vehicle, veh_id)
                     recipients = reservation_notification_recipients(r)
                     if recipients:
@@ -2932,7 +3051,13 @@ def manage_request(rid):
                         current_date += timedelta(days=1)
                     r.vehicle_id = None
                 r.status = "approved"
-                db.session.commit()
+                if not commit_if_still_free(veh_id, day_start, day_end, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                    return redirect(url_for("admin_reservations"))
                 vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
@@ -3015,9 +3140,17 @@ def manage_request(rid):
                     flash("Demande approuvée et véhicule attribué.", "success")
                     return redirect(url_for("admin_reservations"))
         elif action == "segment":
-            start_at = datetime.fromisoformat(request.form.get("start_at"))
-            end_at = datetime.fromisoformat(request.form.get("end_at"))
-            veh_id = int(request.form.get("vehicle_id"))
+            start_at = _form_datetime("start_at")
+            end_at = _form_datetime("end_at")
+            vehicule = form_vehicle()
+            erreur = segment_period_error(r, start_at, end_at)
+            if erreur is None and vehicule is None:
+                erreur = "Choisissez un véhicule existant."
+            if erreur:
+                # Refusé avant toute écriture.
+                flash(erreur, "danger")
+                return redirect(url_for("manage_request", rid=r.id))
+            veh_id = vehicule.id
             if has_conflict(veh_id, start_at, end_at, exclude_reservation_id=r.id):
                 flash("Conflit détecté lors de la création du segment.", "danger")
             else:
@@ -3112,7 +3245,11 @@ def manage_segment(sid):
     if request.method == "POST":
         action = request.form.get("action")
         if action == "update":
-            veh_id = int(request.form.get("vehicle_id"))
+            vehicule = form_vehicle()
+            if vehicule is None:
+                flash("Choisissez un véhicule existant.", "danger")
+                return redirect(url_for("manage_segment", sid=seg.id))
+            veh_id = vehicule.id
             if has_conflict(
                 veh_id, seg.start_at, seg.end_at, exclude_reservation_id=r.id
             ):
@@ -3120,7 +3257,13 @@ def manage_segment(sid):
             else:
                 old_vehicle = seg.vehicle
                 seg.vehicle_id = veh_id
-                db.session.commit()
+                if not commit_if_still_free(veh_id, seg.start_at, seg.end_at, r.id):
+                    flash(
+                        "Ce véhicule vient d'être attribué par un autre "
+                        "administrateur. Choisissez-en un autre.",
+                        "danger",
+                    )
+                    return redirect(url_for("admin_reservations"))
                 new_vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
@@ -3157,14 +3300,32 @@ def manage_segment(sid):
     )
 
 
+def month_from_args():
+    """Année et mois demandés dans l'adresse, ou le mois en cours.
+
+    « ?m=13 » ou « ?y=abc » levaient une erreur 500. Une adresse abîmée —
+    tronquée par une messagerie, modifiée à la main — ramène désormais au mois
+    en cours plutôt qu'à une page d'erreur.
+    """
+
+    aujourdhui = local_now()
+    try:
+        y = int(request.args.get("y", aujourdhui.year))
+        m = int(request.args.get("m", aujourdhui.month))
+    except (TypeError, ValueError):
+        return aujourdhui.year, aujourdhui.month
+    if not (1 <= m <= 12) or not (2000 <= y <= 2100):
+        return aujourdhui.year, aujourdhui.month
+    return y, m
+
+
 @app.route("/export/pdf/month")
 @role_required("admin", "superadmin")
 def export_pdf_month():
     if not WEASY_OK:
         flash("WeasyPrint non installé.", "warning")
         return redirect(url_for("calendar_month"))
-    y = int(request.args.get("y", datetime.today().year))
-    m = int(request.args.get("m", datetime.today().month))
+    y, m = month_from_args()
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
     # Même source que le planning affiché : le PDF oubliait les
@@ -3215,8 +3376,7 @@ def calendar_payload(start, end):
 @app.route("/calendar/month")
 def calendar_month():
     user = current_user()
-    y = int(request.args.get("y", datetime.today().year))
-    m = int(request.args.get("m", datetime.today().month))
+    y, m = month_from_args()
     start = datetime(y, m, 1)
     end = datetime(y + 1, 1, 1) if m == 12 else datetime(y, m + 1, 1)
     return render_template(
