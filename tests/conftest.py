@@ -26,3 +26,28 @@ os.environ["MAIL_SERVER"] = "127.0.0.1"
 os.environ["MAIL_PORT"] = "9"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+
+import tempfile
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _etat_mail_isole(tmp_path_factory):
+    """Chaque test a son propre fichier d'état de l'envoi des e-mails.
+
+    Sans cela, les tests écrivent dans ``instance/mail_health.json`` — le
+    dossier réel de l'application — et un état laissé par l'un fait échouer un
+    autre selon l'ordre d'exécution.
+    """
+
+    from app import app
+
+    dossier = tmp_path_factory.mktemp("mail-health")
+    ancien = app.config.get("MAIL_HEALTH_PATH")
+    app.config["MAIL_HEALTH_PATH"] = str(dossier / "mail_health.json")
+    try:
+        yield
+    finally:
+        app.config["MAIL_HEALTH_PATH"] = ancien

@@ -1,0 +1,39 @@
+{# Bandeau d'alerte sur l'envoi des e-mails, pour les administrateurs.
+
+   La clé d'application Gmail avait été révoquée sans prévenir : plus aucun
+   utilisateur ne recevait ses identifiants, et la panne n'a été découverte
+   qu'en créant un compte. L'état est désormais suivi, et signalé ici.
+
+   Attend ``alerte_mail`` (voir ``mail_alert`` dans app.py). Pas d'e-mail
+   d'alerte, évidemment : c'est justement l'e-mail qui ne part plus. #}
+{% if alerte_mail %}
+<div class="alert alert-danger d-flex align-items-start gap-2 max-w-720">
+  <i class="fa-solid fa-envelope-circle-check mt-1"></i>
+  <div>
+    <strong>Les e-mails ne partent plus.</strong>
+    {% if alerte_mail.since %}
+      <span class="d-block small">Depuis le {{ alerte_mail.since.strftime('%d/%m/%Y à %Hh%M') }}.</span>
+    {% endif %}
+    <div class="mt-2">
+      {% if alerte_mail.raison == 'configuration' %}
+        La configuration est incomplète : il manque
+        {{ alerte_mail.manquants | join(', ') }} dans le fichier
+        <code>.env</code> du Raspberry.
+      {% elif alerte_mail.explication %}
+        {{ alerte_mail.explication }}
+      {% else %}
+        Le serveur d'envoi refuse la connexion.
+      {% endif %}
+    </div>
+    <div class="mt-2 small">
+      Les utilisateurs ne reçoivent ni leurs identifiants, ni les réponses à
+      leurs demandes de réservation. Transmettez-les de vive voix en attendant.
+    </div>
+    {% if user and user.role == 'superadmin' %}
+      <a class="btn btn-sm btn-outline-secondary mt-2" href="{{ url_for('admin_mail_test') }}">
+        Vérifier l'envoi
+      </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}

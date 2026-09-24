@@ -504,6 +504,22 @@ p {
   word-break: break-word;
 }
 
+/* Un bouton pose dans une alerte heritait d'un texte blanc sur fond pale :
+   contraste mesure a 1,22. Fond franc et texte sombre, quelle que soit la
+   couleur de l'alerte. */
+.alert .btn-outline-secondary {
+  background: var(--color-background);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.alert .btn-outline-secondary:hover,
+.alert .btn-outline-secondary:focus-visible {
+  background: var(--color-background-alt);
+  border-color: var(--color-secondary);
+  color: var(--color-text);
+}
+
 /* --- Boutons améliorés --- */
 .btn {
   font-weight: 500;
