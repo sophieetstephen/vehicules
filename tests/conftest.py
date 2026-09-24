@@ -24,6 +24,9 @@ os.environ["DATABASE_URL"] = "sqlite://"
 os.environ.setdefault("SECRET_KEY", "test-only-secret-key")
 os.environ["MAIL_SERVER"] = "127.0.0.1"
 os.environ["MAIL_PORT"] = "9"
+# Le client de test parle en HTTP : un cookie marqué Secure n'y serait pas
+# renvoyé et toutes les sessions de test seraient perdues.
+os.environ["SESSION_COOKIE_SECURE"] = "false"
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 

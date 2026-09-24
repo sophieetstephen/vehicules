@@ -27,6 +27,7 @@ from flask import (
     send_from_directory,
     jsonify,
     has_request_context,
+    make_response,
 )
 from datetime import datetime, timedelta, time
 from io import BytesIO
@@ -370,6 +371,7 @@ def _inject_locale_helpers():
         "static_url": static_url,
         # Défini plus bas dans le fichier : la résolution a lieu à l'appel.
         "calendar_grid": calendar_grid,
+        "can_act_on_account": can_act_on_account,
         "calendar_entries": calendar_entries,
     }
 
@@ -544,6 +546,23 @@ def list_usernames_command():
 
     for user in User.query.order_by(User.username).all():
         print(f"{user.username or '(aucun)':20} {user.email:40} {user.role:10} {user.status}")
+
+
+def purge_expired_credentials():
+    """Effacer les mots de passe en clair dont l'affichage a expiré.
+
+    Appelée avant chaque requête. On lit d'abord : une écriture à chaque page
+    prendrait le verrou de SQLite pour rien, alors qu'il n'y a presque jamais
+    rien à effacer.
+    """
+
+    limite = datetime.utcnow() - timedelta(minutes=CredentialHandoff.MAX_AGE_MINUTES)
+    perimee = CredentialHandoff.query.filter(CredentialHandoff.created_at < limite)
+    if perimee.first() is None:
+        return 0
+    nombre = perimee.delete(synchronize_session=False)
+    db.session.commit()
+    return nombre
 
 
 def store_credentials(target, password, *, regenerated, mail_sent):
@@ -731,6 +750,19 @@ def install_guide():
 
 
 # --- Gestion de l'expiration de session
+@app.before_request
+def _purge_credentials():
+    # Les fichiers statiques n'y changent rien : inutile d'interroger la base.
+    if request.path.startswith("/static/"):
+        return None
+    try:
+        purge_expired_credentials()
+    except Exception:  # noqa: BLE001 - une purge ratée ne bloque pas la page
+        db.session.rollback()
+        app.logger.exception("Purge des identifiants expires impossible")
+    return None
+
+
 @app.before_request
 def _check_session_timeout():
     timeout = app.config.get("SESSION_TIMEOUT_MINUTES")
@@ -1814,9 +1846,14 @@ def admin_user_credentials():
     if not creds:
         return redirect(url_for("admin_users"))
     u = current_user()
-    return render_template(
+    reponse = make_response(render_template(
         "user_credentials.html", creds=creds, user=u, current_user=u
-    )
+    ))
+    # La page affiche un mot de passe : ni le navigateur ni un intermédiaire ne
+    # doivent la garder. Sans cela, le bouton « Précédent » peut la réafficher.
+    reponse.headers["Cache-Control"] = "no-store"
+    reponse.headers["Pragma"] = "no-cache"
+    return reponse
 
 
 @app.route("/admin/mail-test", methods=["GET", "POST"])
@@ -1846,19 +1883,113 @@ def admin_mail_test():
     )
 
 
+# --- droits sur les comptes ---------------------------------------------------
+#
+# Chaque route vérifiait le rôle de celui qui agit, jamais celui du compte visé :
+# un administrateur pouvait désactiver le superadministrateur ou changer son
+# adresse e-mail, et le dernier superadministrateur pouvait se retirer lui-même
+# tout accès. Masquer les boutons ne suffit pas, une requête se fabrique à la
+# main : la règle vit ici, et toutes les routes la consultent.
+
+ACCOUNT_ACTIONS = ("edit", "activate", "deactivate", "promote", "demote",
+                   "reset_password", "delete")
+
+
+def _is_last_active_superadmin(target):
+    """Le compte visé est-il le seul superadministrateur actif ?"""
+
+    if target.role != User.ROLE_SUPERADMIN or target.status != "active":
+        return False
+    autres = User.query.filter(
+        User.role == User.ROLE_SUPERADMIN,
+        User.status == "active",
+        User.id != target.id,
+    ).count()
+    return autres == 0
+
+
+def account_action_refusal(actor, target, action, new_role=None):
+    """Pourquoi ``actor`` ne peut pas faire ``action`` sur ``target``.
+
+    Retourne un message en français, ou None si l'action est permise.
+    ``new_role`` sert à la modification d'un compte qui change son rôle.
+    """
+
+    if actor is None or target is None:
+        return "Action impossible."
+
+    if actor.role == User.ROLE_ADMIN:
+        # Un administrateur gère les utilisateurs, pas ses pairs ni ses
+        # supérieurs.
+        if target.role != User.ROLE_USER:
+            return ("Seul le superadministrateur peut agir sur un compte "
+                    "administrateur ou superadministrateur.")
+        if action not in ("edit", "activate", "deactivate"):
+            return "Action réservée au superadministrateur."
+        return None
+
+    if actor.role != User.ROLE_SUPERADMIN:
+        return "Action réservée aux administrateurs."
+
+    # Superadministrateur : tout, sauf se priver de tout recours.
+    dernier = _is_last_active_superadmin(target)
+    if action == "deactivate" and dernier:
+        return ("C'est le dernier superadministrateur actif : le désactiver "
+                "retirerait à tout le monde l'accès à l'administration.")
+    if action == "delete" and target.role == User.ROLE_SUPERADMIN:
+        return "Impossible de supprimer un superadministrateur."
+    if action == "promote" and target.role != User.ROLE_USER:
+        # « Promouvoir » fait passer à administrateur : appliqué à un
+        # superadministrateur, il le rétrogradait sans le dire.
+        return "Seul un utilisateur peut être promu administrateur."
+    if action == "demote" and target.role != User.ROLE_ADMIN:
+        return "Seul un administrateur peut être rétrogradé."
+    if action == "edit" and new_role and new_role != User.ROLE_SUPERADMIN and dernier:
+        return ("C'est le dernier superadministrateur actif : il ne peut pas "
+                "perdre ce rôle.")
+    return None
+
+
+def can_act_on_account(actor, target, action):
+    """Pour les gabarits : afficher seulement les actions permises."""
+
+    return account_action_refusal(actor, target, action) is None
+
+
+def _refuse_account_action(actor, target, action, new_role=None):
+    """Signaler le refus et renvoyer vers la liste, ou None si permis."""
+
+    motif = account_action_refusal(actor, target, action, new_role=new_role)
+    if motif is None:
+        return None
+    app.logger.warning(
+        "Action %s refusee : %s sur le compte %s (%s)",
+        action, actor.username if actor else "?", target.username, target.role,
+    )
+    flash(motif, "danger")
+    return redirect(url_for("admin_users"))
+
+
 @app.route("/admin/user/<int:user_id>/edit", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_user_edit(user_id):
     target = db.get_or_404(User, user_id)
     u = current_user()
+    refus = _refuse_account_action(u, target, "edit")
+    if refus:
+        return refus
     form = UserForm(obj=target)
     if form.validate_on_submit():
+        nouveau_role = form.role.data if u.role == User.ROLE_SUPERADMIN else None
+        refus = _refuse_account_action(u, target, "edit", new_role=nouveau_role)
+        if refus:
+            return refus
         target.first_name = form.first_name.data
         target.last_name = form.last_name.data
         target.name = f"{form.last_name.data} {form.first_name.data}"
         target.email = form.email.data.lower()
-        if current_user().role == User.ROLE_SUPERADMIN:
-            target.role = form.role.data
+        if nouveau_role:
+            target.role = nouveau_role
         db.session.commit()
         flash("Utilisateur mis à jour", "success")
         return redirect(url_for("admin_users"))
@@ -1875,6 +2006,9 @@ def admin_user_edit(user_id):
 @role_required("superadmin")
 def admin_promote(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "promote")
+    if refus:
+        return refus
     target.role = User.ROLE_ADMIN
     db.session.commit()
     flash("Utilisateur promu administrateur", "success")
@@ -1885,6 +2019,9 @@ def admin_promote(user_id):
 @role_required("superadmin")
 def admin_demote(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "demote")
+    if refus:
+        return refus
     target.role = User.ROLE_USER
     db.session.commit()
     flash("Utilisateur rétrogradé", "info")
@@ -1895,6 +2032,9 @@ def admin_demote(user_id):
 @role_required("admin", "superadmin")
 def admin_activate(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "activate")
+    if refus:
+        return refus
     target.status = "active"
     db.session.commit()
     subject = "Votre compte est activé"
@@ -1911,6 +2051,9 @@ def admin_activate(user_id):
 @role_required("admin", "superadmin")
 def admin_deactivate(user_id):
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "deactivate")
+    if refus:
+        return refus
     target.status = "inactive"
     db.session.commit()
     flash("Utilisateur désactivé", "warning")
@@ -1927,6 +2070,9 @@ def admin_reset_password(user_id):
     """
 
     target = db.get_or_404(User, user_id)
+    refus = _refuse_account_action(current_user(), target, "reset_password")
+    if refus:
+        return refus
     if not target.username:
         target.assign_username()
     password = target.set_random_password()
@@ -1940,9 +2086,9 @@ def admin_reset_password(user_id):
 @role_required("superadmin")
 def admin_user_delete(user_id):
     target = db.get_or_404(User, user_id)
-    if target.role == User.ROLE_SUPERADMIN:
-        flash("Impossible de supprimer un superadministrateur", "danger")
-        return redirect(url_for("admin_users"))
+    refus = _refuse_account_action(current_user(), target, "delete")
+    if refus:
+        return refus
     # Suppression des réservations associées et de leurs segments.
     delete_reservations(Reservation.query.filter_by(user_id=target.id))
     db.session.delete(target)

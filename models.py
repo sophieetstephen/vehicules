@@ -187,11 +187,16 @@ class CredentialHandoff(db.Model):
     Le mot de passe en clair ne doit **pas** transiter par le cookie de session :
     celui-ci part chez le navigateur et peut y être conservé. Il est donc gardé
     côté serveur le temps d'une redirection, la session ne portant qu'un jeton
-    opaque. La ligne est supprimée dès l'affichage, et de toute façon au bout de
-    ``MAX_AGE_MINUTES``.
+    opaque. La ligne est supprimée dès l'affichage.
+
+    Une remise abandonnée — page quittée avant affichage — restait en base
+    indéfiniment, mot de passe en clair compris, et partait dans les
+    sauvegardes. ``purge_expired_credentials`` (app.py) l'efface désormais au
+    bout de ``MAX_AGE_MINUTES``, à la première requête qui suit : une
+    redirection prend une seconde, cinq minutes laissent une large marge.
     """
 
-    MAX_AGE_MINUTES = 10
+    MAX_AGE_MINUTES = 5
 
     id = db.Column(db.Integer, primary_key=True)
     token = db.Column(db.String(64), unique=True, nullable=False, index=True)
