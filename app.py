@@ -1122,6 +1122,111 @@ def _mail_result_ok(result):
     return bool(result), ""
 
 
+def mail_settings_summary():
+    """Ce qui est configuré pour l'envoi, sans jamais révéler le mot de passe.
+
+    Destiné à la page de diagnostic : l'administrateur n'a pas accès au
+    terminal du Raspberry, et c'est pourtant la première chose à regarder.
+    """
+
+    # app.config plutôt que Config : la classe de repli, utilisée si config.py
+    # ne s'importe pas, ne porte aucun réglage de messagerie.
+    mot_de_passe = app.config.get("MAIL_PASSWORD") or ""
+    return {
+        "server": app.config.get("MAIL_SERVER") or "",
+        "port": app.config.get("MAIL_PORT") or 0,
+        "tls": bool(app.config.get("MAIL_USE_TLS")),
+        "username": app.config.get("MAIL_USERNAME") or "",
+        "sender": (app.config.get("MAIL_DEFAULT_SENDER")
+                   or app.config.get("MAIL_USERNAME") or ""),
+        # Longueur seulement : une clé d'application Google en fait seize.
+        "password_length": len(mot_de_passe),
+    }
+
+
+def missing_mail_settings(summary=None):
+    """Réglages absents, en clair. Liste vide si tout est renseigné."""
+
+    summary = summary or mail_settings_summary()
+    manquants = []
+    if not summary["server"]:
+        manquants.append("l'adresse du serveur d'envoi (MAIL_SERVER)")
+    if not summary["username"]:
+        manquants.append("l'identifiant du compte (MAIL_USERNAME)")
+    if not summary["password_length"]:
+        manquants.append("la clé d'application (MAIL_PASSWORD)")
+    return manquants
+
+
+# Traductions des pannes d'envoi courantes. L'erreur brute d'un serveur SMTP
+# est en anglais et illisible pour qui n'est pas informaticien.
+_MAIL_ERROR_HINTS = (
+    (("535", "username and password not accepted", "authentication failed",
+      "bad credentials", "application-specific password"),
+     "Google a refusé l'identifiant ou la clé d'application. Une clé est "
+     "invalidée automatiquement quand le mot de passe du compte change ou "
+     "quand la double authentification est reconfigurée. Générez-en une "
+     "nouvelle dans le compte Google, puis remplacez MAIL_PASSWORD dans le "
+     "fichier .env du Raspberry."),
+    (("timed out", "timeout", "connection refused", "network is unreachable"),
+     "Le serveur d'envoi n'a pas répondu. Le port est probablement bloqué sur "
+     "le réseau où se trouve le Raspberry, ou la connexion Internet est "
+     "coupée."),
+    (("name or service not known", "getaddrinfo", "nodename nor servname"),
+     "Le nom du serveur d'envoi est introuvable. Vérifiez MAIL_SERVER dans le "
+     "fichier .env : pour Gmail, c'est smtp.gmail.com."),
+    (("wrong version number", "ssl", "starttls"),
+     "Le port et le mode de chiffrement ne s'accordent pas. Pour Gmail : port "
+     "587 avec MAIL_USE_TLS=true, ou port 465 avec MAIL_USE_TLS=false."),
+    (("sender address rejected", "not allowed", "from address"),
+     "Le serveur refuse l'adresse d'expéditeur. Elle doit correspondre au "
+     "compte utilisé pour se connecter."),
+)
+
+
+def explain_mail_error(detail):
+    """Expliquer une erreur d'envoi en français, ou None si elle est inconnue."""
+
+    texte = (detail or "").lower()
+    for motifs, explication in _MAIL_ERROR_HINTS:
+        if any(motif in texte for motif in motifs):
+            return explication
+    return None
+
+
+def try_mail(recipient):
+    """Envoyer un message de test et décrire le résultat.
+
+    Retourne ``(réussi, détail brut, explication en français)``.
+    """
+
+    manquants = missing_mail_settings()
+    if manquants:
+        return False, "", ("Il manque " + ", ".join(manquants) + " dans le "
+                           "fichier .env du Raspberry.")
+    if not recipient:
+        return False, "", ("Votre compte n'a pas d'adresse e-mail : le test "
+                           "n'a pas de destinataire.")
+
+    corps = (
+        "Ceci est un message de test envoyé depuis l'application de "
+        "réservation des véhicules.\n\n"
+        "Si vous le recevez, l'envoi des e-mails fonctionne."
+    )
+    try:
+        resultat = send_mail_msmtp("Test d'envoi – Réservation des véhicules",
+                                   corps, [recipient])
+    except Exception as exc:  # noqa: BLE001 - on veut tous les échecs
+        app.logger.exception("Test d'envoi vers %s", recipient)
+        return False, str(exc), explain_mail_error(str(exc))
+
+    envoye, detail = _mail_result_ok(resultat)
+    if envoye:
+        return True, detail, None
+    app.logger.error("Test d'envoi vers %s : %s", recipient, detail)
+    return False, detail, explain_mail_error(detail)
+
+
 def notify(subject, body, recipients, *, about=""):
     """Envoyer un e-mail en signalant l'échec au lieu de le taire.
 
@@ -1551,6 +1656,33 @@ def admin_user_credentials():
     u = current_user()
     return render_template(
         "user_credentials.html", creds=creds, user=u, current_user=u
+    )
+
+
+@app.route("/admin/mail-test", methods=["GET", "POST"])
+@role_required("superadmin")
+def admin_mail_test():
+    """Vérifier l'envoi des e-mails depuis l'application elle-même.
+
+    L'administrateur n'a pas toujours accès au terminal du Raspberry — il est
+    souvent sur son téléphone. Sans cette page, la seule façon de savoir
+    pourquoi un e-mail n'est pas parti était de lire le journal du conteneur.
+    """
+
+    u = current_user()
+    reglages = mail_settings_summary()
+    resultat = None
+    if request.method == "POST":
+        reussi, detail, explication = try_mail(u.email)
+        resultat = {"ok": reussi, "detail": detail, "explication": explication,
+                    "destinataire": u.email}
+    return render_template(
+        "mail_test.html",
+        reglages=reglages,
+        manquants=missing_mail_settings(reglages),
+        resultat=resultat,
+        user=u,
+        current_user=u,
     )
 
 
