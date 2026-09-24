@@ -10,6 +10,7 @@ nouvel ordre », comme une panne. Règles convenues :
   étant demandé de vive voix ; on garde la trace de qui l'a enregistré.
 """
 
+import html as html_module
 import importlib
 from datetime import datetime, date
 
@@ -245,19 +246,82 @@ def test_removing_a_loan_is_refused_for_a_segment_too(parc):
     assert VehicleLoan.query.count() == 1
 
 
+# Prêts à venir (NOW est le 7 octobre) : ceux-là se retirent entièrement.
+LUNDI_MATIN = (datetime(2026, 10, 13, 8), datetime(2026, 10, 13, 12))
+
+
 def test_removing_a_loan_covered_by_another_is_allowed(parc):
-    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
-    _pret(parc["vl1"], date(2026, 10, 6), date(2026, 10, 8))
-    _demande(parc, *MATIN, vehicule=parc["vl1"], statut="approved")
+    pret = _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    _pret(parc["vl1"], date(2026, 10, 13), date(2026, 10, 14))
+    _demande(parc, *LUNDI_MATIN, vehicule=parc["vl1"], statut="approved")
     _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
     assert VehicleLoan.query.count() == 1
 
 
 def test_refused_reservation_does_not_hold_a_loan(parc):
-    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
-    _demande(parc, *MATIN, vehicule=parc["vl1"], statut="rejected")
+    pret = _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    _demande(parc, *LUNDI_MATIN, vehicule=parc["vl1"], statut="rejected")
     _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
     assert VehicleLoan.query.count() == 0
+
+
+# --- la trace des prêts --------------------------------------------------------
+#
+# Relevé par le second audit : retirer un prêt l'effaçait, même quand il avait
+# déjà servi. On perdait « qui a eu le VL1 tel jour ».
+
+def test_past_loan_cannot_be_removed(parc):
+    pret = _pret(parc["vl1"], date(2026, 9, 1), date(2026, 9, 5))
+    reponse = _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete",
+                                            follow_redirects=True)
+    assert VehicleLoan.query.count() == 1
+    assert "reste dans l'historique" in html_module.unescape(reponse.data.decode())
+
+
+def test_ongoing_loan_is_ended_not_erased(parc):
+    """Les jours écoulés restent ; seule la suite du prêt disparaît."""
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
+
+    db.session.expire_all()
+    garde = db.session.get(VehicleLoan, pret.id)
+    assert garde is not None
+    assert garde.start_at == datetime(2026, 10, 5)
+    assert garde.end_at == NOW
+    assert has_conflict(parc["vl1"].id, datetime(2026, 10, 8, 8), datetime(2026, 10, 8, 12)), \
+        "après la fin du prêt, le véhicule redevient réservé"
+
+
+def test_ending_a_loan_ignores_reservations_already_past(parc):
+    """Une réservation d'avant-hier sur ce prêt n'empêche pas de le terminer :
+    elle reste couverte par la partie conservée."""
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _demande(parc, datetime(2026, 10, 5, 8), datetime(2026, 10, 5, 12),
+             vehicule=parc["vl1"], statut="approved")
+    _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete")
+    db.session.expire_all()
+    assert db.session.get(VehicleLoan, pret.id).end_at == NOW
+
+
+def test_ending_a_loan_is_refused_when_a_later_reservation_uses_it(parc):
+    pret = _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _demande(parc, datetime(2026, 10, 8, 8), datetime(2026, 10, 8, 12),
+             vehicule=parc["vl1"], statut="approved")
+    reponse = _client(parc["adjoint"]).post(f"/admin/vehicles/loans/{pret.id}/delete",
+                                            follow_redirects=True)
+    db.session.expire_all()
+    assert db.session.get(VehicleLoan, pret.id).end_at == datetime.combine(
+        date(2026, 10, 9), datetime.max.time())
+    assert "Impossible de terminer ce prêt" in html_module.unescape(reponse.data.decode())
+
+
+def test_loans_page_offers_to_end_an_ongoing_loan(parc):
+    _pret(parc["vl1"], date(2026, 10, 5), date(2026, 10, 9))
+    _pret(parc["vl1"], date(2026, 10, 12), date(2026, 10, 16))
+    page = html_module.unescape(
+        _client(parc["adjoint"]).get(f"/admin/vehicles/{parc['vl1'].id}/loans").data.decode())
+    assert page.count(">Terminer") == 1
+    assert page.count(">Retirer") == 1
 
 
 def test_vehicle_form_sets_and_clears_the_holder(parc):
@@ -351,3 +415,70 @@ def test_pdf_explains_reserved_vehicles(parc):
     assert "pastille-reserved" in html
     tableau = html.split("<h2>Véhicules à usage réservé</h2>")[1].split("</table>")[0]
     assert "Chef de centre" in tableau and "du 12/10 au 16/10 (congés)" in tableau
+
+
+# --- passage en usage réservé d'un véhicule déjà réservé ------------------------
+#
+# Relevé par le second audit : rien ne signalait les réservations accordées
+# avant, qui restaient sur un véhicule que plus aucun prêt n'autorisait.
+
+def _passer_en_reserve(client, v):
+    return client.post(f"/admin/vehicles/{v.id}/edit", data={
+        "code": v.code, "label": v.label, "category": "", "reserved_for": "Chef de centre",
+    }, follow_redirects=True)
+
+
+def _reservation_sur(v, jean, debut, fin, segment=False):
+    r = Reservation(user_id=jean.id, start_at=debut, end_at=fin, status="approved",
+                    vehicle_id=None if segment else v.id)
+    db.session.add(r)
+    db.session.flush()
+    if segment:
+        db.session.add(ReservationSegment(reservation_id=r.id, vehicle_id=v.id,
+                                          start_at=debut, end_at=fin))
+    db.session.commit()
+    return r
+
+
+def test_becoming_reserved_lists_upcoming_reservations(ctx):
+    chef, jean = _user("Chef", User.ROLE_ADMIN), _user()
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+    _reservation_sur(v, jean, datetime(2026, 10, 12, 8), datetime(2026, 10, 12, 17))
+    _reservation_sur(v, jean, datetime(2026, 10, 14, 8), datetime(2026, 10, 14, 12), segment=True)
+    _reservation_sur(v, jean, datetime(2026, 9, 1, 8), datetime(2026, 9, 1, 17))  # passée
+
+    reponse = _passer_en_reserve(_client(chef), v)
+    page = html_module.unescape(reponse.data.decode())
+
+    assert db.session.get(Vehicle, v.id).reserved_for == "Chef de centre", "le changement est fait"
+    assert reponse.request.path == f"/admin/vehicles/{v.id}/loans", "on arrive sur les prêts"
+    assert "2 réservation(s) à venir l'utilisent déjà" in page
+    assert "12/10 (Jean X)" in page and "14/10 (Jean X)" in page
+    assert "Enregistrez un prêt" in page
+
+
+def test_no_warning_when_a_loan_covers_them(ctx):
+    chef, jean = _user("Chef", User.ROLE_ADMIN), _user()
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+    _reservation_sur(v, jean, datetime(2026, 10, 12, 8), datetime(2026, 10, 12, 17))
+    db.session.add(VehicleLoan(vehicle_id=v.id, start_at=datetime(2026, 10, 12),
+                               end_at=datetime(2026, 10, 13), created_by=chef.id))
+    db.session.commit()
+
+    page = html_module.unescape(_passer_en_reserve(_client(chef), v).data.decode())
+    assert "l'utilisent déjà" not in page
+
+
+def test_no_warning_without_upcoming_reservations(ctx):
+    chef = _user("Chef", User.ROLE_ADMIN)
+    v = Vehicle(code="VL1", label="Chef")
+    db.session.add(v)
+    db.session.commit()
+
+    page = html_module.unescape(_passer_en_reserve(_client(chef), v).data.decode())
+    assert "Véhicule mis à jour" in page
+    assert "l'utilisent déjà" not in page

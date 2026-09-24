@@ -1,10 +1,32 @@
 from email.message import EmailMessage
 import smtplib
+import ssl
 from config import Config
 
 # Délai d'envoi. Sans lui, un serveur muet bloquait indéfiniment la page qui
 # avait déclenché l'envoi — validation d'une réservation, création d'un compte.
 SEND_TIMEOUT = 15
+
+
+def _smtp_connect(server, port, timeout):
+    """Connexion chiffrée au serveur d'envoi, certificat vérifié.
+
+    Sans contexte, ``starttls()`` et ``SMTP_SSL`` chiffrent sans vérifier le
+    certificat : un intermédiaire pouvait se faire passer pour Gmail et
+    recueillir la clé d'application. Le contexte par défaut vérifie le
+    certificat et le nom du serveur.
+    """
+
+    contexte = ssl.create_default_context()
+    if Config.MAIL_USE_TLS:
+        smtp = smtplib.SMTP(server, port, timeout=timeout)
+        try:
+            smtp.starttls(context=contexte)
+        except Exception:
+            smtp.close()
+            raise
+        return smtp
+    return smtplib.SMTP_SSL(server, port, timeout=timeout, context=contexte)
 
 
 def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile: str = "gmail"):
@@ -36,15 +58,9 @@ def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile
     port = Config.MAIL_PORT or (465 if not Config.MAIL_USE_TLS else 587)
 
     try:
-        if Config.MAIL_USE_TLS:
-            with smtplib.SMTP(server, port, timeout=SEND_TIMEOUT) as smtp:
-                smtp.starttls()
-                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP_SSL(server, port, timeout=SEND_TIMEOUT) as smtp:
-                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
-                smtp.send_message(msg)
+        with _smtp_connect(server, port, SEND_TIMEOUT) as smtp:
+            smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+            smtp.send_message(msg)
         return True, "sent"
     except Exception as e:
         return False, f"smtp error: {e}"
@@ -67,13 +83,8 @@ def check_mail_login(timeout: int = 6):
     port = Config.MAIL_PORT or (465 if not Config.MAIL_USE_TLS else 587)
 
     try:
-        if Config.MAIL_USE_TLS:
-            with smtplib.SMTP(server, port, timeout=timeout) as smtp:
-                smtp.starttls()
-                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
-        else:
-            with smtplib.SMTP_SSL(server, port, timeout=timeout) as smtp:
-                smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
+        with _smtp_connect(server, port, timeout) as smtp:
+            smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
         return True, "login ok"
     except Exception as e:
         return False, f"smtp error: {e}"

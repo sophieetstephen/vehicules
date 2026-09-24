@@ -376,15 +376,43 @@ def test_outside_a_container_nothing_is_volatile(tmp_path):
     assert ay.destination_is_volatile(str(tmp_path), in_container=False) is False
 
 
-def test_volatile_run_reports_failure():
-    """Le script doit sortir en erreur, pas annoncer un succès trompeur."""
-    import inspect
+def _lancer_archivage(monkeypatch, *options, volatile):
+    """Exécute main() sans générer de PDF ; note ce qui aurait été supprimé."""
+    import sys
 
     import tools.archive_year as ay
 
-    source = inspect.getsource(ay.main)
-    fin = source.split("if volatile:")[-1]
-    assert "return 1" in fin, "une archive perdue ne doit pas passer pour un succès"
+    faits = []
+    monkeypatch.setattr(ay, "destination_is_volatile", lambda *a, **k: volatile)
+    monkeypatch.setattr(ay, "archive_year", lambda annee, dry_run: (True, 12))
+    monkeypatch.setattr(ay, "purge_year_reservations",
+                        lambda *a, **k: faits.append("purge") or 0)
+    monkeypatch.setattr(ay, "cleanup_old_archives",
+                        lambda *a, **k: faits.append("menage") or 0)
+    monkeypatch.setattr(sys, "argv", ["archive_year.py", "--year", "2025", *options])
+    return ay.main(), faits
+
+
+def test_volatile_run_reports_failure(monkeypatch):
+    """Le script doit sortir en erreur, pas annoncer un succès trompeur."""
+    code, _ = _lancer_archivage(monkeypatch, volatile=True)
+    assert code == 1, "une archive perdue ne doit pas passer pour un succès"
+
+
+def test_volatile_run_never_purges(monkeypatch, capsys):
+    """Relevé par le second audit : la purge avait lieu avant la sortie en
+    erreur. Les réservations étaient supprimées sur la foi de PDF qui
+    disparaissaient avec le conteneur."""
+    code, faits = _lancer_archivage(monkeypatch, "--purge", volatile=True)
+    assert code == 1
+    assert faits == [], f"supprimé malgré une archive perdue : {faits}"
+    assert "Purge annulee" in capsys.readouterr().out
+
+
+def test_mounted_run_still_purges_on_request(monkeypatch):
+    code, faits = _lancer_archivage(monkeypatch, "--purge", volatile=False)
+    assert code == 0
+    assert faits == ["purge", "menage"]
 
 
 # --- des lignes assez basses pour qu'une page ne les coupe pas --------------

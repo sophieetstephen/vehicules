@@ -2,25 +2,27 @@
 {% block title %}Administration – Véhicule{% endblock %}
 {% block content %}
 <h2>{{ "Nouveau véhicule" if not vehicle else "Modifier véhicule #" ~ vehicle.id }}</h2>
+{# Après un refus, on réaffiche ce qui avait été saisi plutôt que la fiche. #}
+{% set f = saisie if saisie else vehicle %}
 <form method="post">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div class="mb-3">
     <label class="form-label">Code</label>
-    <input class="form-control" type="text" name="code" value="{{ vehicle.code if vehicle else "" }}" required>
+    <input class="form-control" type="text" name="code" value="{{ f.code if f and f.code else "" }}" required>
   </div>
   <div class="mb-3">
     <label class="form-label">Libellé</label>
-    <input class="form-control" type="text" name="label" value="{{ vehicle.label if vehicle else "" }}" required>
+    <input class="form-control" type="text" name="label" value="{{ f.label if f and f.label else "" }}" required>
   </div>
   <div class="mb-3">
     <label class="form-label">Catégorie</label>
-    <input class="form-control" type="text" name="category" value="{{ vehicle.category if vehicle else "" }}">
+    <input class="form-control" type="text" name="category" value="{{ f.category if f and f.category else "" }}">
   </div>
   <div class="mb-3">
     <label class="form-label" for="reserved_for">Usage réservé à</label>
     <input class="form-control" type="text" id="reserved_for" name="reserved_for" maxlength="80"
            placeholder="ex : Chef de centre"
-           value="{{ vehicle.reserved_for if vehicle and vehicle.reserved_for else "" }}">
+           value="{{ f.reserved_for if f and f.reserved_for else "" }}">
     <div class="form-text">
       Laisser vide pour un véhicule du parc. Renseigné, le véhicule n'est
       attribuable à une demande que pendant un prêt.

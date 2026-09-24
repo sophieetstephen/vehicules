@@ -365,6 +365,16 @@ def main() -> int:
 
     print(f"\nSUCCES: {pdf_count}/12 PDFs generes.")
 
+    # Des PDF qui disparaitront avec le conteneur ne sont pas une archive :
+    # rien ne doit etre supprime sur leur foi, ni les reservations de
+    # l'annee, ni les anciennes archives.
+    if volatile:
+        print("\n*** Les PDF ont ete ecrits dans le conteneur et seront perdus. ***")
+        if args.purge:
+            print("Purge annulee par securite : la base n'a pas ete modifiee.")
+        print("Relancez avec --output-dir vers un dossier monte depuis l'hote.")
+        return 1
+
     # Step 2: Purge reservations - uniquement sur demande explicite.
     # Par defaut l'historique reste dans l'application (quelques centaines de
     # kilo-octets par an) et reste consultable dans le planning.
@@ -376,11 +386,6 @@ def main() -> int:
 
     # Step 3: Cleanup old archives
     cleanup_old_archives(args.keep_years, args.dry_run)
-
-    if volatile:
-        print("\n*** Les PDF ont ete ecrits dans le conteneur et seront perdus. ***")
-        print("Relancez avec --output-dir vers un dossier monte depuis l'hote.")
-        return 1
 
     print("\n=== Archivage termine ===")
     return 0

@@ -11,15 +11,18 @@
   </div>
   <div class="mb-3">
     {{ form.first_name.label(class="form-label") }}
-    {{ form.first_name(class="form-control") }}
+    {{ form.first_name(class="form-control" + (" is-invalid" if form.first_name.errors else "")) }}
+    {% for e in form.first_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
   </div>
   <div class="mb-3">
     {{ form.last_name.label(class="form-label") }}
-    {{ form.last_name(class="form-control") }}
+    {{ form.last_name(class="form-control" + (" is-invalid" if form.last_name.errors else "")) }}
+    {% for e in form.last_name.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
   </div>
   <div class="mb-3">
     {{ form.email.label(class="form-label") }}
-    {{ form.email(class="form-control") }}
+    {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), type="email") }}
+    {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
   </div>
   <div class="mb-3">
     {{ form.role.label(class="form-label") }}

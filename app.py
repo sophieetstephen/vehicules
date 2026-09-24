@@ -458,6 +458,23 @@ def find_orphan_segments():
     )
 
 
+def find_shadowed_segments():
+    """Segments d'une réservation qui a aussi un véhicule global.
+
+    Seule l'ancienne validation créait cet état : passer la réservation sur B
+    laissait en place les segments posés sur A, qui bloquaient A pour
+    personne. Une attribution globale remplace les segments ; ceux qui
+    restent sont des résidus.
+    """
+
+    return (
+        ReservationSegment.query.join(Reservation)
+        .filter(Reservation.vehicle_id.isnot(None))
+        .order_by(ReservationSegment.start_at)
+        .all()
+    )
+
+
 def purge_expired_requests():
     """Archive or delete expired reservations depending on their status.
 
@@ -1153,7 +1170,9 @@ def repair_orphan_segments_command(dry_run):
         Reservation.vehicle_id.notin_(existing_vehicles or [-1]),
     ).all()
 
-    if not orphans and not dangling:
+    residus = find_shadowed_segments()
+
+    if not orphans and not dangling and not residus:
         print("Aucun segment fantôme. Rien à réparer.")
         return
 
@@ -1171,18 +1190,26 @@ def repair_orphan_segments_command(dry_run):
         )
     for r in dangling:
         print(f"  réservation #{r.id} pointe vers un véhicule supprimé")
+    for seg in residus:
+        print(
+            f"  segment #{seg.id} du {seg.start_at.strftime('%d/%m/%Y')} "
+            f"({seg.vehicle.code}) : reste d'une ancienne attribution de la "
+            f"réservation #{seg.reservation_id}, passée depuis sur "
+            f"{seg.reservation.vehicle.code}"
+        )
 
     if dry_run:
-        print(f"\n{len(orphans)} segment(s) et {len(dangling)} réservation(s) à corriger (simulation).")
+        print(f"\n{len(orphans) + len(residus)} segment(s) et {len(dangling)} "
+              "réservation(s) à corriger (simulation).")
         return
 
-    for seg in orphans:
+    for seg in orphans + residus:
         db.session.delete(seg)
     for r in dangling:
         r.vehicle_id = None
     db.session.commit()
     print(
-        f"\n{len(orphans)} segment(s) fantôme(s) supprimé(s), "
+        f"\n{len(orphans) + len(residus)} segment(s) fantôme(s) supprimé(s), "
         f"{len(dangling)} réservation(s) détachée(s) d'un véhicule supprimé."
     )
 
@@ -1209,7 +1236,14 @@ def check_integrity_command():
         for table, ligne, parent, _ in casses:
             print(f"  - {table} n°{ligne} désigne un(e) {parent} qui n'existe plus")
         print("Pour les segments, « flask repair-orphan-segments » les répare.")
-    if sain != "ok" or casses:
+    residus = find_shadowed_segments()
+    if not residus:
+        print("Attributions : aucun segment resté sur un ancien véhicule.")
+    else:
+        print(f"Attributions : {len(residus)} segment(s) resté(s) sur un ancien "
+              "véhicule, qu'ils bloquent pour personne.")
+        print("« flask repair-orphan-segments » les retire.")
+    if sain != "ok" or casses or residus:
         raise SystemExit(1)
 
 
@@ -1465,6 +1499,12 @@ _MAIL_ERROR_HINTS = (
     (("name or service not known", "getaddrinfo", "nodename nor servname"),
      "Le nom du serveur d'envoi est introuvable. Vérifiez MAIL_SERVER dans le "
      "fichier .env : pour Gmail, c'est smtp.gmail.com."),
+    # Avant la règle « ssl » ci-dessous, que ce message contient aussi.
+    (("certificate verify failed", "certificate_verify_failed"),
+     "Le certificat présenté par le serveur d'envoi n'a pas pu être vérifié. "
+     "Soit le conteneur n'a pas les certificats racine (paquet "
+     "ca-certificates), soit quelqu'un s'intercale entre le Raspberry et "
+     "Gmail. Aucun mot de passe n'a été transmis."),
     (("wrong version number", "ssl", "starttls"),
      "Le port et le mode de chiffrement ne s'accordent pas. Pour Gmail : port "
      "587 avec MAIL_USE_TLS=true, ou port 465 avec MAIL_USE_TLS=false."),
@@ -2087,10 +2127,16 @@ def admin_user_edit(user_id):
         refus = _refuse_account_action(u, target, "edit", new_role=nouveau_role)
         if refus:
             return refus
+        # Comme à la création : une adresse déjà prise levait une erreur 500.
+        email = form.email.data.strip().lower()
+        if User.query.filter(User.email == email, User.id != target.id).first():
+            form.email.errors.append("Cette adresse e-mail est déjà utilisée.")
+            return render_template("user_form.html", form=form, target=target,
+                                   user=u, current_user=u), 200
         target.first_name = form.first_name.data
         target.last_name = form.last_name.data
         target.name = f"{form.last_name.data} {form.first_name.data}"
-        target.email = form.email.data.lower()
+        target.email = email
         if nouveau_role:
             target.role = nouveau_role
         db.session.commit()
@@ -2333,21 +2379,48 @@ def occupations_on_vehicle(vehicle_id, start, end):
     return sorted(out, key=lambda o: o[0])
 
 
-def reservations_orphaned_by_loan_removal(loan):
+def reservations_orphaned_by_loan_removal(loan, depuis=None):
     """Réservations qui ne seraient plus couvertes si l'on retirait ce prêt.
+
+    ``depuis`` : seule la fin du prêt est retirée, à partir de ce moment
+    (prêt en cours qu'on termine).
 
     Un autre prêt peut couvrir la même période : seules les réservations
     réellement laissées sans prêt comptent.
     """
 
-    autres = [p for p in loans_for(loan.vehicle_id, loan.start_at, loan.end_at)
+    debut_retire = max(loan.start_at, depuis) if depuis else loan.start_at
+    autres = [p for p in loans_for(loan.vehicle_id, debut_retire, loan.end_at)
               if p.id != loan.id]
     orphelines = []
     for debut, fin, reservation in occupations_on_vehicle(
-            loan.vehicle_id, loan.start_at, loan.end_at):
+            loan.vehicle_id, debut_retire, loan.end_at):
         if not loans_cover(autres, debut, fin):
             orphelines.append(reservation)
     return orphelines
+
+
+def reservations_outside_loans(vehicle):
+    """Réservations à venir qui occupent ce véhicule hors de tout prêt.
+
+    Sert au passage d'un véhicule en usage réservé : celles accordées avant
+    restaient en place sans que rien ne le signale.
+    """
+
+    maintenant = local_now().replace(tzinfo=None)
+    fin = datetime.max
+    prets = loans_for(vehicle.id, maintenant, fin)
+    vues, out = set(), []
+    for debut, fin_occ, reservation in occupations_on_vehicle(vehicle.id, maintenant, fin):
+        if reservation.id not in vues and not loans_cover(prets, debut, fin_occ):
+            vues.add(reservation.id)
+            out.append(reservation)
+    return out
+
+
+def _reservation_brief(r):
+    nom = f"{r.user.first_name or ''} {r.user.last_name or ''}".strip()
+    return f"{r.start_at.strftime('%d/%m')} ({nom})" if nom else r.start_at.strftime("%d/%m")
 
 
 @app.route("/admin/vehicles/<int:vehicle_id>/loans", methods=["GET", "POST"])
@@ -2417,32 +2490,73 @@ def _render_vehicle_loans(vehicle, form, user, now):
 @app.route("/admin/vehicles/loans/<int:loan_id>/delete", methods=["POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_loan_delete(loan_id):
+    """Retirer un prêt à venir, ou terminer maintenant un prêt en cours.
+
+    Un prêt passé ne se retire pas : il dit qui a eu le véhicule, et quand.
+    Retirer un prêt en cours effaçait aussi les jours déjà écoulés.
+    """
+
     loan = db.get_or_404(VehicleLoan, loan_id)
     vehicle_id = loan.vehicle_id
-    orphelines = reservations_orphaned_by_loan_removal(loan)
+    now = local_now()
+    if loan.end_at < now:
+        flash("Ce prêt est terminé : il reste dans l'historique du véhicule.", "info")
+        return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
+    en_cours = loan.start_at <= now
+    orphelines = reservations_orphaned_by_loan_removal(
+        loan, depuis=now if en_cours else None)
     if orphelines:
         # Retirer le prêt laisserait ces réservations sur un véhicule que plus
         # rien n'autorise : on demande de les réattribuer d'abord.
-        noms = ", ".join(
-            f"{r.start_at.strftime('%d/%m')} ({(r.user.first_name or '')} {(r.user.last_name or '')})".strip()
-            for r in orphelines[:5]
-        )
+        noms = ", ".join(_reservation_brief(r) for r in orphelines[:5])
         flash(
-            f"Impossible de retirer ce prêt : {len(orphelines)} réservation(s) l'utilisent "
+            f"Impossible de {'terminer' if en_cours else 'retirer'} ce prêt : "
+            f"{len(orphelines)} réservation(s) l'utilisent "
             f"— {noms}. Réattribuez-les à un autre véhicule d'abord.",
             "danger",
         )
         return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
-    db.session.delete(loan)
-    db.session.commit()
-    flash("Prêt retiré : le véhicule revient à son usage réservé.", "info")
+    if en_cours:
+        loan.end_at = now
+        db.session.commit()
+        flash("Prêt terminé : le véhicule revient à son usage réservé. "
+              "Les jours déjà écoulés restent dans l'historique.", "info")
+    else:
+        db.session.delete(loan)
+        db.session.commit()
+        flash("Prêt retiré : le véhicule revient à son usage réservé.", "info")
     return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
+
+
+def vehicle_code_error(code, vehicle_id=None):
+    """Pourquoi ce code de véhicule est refusé, ou None.
+
+    Un code déjà pris faisait échouer l'enregistrement sur une page
+    d'erreur 500. « vl1 » et « VL1 » se confondent au planning : on les
+    traite comme le même code.
+    """
+
+    code = (code or "").strip()
+    if not code:
+        return "Indiquez le code du véhicule."
+    autre = Vehicle.query.filter(db.func.lower(Vehicle.code) == code.lower())
+    if vehicle_id is not None:
+        autre = autre.filter(Vehicle.id != vehicle_id)
+    autre = autre.first()
+    if autre:
+        return f"Le code « {autre.code} » est déjà utilisé par un autre véhicule ({autre.label})."
+    return None
 
 
 @app.route("/admin/vehicles/new", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_new():
     if request.method == "POST":
+        erreur = vehicle_code_error(request.form.get("code", ""))
+        if erreur:
+            flash(erreur, "danger")
+            return render_template("vehicle_form.html", vehicle=None,
+                                   saisie=request.form, user=current_user()), 400
         v = Vehicle(
             code=request.form["code"].strip(),
             label=request.form["label"].strip(),
@@ -2463,12 +2577,33 @@ def admin_vehicle_new():
 def admin_vehicle_edit(vehicle_id):
     vehicle = db.get_or_404(Vehicle, vehicle_id)
     if request.method == "POST":
+        erreur = vehicle_code_error(request.form.get("code", ""), vehicle.id)
+        if erreur:
+            flash(erreur, "danger")
+            return render_template("vehicle_form.html", vehicle=vehicle,
+                                   saisie=request.form, user=current_user()), 400
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
         vehicle.category = request.form.get("category", "").strip() or None
+        devient_reserve = (not vehicle.is_reserved
+                           and request.form.get("reserved_for", "").strip())
         vehicle.reserved_for = request.form.get("reserved_for", "").strip() or None
         db.session.commit()
         flash("Véhicule mis à jour", "success")
+        if devient_reserve:
+            hors_pret = reservations_outside_loans(vehicle)
+            if hors_pret:
+                # On n'annule rien : ces réservations ont été accordées. Mais
+                # plus aucun prêt ne les autorise, et rien ne le montrait.
+                flash(
+                    f"{vehicle.code} est maintenant à usage réservé, mais "
+                    f"{len(hors_pret)} réservation(s) à venir l'utilisent déjà — "
+                    + ", ".join(_reservation_brief(r) for r in hors_pret[:5])
+                    + ". Enregistrez un prêt couvrant ces dates, ou "
+                    "réattribuez-les à un autre véhicule.",
+                    "warning",
+                )
+                return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle.id))
         return redirect(url_for("admin_vehicles"))
     return render_template(
         "vehicle_form.html", vehicle=vehicle, user=current_user()
@@ -2654,10 +2789,100 @@ def segment_period_error(reservation, start, end):
 
 
 def _form_datetime(field):
+    """La date d'un champ de formulaire, en heure locale sans fuseau, ou None.
+
+    Les réservations sont enregistrées en heure locale, sans fuseau. Une date
+    envoyée avec un fuseau (« 2026-10-01T08:00+02:00 ») ne pouvait pas leur
+    être comparée : erreur 500. On la ramène à l'heure locale.
+    """
+
     try:
-        return datetime.fromisoformat(request.form.get(field, ""))
+        valeur = datetime.fromisoformat(request.form.get(field, ""))
     except (TypeError, ValueError):
         return None
+    if valeur.tzinfo is not None:
+        from zoneinfo import ZoneInfo
+
+        fuseau = ZoneInfo(app.config.get("APP_TIMEZONE") or "Europe/Paris")
+        valeur = valeur.astimezone(fuseau).replace(tzinfo=None)
+    return valeur
+
+
+def free_period(reservation, start, end):
+    """Retirer à la réservation tout véhicule posé sur [start, end).
+
+    Un segment qui déborde de la période est coupé : seuls ses morceaux
+    hors période restent. Une attribution globale (``vehicle_id`` de la
+    réservation) est d'abord convertie en segment couvrant toute la
+    réservation, pour pouvoir en retirer une partie.
+
+    Avant, « un jour » désignait en fait le premier segment qui touchait ce
+    jour : sur un segment du 1er au 3, supprimer ou changer le 2 agissait sur
+    les trois jours. Et un segment ajouté par-dessus un autre donnait deux
+    véhicules en même temps à la même réservation.
+    """
+
+    # Une journée entière finit à 23:59:59.999999 : le reste coupé doit
+    # reprendre à minuit, sinon il toucherait encore ce jour-là.
+    if end.time() == time.max:
+        end = datetime.combine(end.date() + timedelta(days=1), time.min)
+
+    if reservation.vehicle_id is not None:
+        db.session.add(ReservationSegment(
+            reservation_id=reservation.id,
+            vehicle_id=reservation.vehicle_id,
+            start_at=reservation.start_at,
+            end_at=reservation.end_at,
+        ))
+        reservation.vehicle_id = None
+        db.session.flush()
+
+    for seg in ReservationSegment.query.filter(
+        ReservationSegment.reservation_id == reservation.id,
+        ReservationSegment.end_at > start,
+        ReservationSegment.start_at < end,
+    ).all():
+        for debut, fin in ((seg.start_at, start), (end, seg.end_at)):
+            for morceau in _day_pieces(debut, fin):
+                db.session.add(ReservationSegment(
+                    reservation_id=reservation.id,
+                    vehicle_id=seg.vehicle_id,
+                    start_at=morceau[0],
+                    end_at=morceau[1],
+                ))
+        db.session.delete(seg)
+    db.session.flush()
+
+
+def _day_pieces(debut, fin):
+    """[debut, fin) découpé jour par jour, chaque jour finissant à 23:59:59.
+
+    Un segment par jour, comme ceux que crée l'attribution jour par jour :
+    chaque jour du planning mène à son propre segment, qu'on peut modifier
+    sans toucher aux voisins.
+    """
+
+    jour = debut.date()
+    while debut < fin:
+        fin_du_jour = datetime.combine(jour, time.max)
+        morceau_fin = min(fin, fin_du_jour)
+        if debut < morceau_fin:
+            yield debut, morceau_fin
+        jour += timedelta(days=1)
+        debut = datetime.combine(jour, time.min)
+
+
+def assign_whole_reservation(reservation, vehicle_id):
+    """Attribuer un véhicule à toute la réservation.
+
+    Les segments posés auparavant sont retirés : ils continuaient de bloquer
+    l'ancien véhicule alors que la réservation était passée sur un autre.
+    """
+
+    ReservationSegment.query.filter_by(reservation_id=reservation.id).delete(
+        synchronize_session="fetch"
+    )
+    reservation.vehicle_id = vehicle_id
 
 
 def commit_if_still_free(vehicle_id, start, end, reservation_id):
@@ -3293,70 +3518,15 @@ def manage_request(rid):
             ):
                 flash("Conflit détecté lors de la création du segment.", "danger")
             else:
-                existing = ReservationSegment.query.filter(
-                    ReservationSegment.reservation_id == r.id,
-                    ReservationSegment.end_at > day_start,
-                    ReservationSegment.start_at < day_end,
-                ).first()
-                if existing:
-                    old_vehicle = db.session.get(Vehicle, existing.vehicle_id)
-                    existing.vehicle_id = veh_id
-                    if not commit_if_still_free(
-                        veh_id, existing.start_at, existing.end_at, r.id
-                    ):
-                        flash(
-                            "Ce véhicule vient d'être attribué par un autre "
-                            "administrateur. Choisissez-en un autre.",
-                            "danger",
-                        )
-                        return redirect(url_for("admin_reservations"))
-                    new_vehicle = db.session.get(Vehicle, veh_id)
-                    recipients = reservation_notification_recipients(r)
-                    if recipients:
-                        notify(
-                            "Véhicule attribué",
-                            (
-                                f"Véhicule attribué pour votre réservation :\n\n"
-                                f"Période : du {existing.start_at.strftime('%d/%m/%Y')} au {existing.end_at.strftime('%d/%m/%Y')}\n"
-                                f"Véhicule : {new_vehicle.code}"
-                                + (f" ({new_vehicle.label})" if new_vehicle.label else "")
-                            ),
-                            recipients,
-                        )
-                    flash("Segment mis à jour.", "success")
-                    return redirect(url_for("admin_reservations"))
-                seg = ReservationSegment(
+                # Seul ce jour change de véhicule : le reste de la
+                # réservation garde le sien.
+                free_period(r, day_start, day_end)
+                db.session.add(ReservationSegment(
                     reservation_id=r.id,
                     vehicle_id=veh_id,
                     start_at=day_start,
                     end_at=day_end,
-                )
-                db.session.add(seg)
-                old_vehicle = r.vehicle_id
-                if old_vehicle is not None:
-                    db.session.flush()
-                    segments = ReservationSegment.query.filter_by(reservation_id=r.id).all()
-                    covered_dates = {s.start_at.date() for s in segments}
-                    current_date = r.start_at.date()
-                    end_date = r.end_at.date()
-                    while current_date <= end_date:
-                        if current_date not in covered_dates:
-                            day_start_fill = datetime.combine(current_date, time.min)
-                            day_end_fill = datetime.combine(current_date, time.max)
-                            if current_date == r.start_at.date():
-                                day_start_fill = r.start_at
-                            if current_date == r.end_at.date():
-                                day_end_fill = r.end_at
-                            db.session.add(
-                                ReservationSegment(
-                                    reservation_id=r.id,
-                                    vehicle_id=old_vehicle,
-                                    start_at=day_start_fill,
-                                    end_at=day_end_fill,
-                                )
-                            )
-                        current_date += timedelta(days=1)
-                    r.vehicle_id = None
+                ))
                 r.status = "approved"
                 if not commit_if_still_free(veh_id, day_start, day_end, r.id):
                     flash(
@@ -3365,7 +3535,6 @@ def manage_request(rid):
                         "danger",
                     )
                     return redirect(url_for("admin_reservations"))
-                vehicle = db.session.get(Vehicle, veh_id)
                 recipients = reservation_notification_recipients(r)
                 if recipients:
                     notify(
@@ -3373,47 +3542,18 @@ def manage_request(rid):
                         (
                             f"Véhicule attribué pour votre réservation :\n\n"
                             f"Période : du {day_start.strftime('%d/%m/%Y')} au {day_end.strftime('%d/%m/%Y')}\n"
-                            f"Véhicule : {vehicle.code}"
-                            + (f" ({vehicle.label})" if vehicle.label else "")
+                            f"Véhicule : {vehicule.code}"
+                            + (f" ({vehicule.label})" if vehicule.label else "")
                         ),
                         recipients,
                     )
-                flash("Segment ajouté.", "success")
+                flash("Véhicule attribué pour ce jour.", "success")
                 return redirect(url_for("admin_reservations"))
         elif action == "delete_day" and day:
-            existing = ReservationSegment.query.filter(
-                ReservationSegment.reservation_id == r.id,
-                ReservationSegment.end_at > day_start,
-                ReservationSegment.start_at < day_end,
-            ).first()
-            if existing:
-                db.session.delete(existing)
-            else:
-                old_vehicle = r.vehicle_id
-                if old_vehicle is not None:
-                    current_date = r.start_at.date()
-                    end_date = r.end_at.date()
-                    while current_date <= end_date:
-                        if current_date != day_start.date():
-                            day_start_fill = datetime.combine(current_date, time.min)
-                            day_end_fill = datetime.combine(current_date, time.max)
-                            if current_date == r.start_at.date():
-                                day_start_fill = r.start_at
-                            if current_date == r.end_at.date():
-                                day_end_fill = r.end_at
-                            db.session.add(
-                                ReservationSegment(
-                                    reservation_id=r.id,
-                                    vehicle_id=old_vehicle,
-                                    start_at=day_start_fill,
-                                    end_at=day_end_fill,
-                                )
-                            )
-                        current_date += timedelta(days=1)
-                    r.vehicle_id = None
-            r.status = "approved"
+            # Retire le véhicule de ce jour seulement, sans toucher aux autres.
+            free_period(r, day_start, day_end)
             db.session.commit()
-            flash("Journée supprimée.", "info")
+            flash("Véhicule retiré pour ce jour.", "info")
             return redirect(url_for("admin_reservations"))
         if action == "approve":
             # Même garde que les autres chemins d'attribution : un champ
@@ -3433,7 +3573,7 @@ def manage_request(rid):
                     "Conflit détecté sur ce véhicule pour la période.", "danger"
                 )
             else:
-                r.vehicle_id = v.id
+                assign_whole_reservation(r, v.id)
                 r.status = "approved"
                 if not commit_if_still_free(v.id, r.start_at, r.end_at, r.id):
                     flash(
@@ -3471,15 +3611,16 @@ def manage_request(rid):
             if has_conflict(veh_id, start_at, end_at, exclude_reservation_id=r.id):
                 flash("Conflit détecté lors de la création du segment.", "danger")
             else:
-                seg = ReservationSegment(
+                # Le nouveau véhicule remplace celui déjà posé sur la période :
+                # jamais deux véhicules en même temps pour une réservation.
+                free_period(r, start_at, end_at)
+                db.session.add(ReservationSegment(
                     reservation_id=r.id,
                     vehicle_id=veh_id,
                     start_at=start_at,
                     end_at=end_at,
-                )
-                r.vehicle_id = None
+                ))
                 r.status = "approved"
-                db.session.add(seg)
                 if not commit_if_still_free(veh_id, start_at, end_at, r.id):
                     flash(
                         "Ce véhicule vient d'être attribué par un autre "
