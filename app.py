@@ -2127,10 +2127,16 @@ def admin_user_edit(user_id):
         refus = _refuse_account_action(u, target, "edit", new_role=nouveau_role)
         if refus:
             return refus
+        # Comme à la création : une adresse déjà prise levait une erreur 500.
+        email = form.email.data.strip().lower()
+        if User.query.filter(User.email == email, User.id != target.id).first():
+            form.email.errors.append("Cette adresse e-mail est déjà utilisée.")
+            return render_template("user_form.html", form=form, target=target,
+                                   user=u, current_user=u), 200
         target.first_name = form.first_name.data
         target.last_name = form.last_name.data
         target.name = f"{form.last_name.data} {form.first_name.data}"
-        target.email = form.email.data.lower()
+        target.email = email
         if nouveau_role:
             target.role = nouveau_role
         db.session.commit()
@@ -2502,10 +2508,35 @@ def admin_vehicle_loan_delete(loan_id):
     return redirect(url_for("admin_vehicle_loans", vehicle_id=vehicle_id))
 
 
+def vehicle_code_error(code, vehicle_id=None):
+    """Pourquoi ce code de véhicule est refusé, ou None.
+
+    Un code déjà pris faisait échouer l'enregistrement sur une page
+    d'erreur 500. « vl1 » et « VL1 » se confondent au planning : on les
+    traite comme le même code.
+    """
+
+    code = (code or "").strip()
+    if not code:
+        return "Indiquez le code du véhicule."
+    autre = Vehicle.query.filter(db.func.lower(Vehicle.code) == code.lower())
+    if vehicle_id is not None:
+        autre = autre.filter(Vehicle.id != vehicle_id)
+    autre = autre.first()
+    if autre:
+        return f"Le code « {autre.code} » est déjà utilisé par un autre véhicule ({autre.label})."
+    return None
+
+
 @app.route("/admin/vehicles/new", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def admin_vehicle_new():
     if request.method == "POST":
+        erreur = vehicle_code_error(request.form.get("code", ""))
+        if erreur:
+            flash(erreur, "danger")
+            return render_template("vehicle_form.html", vehicle=None,
+                                   saisie=request.form, user=current_user()), 400
         v = Vehicle(
             code=request.form["code"].strip(),
             label=request.form["label"].strip(),
@@ -2526,6 +2557,11 @@ def admin_vehicle_new():
 def admin_vehicle_edit(vehicle_id):
     vehicle = db.get_or_404(Vehicle, vehicle_id)
     if request.method == "POST":
+        erreur = vehicle_code_error(request.form.get("code", ""), vehicle.id)
+        if erreur:
+            flash(erreur, "danger")
+            return render_template("vehicle_form.html", vehicle=vehicle,
+                                   saisie=request.form, user=current_user()), 400
         vehicle.code = request.form["code"].strip()
         vehicle.label = request.form["label"].strip()
         vehicle.category = request.form.get("category", "").strip() or None
@@ -2733,10 +2769,23 @@ def segment_period_error(reservation, start, end):
 
 
 def _form_datetime(field):
+    """La date d'un champ de formulaire, en heure locale sans fuseau, ou None.
+
+    Les réservations sont enregistrées en heure locale, sans fuseau. Une date
+    envoyée avec un fuseau (« 2026-10-01T08:00+02:00 ») ne pouvait pas leur
+    être comparée : erreur 500. On la ramène à l'heure locale.
+    """
+
     try:
-        return datetime.fromisoformat(request.form.get(field, ""))
+        valeur = datetime.fromisoformat(request.form.get(field, ""))
     except (TypeError, ValueError):
         return None
+    if valeur.tzinfo is not None:
+        from zoneinfo import ZoneInfo
+
+        fuseau = ZoneInfo(app.config.get("APP_TIMEZONE") or "Europe/Paris")
+        valeur = valeur.astimezone(fuseau).replace(tzinfo=None)
+    return valeur
 
 
 def free_period(reservation, start, end):
