@@ -1042,6 +1042,40 @@ def login_blocked_minutes(identifier, ip, now=None):
     return blocked
 
 
+def login_attempts_left(identifier, now=None):
+    """Essais restants avant le blocage de l'identifiant, selon la même règle
+    que ``login_blocked_minutes``."""
+
+    now = now or datetime.utcnow()
+    maximum = app.config.get("LOGIN_MAX_ATTEMPTS", 5)
+    if maximum <= 0 or not identifier:
+        return None
+    debut = now - timedelta(minutes=app.config.get("LOGIN_LOCKOUT_MINUTES", 15))
+    echecs = LoginAttempt.query.filter(
+        LoginAttempt.username == identifier,
+        LoginAttempt.success.is_(False),
+        LoginAttempt.created_at > debut,
+    ).count()
+    return max(0, maximum - echecs)
+
+
+def password_matches(user, typed):
+    """Le mot de passe saisi, tel quel puis sans espaces autour.
+
+    Les mots de passe sont générés par l'application et ne contiennent jamais
+    d'espace ; un copier-coller depuis l'e-mail d'identifiants en ajoute
+    souvent une en fin de ligne, et chaque échec rapproche du blocage. On
+    essaie d'abord la saisie exacte, pour ne jamais refuser un mot de passe
+    choisi autrement (celui du superadministrateur initial).
+    """
+
+    typed = typed or ""
+    if user.check_password(typed):
+        return True
+    nettoye = typed.strip()
+    return nettoye != typed and bool(nettoye) and user.check_password(nettoye)
+
+
 def record_login_attempt(identifier, ip, success):
     """Store an attempt; a success clears the identifier's failure counter."""
 
@@ -1076,7 +1110,7 @@ def login():
             )
             return render_template("login.html", form=form), 429
         u = User.find_by_login(identifier)
-        if u and u.check_password(form.password.data):
+        if u and password_matches(u, form.password.data):
             record_login_attempt(identifier, ip, True)
             session["uid"] = u.id
             session["pwd_stamp"] = u.session_stamp(app.config["SECRET_KEY"])
@@ -1087,7 +1121,19 @@ def login():
             )
         record_login_attempt(identifier, ip, False)
         app.logger.warning("Échec de connexion pour '%s' depuis %s", identifier, ip)
-        flash("Identifiants invalides", "danger")
+        # Prévenir avant le blocage plutôt que le découvrir : une faute de
+        # frappe sur un mot de passe aléatoire est vite arrivée sur téléphone.
+        restants = login_attempts_left(identifier)
+        duree = app.config.get("LOGIN_LOCKOUT_MINUTES", 15)
+        if restants == 0:
+            flash(f"Identifiant ou mot de passe incorrect. Connexion bloquée "
+                  f"{duree} minutes pour cet identifiant.", "danger")
+        elif restants is not None and restants <= 2:
+            flash(f"Identifiant ou mot de passe incorrect. Attention : encore "
+                  f"{restants} essai{'s' if restants > 1 else ''} avant un blocage "
+                  f"de {duree} minutes.", "warning")
+        else:
+            flash("Identifiant ou mot de passe incorrect.", "danger")
     return render_template("login.html", form=form), 200
 
 

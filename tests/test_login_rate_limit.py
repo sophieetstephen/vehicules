@@ -43,7 +43,7 @@ def test_lockout_after_five_failures_even_with_correct_password(ctx):
     client = app.test_client()
     for _ in range(5):
         resp = _login(client, "dupontj", "mauvais")
-        assert resp.status_code == 200 and "Identifiants invalides" in resp.data.decode()
+        assert resp.status_code == 200 and "Identifiant ou mot de passe incorrect" in resp.data.decode()
     assert LoginAttempt.query.filter_by(username="dupontj", success=False).count() == 5
 
     resp = _login(client, "DupontJ", PASSWORD)  # bon mot de passe, mais bloqué
@@ -97,11 +97,20 @@ def test_success_resets_failure_counter(ctx):
 
 
 def test_unknown_identifier_is_locked_too_without_revealing_it(ctx):
-    client = app.test_client()
+    """Les messages, essais restants compris, ne doivent pas trahir qu'un
+    identifiant existe : on les compare mot pour mot avec un compte réel."""
+    import re
+
+    def message(html):
+        return re.search(r'class="alert[^"]*">\s*<i[^>]*></i>\s*(.*?)\s*</div>', html, re.S).group(1)
+
+    inconnu, reel = app.test_client(), app.test_client()
     for _ in range(5):
-        resp = _login(client, "inconnu", "x")
-        assert "Identifiants invalides" in resp.data.decode()
-    assert _login(client, "inconnu", "x").status_code == 429
+        a = message(_login(inconnu, "inconnu", "x", ip="192.0.2.1").data.decode())
+        b = message(_login(reel, "dupontj", "x", ip="192.0.2.2").data.decode())
+        assert "Identifiant ou mot de passe incorrect" in a
+        assert a == b, "même message pour un compte existant ou non"
+    assert _login(inconnu, "inconnu", "x", ip="192.0.2.1").status_code == 429
 
 
 def test_lock_is_per_identifier(ctx):
@@ -150,3 +159,65 @@ def test_old_attempts_are_purged(ctx):
     db.session.commit()
     _login(app.test_client(), "dupontj", "x")
     assert LoginAttempt.query.filter_by(username="vieux").count() == 0
+
+
+# --- page de connexion : moins de blocages par faute de frappe -----------------
+#
+# Les mots de passe sont aléatoires (« Kx7m-Rp2v-Q9wT »), pénibles à taper sur
+# un téléphone, et cinq échecs bloquent l'identifiant quinze minutes.
+
+import html as _html
+
+
+def _texte(reponse):
+    return _html.unescape(reponse.data.decode())
+
+
+def test_pasted_password_with_surrounding_spaces_is_accepted(ctx):
+    """Un copier-coller depuis l'e-mail d'identifiants embarque souvent une
+    espace en fin de ligne : l'échec comptait pour le blocage."""
+    assert _login(app.test_client(), "dupontj", f"  {PASSWORD} \n").status_code == 302
+    assert LoginAttempt.query.filter_by(success=False).count() == 0
+
+
+def test_spaces_inside_are_not_forgiven(ctx):
+    """Seules les espaces autour sont tolérées : le mot de passe lui-même
+    doit rester exact."""
+    assert _login(app.test_client(), "dupontj", PASSWORD.replace("-", " ")).status_code == 200
+
+
+def test_a_chosen_password_with_spaces_still_works_as_typed(ctx):
+    """Le mot de passe du superadministrateur initial a été choisi, pas
+    généré : on essaie toujours la saisie exacte d'abord."""
+    ctx.set_password("mon mot de passe ")
+    db.session.commit()
+    assert _login(app.test_client(), "dupontj", "mon mot de passe ").status_code == 302
+
+
+def test_warning_before_the_lock(ctx):
+    """Prévenir avant le blocage plutôt que le découvrir."""
+    client = app.test_client()
+    messages = [_texte(_login(client, "dupontj", "faux")) for _ in range(5)]
+    assert "Attention" not in messages[0] and "Attention" not in messages[1]
+    assert "encore 2 essais avant un blocage de 15 minutes" in messages[2]
+    assert "encore 1 essai avant un blocage" in messages[3]
+    assert "Connexion bloquée 15 minutes" in messages[4]
+
+
+def test_password_field_is_ready_for_phones(ctx):
+    html = app.test_client().get("/login").data.decode()
+    champ = html.split('id="password"')[0].rsplit("<input", 1)[1] + html.split('id="password"')[1].split(">")[0]
+    assert 'autocomplete="current-password"' in champ, "le téléphone propose d'enregistrer"
+    assert 'autocapitalize="none"' in champ
+    assert 'autocorrect="off"' in champ
+    assert 'spellcheck="false"' in champ, "affiché en clair, le clavier ne doit rien corriger"
+
+
+def test_show_password_button_is_accessible(ctx):
+    html = app.test_client().get("/login").data.decode()
+    bouton = html.split('id="passwordToggle"')[1].split(">")[0]
+    assert 'aria-controls="password"' in bouton
+    assert 'aria-pressed="false"' in bouton
+    assert 'aria-label="Afficher le mot de passe"' in bouton
+    assert 'type="button"' in html.split('id="passwordToggle"')[0].rsplit("<button", 1)[1], \
+        "un bouton de type submit enverrait le formulaire"

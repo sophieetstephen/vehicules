@@ -96,7 +96,7 @@ def test_login_uses_username_not_email():
         client = app.test_client()
 
         resp = client.post("/login", data={"username": "jean@example.com", "password": "Kx7m-Rp2v-Q9wT"})
-        assert resp.status_code == 200 and "Identifiants invalides" in resp.data.decode()
+        assert resp.status_code == 200 and "Identifiant ou mot de passe incorrect" in resp.data.decode()
 
         resp = client.post("/login", data={"username": " DupontJ ", "password": "Kx7m-Rp2v-Q9wT"})
         assert resp.status_code == 302
