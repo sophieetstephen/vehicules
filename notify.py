@@ -2,6 +2,11 @@ from email.message import EmailMessage
 import smtplib
 from config import Config
 
+# Délai d'envoi. Sans lui, un serveur muet bloquait indéfiniment la page qui
+# avait déclenché l'envoi — validation d'une réservation, création d'un compte.
+SEND_TIMEOUT = 15
+
+
 def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile: str = "gmail"):
     """Send an email using Gmail's SMTP service.
 
@@ -32,12 +37,12 @@ def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile
 
     try:
         if Config.MAIL_USE_TLS:
-            with smtplib.SMTP(server, port) as smtp:
+            with smtplib.SMTP(server, port, timeout=SEND_TIMEOUT) as smtp:
                 smtp.starttls()
                 smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
                 smtp.send_message(msg)
         else:
-            with smtplib.SMTP_SSL(server, port) as smtp:
+            with smtplib.SMTP_SSL(server, port, timeout=SEND_TIMEOUT) as smtp:
                 smtp.login(Config.MAIL_USERNAME, Config.MAIL_PASSWORD)
                 smtp.send_message(msg)
         return True, "sent"

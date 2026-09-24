@@ -349,3 +349,24 @@ def test_state_file_stays_out_of_the_instance_folder_in_tests():
     """Le piège déjà rencontré avec la base : écrire dans le dossier réel."""
     assert app.config.get("MAIL_HEALTH_PATH"), "conftest doit isoler ce fichier"
     assert "vehicules/instance" not in app.config["MAIL_HEALTH_PATH"]
+
+
+# --- délai d'envoi -------------------------------------------------------------
+
+def test_real_send_has_a_timeout(monkeypatch):
+    """Sans délai, un serveur muet bloquait indéfiniment la page qui avait
+    déclenché l'envoi."""
+    import notify
+
+    vus = {}
+
+    class FauxSMTP:
+        def __init__(self, serveur, port, timeout=None):
+            vus["timeout"] = timeout
+            raise OSError("arret du test")
+
+    monkeypatch.setattr(notify.smtplib, "SMTP", FauxSMTP)
+    monkeypatch.setattr(notify.smtplib, "SMTP_SSL", FauxSMTP)
+    ok, _ = notify.send_mail_msmtp("Sujet", "Corps", ["a@ex.fr"])
+    assert ok is False
+    assert vus["timeout"] and vus["timeout"] <= 30

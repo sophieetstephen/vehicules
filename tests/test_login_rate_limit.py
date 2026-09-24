@@ -122,13 +122,26 @@ def test_ip_lockout_across_identifiers(ctx):
     assert _login(client, "dupontj", PASSWORD, ip="203.0.113.8").status_code == 302
 
 
-def test_client_ip_uses_forwarded_header_then_remote_addr(ctx):
+def test_client_ip_is_the_one_seen_by_the_proxy(ctx):
+    """Chaque proxy ajoute à X-Forwarded-For l'adresse qu'il a vue. Avec Caddy
+    seul devant l'application, c'est la dernière valeur qui est fiable ; les
+    précédentes viennent du client."""
     client = app.test_client()
     _login(client, "dupontj", "x", ip="198.51.100.4, 10.0.0.2")
-    assert LoginAttempt.query.first().ip == "198.51.100.4"
+    assert LoginAttempt.query.first().ip == "10.0.0.2"
     client.post("/login", data={"username": "dupontj", "password": "x"},
                 environ_base={"REMOTE_ADDR": "192.0.2.9"})
     assert LoginAttempt.query.order_by(LoginAttempt.id.desc()).first().ip == "192.0.2.9"
+
+
+def test_forged_address_cannot_dodge_the_ip_limit(ctx):
+    """On retenait la première valeur, que le client écrit lui-même : en en
+    changeant à chaque essai, il échappait à la limite par adresse."""
+    client = app.test_client()
+    for n in range(3):
+        _login(client, "dupontj", "x", ip=f"203.0.113.{n}, 192.0.2.50")
+    adresses = {a.ip for a in LoginAttempt.query.all()}
+    assert adresses == {"192.0.2.50"}, "une seule adresse réelle derrière les faux"
 
 
 def test_old_attempts_are_purged(ctx):

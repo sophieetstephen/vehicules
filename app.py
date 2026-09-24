@@ -14,6 +14,7 @@ from urllib.parse import quote as _urlquote
 from functools import wraps
 import click
 from collections.abc import Iterable
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import (
     Flask,
     request,
@@ -232,6 +233,18 @@ except Exception:
 
 app = Flask(__name__)
 app.config.from_object(Config)
+
+# Derrière Caddy, l'adresse du client arrive dans X-Forwarded-For. On en
+# retenait la première valeur — celle que le client peut écrire lui-même : il
+# pouvait changer d'adresse apparente à chaque essai et contourner la limite
+# de tentatives de connexion par adresse. ProxyFix retient la valeur ajoutée
+# par le proxy, la seule fiable. PROXY_COUNT : nombre de proxys devant
+# l'application (Caddy seul : 1).
+app.wsgi_app = ProxyFix(
+    app.wsgi_app,
+    x_for=int(os.environ.get("PROXY_COUNT", "1")),
+    x_proto=int(os.environ.get("PROXY_COUNT", "1")),
+)
 csrf = CSRFProtect(app)
 
 _storage_root = app.instance_path
@@ -966,17 +979,13 @@ def _safe_next_url(candidate):
 
 
 def client_ip():
-    """Return the client IP, honouring the reverse proxy header (Caddy).
+    """Adresse du client, telle que transmise par Caddy.
 
-    Behind the HTTPS proxy, ``remote_addr`` is the proxy's address; the real
-    client is the first entry of ``X-Forwarded-For``.
+    ``ProxyFix`` (voir la création de l'application) a déjà remplacé
+    ``remote_addr`` par l'adresse que le proxy a vue, et non par celle que le
+    client prétend avoir.
     """
 
-    forwarded = request.headers.get("X-Forwarded-For", "")
-    if forwarded:
-        first = forwarded.split(",")[0].strip()
-        if first:
-            return first[:45]
     return (request.remote_addr or "")[:45] or None
 
 
