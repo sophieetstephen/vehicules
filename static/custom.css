@@ -103,10 +103,72 @@
   --color-info-light: #164e63;
 
   /* Sur fond sombre, les mêmes teintes deviennent illisibles : on éclaircit. */
-  --btn-success-text: #16a34a;
+  --btn-success-text: #4ade80;
   --btn-warning-text: #d97706;
   --btn-danger-text: #f87171;
+
+  /* Les couleurs de Bootstrap, sur la palette de l'application. Sans elles,
+     le texte de base restait gris foncé (#343a40), celui des tableaux noir,
+     et les aides des formulaires illisibles : sombre sur sombre. */
+  color-scheme: dark;
+  --bs-body-color: var(--color-text);
+  --bs-body-color-rgb: 241, 245, 249;
+  --bs-body-bg: var(--color-background);
+  --bs-body-bg-rgb: 15, 23, 42;
+  --bs-emphasis-color: #ffffff;
+  --bs-emphasis-color-rgb: 255, 255, 255;
+  --bs-heading-color: var(--color-text);
+  --bs-secondary-color: var(--color-text-muted);
+  --bs-tertiary-color: #94a3b8;
+  --bs-secondary-bg: #334155;
+  --bs-tertiary-bg: var(--color-background-alt);
+  --bs-border-color: var(--color-border);
+  --bs-link-color: #93c5fd;
+  --bs-link-color-rgb: 147, 197, 253;
+  --bs-link-hover-color: #bfdbfe;
+  --bs-link-hover-color-rgb: 191, 219, 254;
 }
+
+[data-theme="dark"] .card {
+  --bs-card-color: var(--color-text);
+  --bs-card-cap-color: var(--color-text);
+}
+
+[data-theme="dark"] .table {
+  --bs-table-color: var(--color-text);
+  --bs-table-striped-color: var(--color-text);
+  --bs-table-hover-color: var(--color-text);
+}
+
+/* Lignes « en attente » : le thème mettait du blanc sur orange clair (1,95).
+   Texte foncé sur ambre pâle en clair, ambre clair sur brun en sombre. */
+.table-warning {
+  --bs-table-color: #1e293b;
+  --bs-table-bg: #fef3c7;
+  --bs-table-border-color: #fde68a;
+  --bs-table-striped-bg: #fdecb5;
+  --bs-table-striped-color: #1e293b;
+  --bs-table-hover-bg: #fde68a;
+  --bs-table-hover-color: #1e293b;
+}
+[data-theme="dark"] .table-warning {
+  --bs-table-color: #fde68a;
+  --bs-table-bg: #422006;
+  --bs-table-border-color: #713f12;
+  --bs-table-striped-bg: #4a2508;
+  --bs-table-striped-color: #fde68a;
+  --bs-table-hover-bg: #5a2d0a;
+  --bs-table-hover-color: #fde68a;
+}
+
+/* Pastilles : les teintes du thème donnaient du blanc sur vert clair (2,59)
+   ou sur orange (1,95). Teintes foncées, texte blanc, dans les deux modes. */
+.badge.bg-success { background-color: #15803d !important; color: #fff !important; }
+.badge.bg-warning { background-color: #b45309 !important; color: #fff !important; }
+.badge.bg-danger { background-color: #dc2626 !important; color: #fff !important; }
+.badge.bg-info { background-color: #0e7490 !important; color: #fff !important; }
+.badge.bg-secondary { background-color: #475569 !important; color: #fff !important; }
+.badge.bg-primary { background-color: #2563eb !important; color: #fff !important; }
 
 [data-theme="dark"] body {
   background-color: var(--color-background);
@@ -1527,4 +1589,53 @@ p {
 
 [data-theme="dark"] .vehicle-status-loan {
   color: #c4b5fd;
+}
+
+
+/* ============================================
+   LISIBILITÉ DANS LES DEUX THÈMES
+   Mesurée page par page (texte / fond, 4,5 attendus) après le signalement
+   de textes illisibles au passage clair / sombre.
+   ============================================ */
+
+/* Liens : le bleu du thème donnait 3,7 sur blanc. */
+:root:not([data-theme="dark"]) {
+  --bs-link-color: #1d4ed8;
+  --bs-link-color-rgb: 29, 78, 216;
+  --bs-link-hover-color: #1e40af;
+  --bs-link-hover-color-rgb: 30, 64, 175;
+  --bs-code-color: #be185d;
+}
+
+/* Pastilles « réservation » du planning : blanc sur vert moyen (3,3). */
+.cal-chip-res { background: #15803d; }
+
+/* Créneau et motif sur les cartes du planning (fond vert ou gris pâle). */
+.cal-card .cal-card-slot,
+.cal-card .cal-card-purpose { color: #475569; }
+[data-theme="dark"] .cal-card .cal-card-slot,
+[data-theme="dark"] .cal-card .cal-card-purpose { color: #cbd5e1; }
+
+/* Fonds bleus pleins portant du blanc : le bleu clair du mode sombre
+   (#3b82f6) ne donnait que 3,7. On garde le bleu franc pour les aplats. */
+[data-theme="dark"] .user-avatar,
+[data-theme="dark"] .calendar-switch .btn.active,
+[data-theme="dark"] .calendar-nav .calendar-switch .btn.active:hover,
+[data-theme="dark"] .btn-outline-primary:hover,
+[data-theme="dark"] .btn-outline-primary:focus-visible,
+[data-theme="dark"] .btn-outline-primary:active {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+
+/* Bouton en contour bleu sur fond sombre : texte bleu clair. */
+[data-theme="dark"] .btn-outline-primary {
+  color: #93c5fd;
+  border-color: #60a5fa;
+}
+
+/* Tableau rayé : en sombre, la rayure recouvrait l'ambre des lignes en
+   attente une ligne sur deux. */
+[data-theme="dark"] .table-striped > tbody > tr.table-warning > * {
+  --bs-table-bg-type: #422006;
 }
