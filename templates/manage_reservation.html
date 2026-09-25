@@ -320,6 +320,7 @@
   color: var(--color-danger, #dc3545);
   font-size: 0.9rem;
 }
+[data-theme="dark"] .day-plan-none { color: #f87171; }
 
 /* ============================================
    GESTIONNAIRE DE RÉSERVATION - Styles
@@ -559,8 +560,19 @@
   font-weight: 600;
 }
 
-.status-available { color: var(--color-success); }
+/* Vert foncé : le vert standard sur la carte sélectionnée (bleu pâle)
+   tombait à 2,7. En sombre, vert clair. */
+.status-available { color: #166534; }
+[data-theme="dark"] .status-available { color: #4ade80; }
 .status-unavailable { color: var(--color-danger); }
+[data-theme="dark"] .status-unavailable { color: #f87171; }
+
+/* Lisibilité mesurée dans les deux thèmes (4,5 attendus). */
+.vehicle-current { color: #166534; }
+[data-theme="dark"] .vehicle-current { background: #14532d; color: #86efac; }
+.vehicle-option.vehicle-selected .vehicle-label { color: #475569; }
+[data-theme="dark"] .vehicle-option.vehicle-selected .vehicle-label { color: #cbd5e1; }
+[data-theme="dark"] .user-avatar-large { background: #2563eb; }
 
 /* Boutons */
 .action-buttons {

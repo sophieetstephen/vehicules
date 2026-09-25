@@ -11,6 +11,22 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link href="{{ static_url('custom.css') }}" rel="stylesheet">
+  {# Thème appliqué avant le premier affichage : placé en fin de page, il
+     laissait voir un éclair clair à chaque chargement en mode sombre.
+     data-bs-theme active le mode sombre de Bootstrap lui-même ; sans lui, le
+     texte de base, les tableaux et les aides des formulaires restaient
+     sombres sur fond sombre. #}
+  <script>
+  (function () {
+    var theme = null;
+    try { theme = localStorage.getItem('theme'); } catch (e) {}
+    if (!theme) theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    if (theme === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.documentElement.setAttribute('data-bs-theme', 'dark');
+    }
+  })();
+  </script>
   <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
   <meta name="theme-color" content="#1e293b">
   <meta name="mobile-web-app-capable" content="yes">
@@ -122,35 +138,31 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-<!-- Script pour le mode sombre -->
+<!-- Bouton du mode sombre (le thème est déjà appliqué dans <head>) -->
 <script>
 (function() {
   const themeToggle = document.getElementById('themeToggle');
   const themeIcon = document.getElementById('themeIcon');
   const html = document.documentElement;
+  if (!themeToggle || !themeIcon) return;
 
-  // Charger le thème sauvegardé ou utiliser la préférence système
-  const savedTheme = localStorage.getItem('theme');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  const currentTheme = savedTheme || (prefersDark ? 'dark' : 'light');
-
-  if (currentTheme === 'dark') {
-    html.setAttribute('data-theme', 'dark');
-    themeIcon.classList.replace('fa-moon', 'fa-sun');
-  }
+  const appliquer = function (sombre) {
+    if (sombre) {
+      html.setAttribute('data-theme', 'dark');
+      html.setAttribute('data-bs-theme', 'dark');
+    } else {
+      html.removeAttribute('data-theme');
+      html.removeAttribute('data-bs-theme');
+    }
+    themeIcon.classList.toggle('fa-sun', sombre);
+    themeIcon.classList.toggle('fa-moon', !sombre);
+  };
+  appliquer(html.getAttribute('data-theme') === 'dark');
 
   themeToggle.addEventListener('click', function() {
-    const isDark = html.getAttribute('data-theme') === 'dark';
-
-    if (isDark) {
-      html.removeAttribute('data-theme');
-      themeIcon.classList.replace('fa-sun', 'fa-moon');
-      localStorage.setItem('theme', 'light');
-    } else {
-      html.setAttribute('data-theme', 'dark');
-      themeIcon.classList.replace('fa-moon', 'fa-sun');
-      localStorage.setItem('theme', 'dark');
-    }
+    const sombre = html.getAttribute('data-theme') !== 'dark';
+    appliquer(sombre);
+    try { localStorage.setItem('theme', sombre ? 'dark' : 'light'); } catch (e) {}
   });
 })();
 </script>
