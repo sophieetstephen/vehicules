@@ -183,3 +183,122 @@ def test_old_leftovers_are_found_and_repaired(atelier):
     assert not has_conflict(a.id, *_journee(2))
     assert has_conflict(b.id, *_journee(2)), "l'attribution réelle reste"
     assert runner.invoke(args=["check-integrity"]).exit_code == 0
+
+
+# --- attribution jour par jour -------------------------------------------------------
+#
+# Une semaine demandée, tous les véhicules pris le mercredi : la page ne
+# montrait que « Occupé » partout. On attribue désormais chaque jour possible
+# en une fois, et le demandeur reçoit un seul récapitulatif.
+
+@pytest.fixture
+def semaine(atelier, monkeypatch):
+    import app as app_module
+
+    client, jean, a, b = atelier
+    mails = []
+    monkeypatch.setattr(app_module, "notify",
+                        lambda sujet, corps, dest, **k: mails.append(corps) or True)
+    for v in (a, b):  # tout est pris le mercredi 14
+        db.session.add(Reservation(user_id=jean.id, vehicle_id=v.id, status="approved",
+                                   start_at=datetime(2026, 10, 14, 8),
+                                   end_at=datetime(2026, 10, 14, 17)))
+    # A est pris le vendredi : B est libre le plus de jours
+    db.session.add(Reservation(user_id=jean.id, vehicle_id=a.id, status="approved",
+                               start_at=datetime(2026, 10, 16, 8),
+                               end_at=datetime(2026, 10, 16, 17)))
+    r = Reservation(user_id=jean.id, start_at=datetime(2026, 10, 12, 8),
+                    end_at=datetime(2026, 10, 16, 17), status="pending")
+    db.session.add(r)
+    db.session.commit()
+    return client, r, a, b, mails
+
+
+def _propositions(page):
+    import re
+
+    out = {}
+    for m in re.finditer(r'<select[^>]*name="day_([^"]+)".*?</select>', page, re.S):
+        choisi = re.search(r'<option value="(\d*)"\s*selected', m.group(0))
+        out[m.group(1)] = choisi.group(1) if choisi else ""
+    return out
+
+
+def test_week_page_shows_each_day_and_the_blocked_one(semaine):
+    client, r, a, b, _ = semaine
+    page = client.get(f"/admin/manage/{r.id}").data.decode()
+
+    assert "Attribuer jour par jour" in page
+    propositions = _propositions(page)
+    assert "2026-10-14" not in propositions, "aucun choix le mercredi"
+    assert "Aucun véhicule libre" in page
+    # le même véhicule toute la semaine : B, libre les quatre jours
+    assert propositions == {k: str(b.id) for k in
+                            ("2026-10-12", "2026-10-13", "2026-10-15", "2026-10-16")}
+
+
+def test_assigning_the_week_leaves_wednesday_empty_and_sends_one_mail(semaine):
+    client, r, a, b, mails = semaine
+    page = client.get(f"/admin/manage/{r.id}").data.decode()
+    data = {"action": "assign_days", **{f"day_{k}": v for k, v in _propositions(page).items()}}
+
+    client.post(f"/admin/manage/{r.id}", data=data)
+
+    db.session.expire_all()
+    assert db.session.get(Reservation, r.id).status == "approved"
+    assert _vehicule_par_jour(r) == {12: {"B"}, 13: {"B"}, 15: {"B"}, 16: {"B"}}
+    assert len(mails) == 1, "un seul récapitulatif"
+    assert "- Lundi 12/10 : B (b)" in mails[0]
+    assert "- Mercredi 14/10 : pas de véhicule disponible pour le moment" in mails[0]
+    assert "- Vendredi 16/10 : B (b)" in mails[0]
+
+
+def test_wednesday_can_be_filled_later_from_the_same_page(semaine):
+    """Le responsable libère un véhicule le mercredi, puis revient compléter."""
+    client, r, a, b, mails = semaine
+    page = client.get(f"/admin/manage/{r.id}").data.decode()
+    client.post(f"/admin/manage/{r.id}", data={
+        "action": "assign_days", **{f"day_{k}": v for k, v in _propositions(page).items()}})
+
+    mercredi = Reservation.query.filter_by(vehicle_id=b.id, start_at=datetime(2026, 10, 14, 8)).one()
+    mercredi.status = "cancelled"
+    db.session.commit()
+
+    page = client.get(f"/admin/manage/{r.id}").data.decode()
+    assert "Réparti jour par jour" in page
+    propositions = _propositions(page)
+    assert propositions["2026-10-14"] == str(b.id)
+    client.post(f"/admin/manage/{r.id}", data={
+        "action": "assign_days", **{f"day_{k}": v for k, v in propositions.items()}})
+
+    assert _vehicule_par_jour(r) == {d: {"B"} for d in (12, 13, 14, 15, 16)}
+    assert len(mails) == 2
+    assert "pas de véhicule" not in mails[1]
+
+
+def test_a_vehicle_busy_that_day_is_refused(semaine):
+    client, r, a, b, mails = semaine
+    reponse = client.post(f"/admin/manage/{r.id}", data={
+        "action": "assign_days", "day_2026-10-12": str(b.id), "day_2026-10-16": str(a.id)},
+        follow_redirects=True)
+    assert "pas libre ce jour-là" in reponse.data.decode()
+    assert ReservationSegment.query.filter_by(reservation_id=r.id).count() == 0
+    assert mails == []
+
+
+def test_nothing_chosen_changes_nothing(semaine):
+    client, r, *_ , mails = semaine
+    client.post(f"/admin/manage/{r.id}", data={"action": "assign_days"})
+    db.session.expire_all()
+    assert db.session.get(Reservation, r.id).status == "pending"
+    assert mails == []
+
+
+def test_no_day_table_when_one_vehicle_is_free_all_week(atelier):
+    client, jean, a, b = atelier
+    r = Reservation(user_id=jean.id, start_at=datetime(2026, 10, 12, 8),
+                    end_at=datetime(2026, 10, 16, 17), status="pending")
+    db.session.add(r)
+    db.session.commit()
+    page = client.get(f"/admin/manage/{r.id}").data.decode()
+    assert "Attribuer jour par jour" not in page
