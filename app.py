@@ -3472,6 +3472,105 @@ def admin_leaves():
     )
 
 
+def day_window(r, jour):
+    """Début et fin de la réservation ``r`` le jour ``jour`` (une date)."""
+
+    label = reservation_slot_label(r, datetime.combine(jour, time.min))
+    if label == "Matin":
+        debut, fin = time(8, 0), time(12, 0)
+    elif label == "Après-midi":
+        debut, fin = time(13, 0), time(17, 0)
+    else:
+        debut, fin = time.min, time.max
+    debut = max(datetime.combine(jour, debut), r.start_at)
+    fin = min(datetime.combine(jour, fin), r.end_at)
+    return debut, fin
+
+
+def day_plan(r):
+    """La réservation jour par jour : véhicule posé, véhicules libres.
+
+    Sert quand aucun véhicule n'est libre toute la période : une semaine
+    demandée alors que tout est pris le mercredi. Avant, la page ne montrait
+    que « Occupé » partout, sans dire quel jour bloquait.
+
+    Chaque jour porte une proposition : le véhicule déjà posé, sinon celui
+    qui est libre le plus de jours, pour changer de véhicule le moins
+    souvent possible.
+    """
+
+    vehicules = Vehicle.query.order_by(Vehicle.code).all()
+    segments = ReservationSegment.query.filter_by(reservation_id=r.id).all()
+    jours = []
+    jour = r.start_at.date()
+    while jour <= r.end_at.date():
+        debut, fin = day_window(r, jour)
+        if debut < fin:
+            pose = None
+            if r.vehicle_id is not None:
+                pose = r.vehicle
+            else:
+                for seg in segments:
+                    if seg.start_at < fin and seg.end_at > debut:
+                        pose = seg.vehicle
+                        break
+            libres = [v for v in vehicules
+                      if not has_conflict(v.id, debut, fin, exclude_reservation_id=r.id)]
+            jours.append({
+                "date": jour, "key": jour.isoformat(), "start": debut, "end": fin,
+                "label": reservation_slot_label(r, datetime.combine(jour, time.min)),
+                "current": pose, "free": libres,
+            })
+        jour += timedelta(days=1)
+
+    frequence = {}
+    for j in jours:
+        for v in j["free"]:
+            frequence[v.id] = frequence.get(v.id, 0) + 1
+    for j in jours:
+        if j["current"] is not None:
+            j["suggested"] = j["current"]
+        elif j["free"]:
+            j["suggested"] = max(j["free"], key=lambda v: (frequence[v.id], -j["free"].index(v)))
+        else:
+            j["suggested"] = None
+    return jours
+
+
+def show_day_plan(r, availability):
+    """Afficher le tableau jour par jour ?
+
+    Pour une réservation de plusieurs jours sans véhicule unique : aucun
+    véhicule n'est libre toute la période, ou elle est déjà répartie.
+    """
+
+    if r.status in INACTIVE_STATUSES or r.vehicle_id is not None:
+        return False
+    if r.start_at.date() == r.end_at.date():
+        return False
+    deja_repartie = ReservationSegment.query.filter_by(reservation_id=r.id).first() is not None
+    return deja_repartie or not any(libre for _, libre in availability)
+
+
+def _jour_fr(jour):
+    return f"{JOURS_FR[jour.weekday()]} {jour.strftime('%d/%m')}"
+
+
+def day_plan_summary(plan):
+    """Le récapitulatif envoyé au demandeur, un jour par ligne."""
+
+    lignes = []
+    for j in plan:
+        creneau = "" if j["label"] == "Journée" else f" ({j['label'].lower()})"
+        v = j["current"]
+        if v is None:
+            quoi = "pas de véhicule disponible pour le moment"
+        else:
+            quoi = v.code + (f" ({v.label})" if v.label else "")
+        lignes.append(f"- {_jour_fr(j['date'])}{creneau} : {quoi}")
+    return "\n".join(lignes)
+
+
 @app.route("/admin/manage/<int:rid>", methods=["GET", "POST"])
 @role_required("admin", "superadmin")
 def manage_request(rid):
@@ -3488,20 +3587,7 @@ def manage_request(rid):
         if day is None or not (r.start_at.date() <= day.date() <= r.end_at.date()):
             flash("Ce jour ne fait pas partie de la réservation.", "warning")
             return redirect(url_for("manage_request", rid=r.id))
-        label = reservation_slot_label(r, day)
-        if label == "Matin":
-            day_start = datetime.combine(day.date(), time(8, 0))
-            day_end = datetime.combine(day.date(), time(12, 0))
-        elif label == "Après-midi":
-            day_start = datetime.combine(day.date(), time(13, 0))
-            day_end = datetime.combine(day.date(), time(17, 0))
-        else:
-            day_start = datetime.combine(day.date(), time.min)
-            day_end = datetime.combine(day.date(), time.max)
-        if day_start < r.start_at:
-            day_start = r.start_at
-        if day_end > r.end_at:
-            day_end = r.end_at
+        day_start, day_end = day_window(r, day.date())
     else:
         day_start = r.start_at
         day_end = r.end_at
@@ -3555,6 +3641,8 @@ def manage_request(rid):
             db.session.commit()
             flash("Véhicule retiré pour ce jour.", "info")
             return redirect(url_for("admin_reservations"))
+        if action == "assign_days" and not day:
+            return assign_days(r)
         if action == "approve":
             # Même garde que les autres chemins d'attribution : un champ
             # absent levait une erreur 500 (oubli du correctif précédent).
@@ -3681,10 +3769,12 @@ def manage_request(rid):
             return redirect(url_for("admin_reservations"))
     avail = vehicles_availability(day_start, day_end, exclude_reservation_id=r.id)
     user = current_user()
+    plan = day_plan(r) if not day and show_day_plan(r, avail) else None
     return render_template(
         "manage_reservation.html",
         reservation=r,
         availability=avail,
+        day_plan=plan,
         unavailable=vehicles_unavailability_map(day_start, day_end),
         reserved=vehicles_reserved_map(day_start, day_end),
         user=user,
@@ -3694,6 +3784,86 @@ def manage_request(rid):
         is_segment=False,
         segment=None,
     )
+
+
+def assign_days(r):
+    """Enregistrer d'un coup le véhicule de chaque jour, puis un seul mail.
+
+    Un jour laissé sans véhicule reste sans véhicule : l'administrateur
+    cherche lui-même une solution (libérer un véhicule, en parler au
+    demandeur) et pourra y revenir depuis cette même page.
+    """
+
+    plan = day_plan(r)
+    retour = redirect(url_for("manage_request", rid=r.id))
+    voulus = {}
+    for j in plan:
+        brut = request.form.get(f"day_{j['key']}", "")
+        if not brut:
+            voulus[j["key"]] = None
+            continue
+        libres = {v.id: v for v in j["free"]}
+        try:
+            voulus[j["key"]] = libres[int(brut)]
+        except (ValueError, KeyError):
+            flash(f"{_jour_fr(j['date'])} : ce véhicule n'est pas libre ce jour-là.", "danger")
+            return retour
+
+    if not any(voulus.values()):
+        flash("Aucun véhicule choisi : rien n'a été enregistré.", "warning")
+        return retour
+
+    change = False
+    for j in plan:
+        voulu = voulus[j["key"]]
+        actuel = j["current"]
+        if (voulu.id if voulu else None) == (actuel.id if actuel else None):
+            continue
+        change = True
+        free_period(r, j["start"], j["end"])
+        if voulu is not None:
+            db.session.add(ReservationSegment(reservation_id=r.id, vehicle_id=voulu.id,
+                                              start_at=j["start"], end_at=j["end"]))
+    if not change and r.status == "approved":
+        flash("Aucun changement.", "info")
+        return retour
+
+    r.status = "approved"
+    # Même garde que commit_if_still_free, pour tous les jours à la fois :
+    # un autre administrateur a pu prendre un véhicule entre-temps.
+    db.session.flush()
+    for j in plan:
+        voulu = voulus[j["key"]]
+        if voulu and has_conflict(voulu.id, j["start"], j["end"], exclude_reservation_id=r.id):
+            db.session.rollback()
+            flash(f"{voulu.code} vient d'être attribué ailleurs le "
+                  f"{_jour_fr(j['date'])}. Rien n'a été enregistré : vérifiez et recommencez.",
+                  "danger")
+            return retour
+    db.session.commit()
+
+    plan = day_plan(r)
+    sans = [j for j in plan if j["current"] is None]
+    recipients = reservation_notification_recipients(r)
+    envoye = False
+    if recipients:
+        corps = ("Véhicules attribués pour votre réservation du "
+                 f"{r.start_at.strftime('%d/%m/%Y')} au {r.end_at.strftime('%d/%m/%Y')} :\n\n"
+                 + day_plan_summary(plan))
+        if sans:
+            corps += ("\n\nAucun véhicule n'est libre pour l'instant sur "
+                      + ("ce jour" if len(sans) == 1 else "ces jours")
+                      + ". Le responsable cherche une solution et vous tiendra informé.")
+        envoye = notify("Véhicules attribués", corps, recipients)
+
+    # notify() signale lui-même un échec d'envoi : ne pas annoncer le contraire.
+    recap = " Un récapitulatif a été envoyé au demandeur." if envoye else ""
+    if sans:
+        flash(f"Véhicules enregistrés. Reste sans véhicule : "
+              f"{', '.join(_jour_fr(j['date']) for j in sans)}.{recap}", "warning")
+    else:
+        flash(f"Véhicules enregistrés pour chaque jour.{recap}", "success")
+    return retour
 
 
 @app.route("/admin/manage/segment/<int:sid>", methods=["GET", "POST"])
@@ -3757,6 +3927,7 @@ def manage_segment(sid):
         day=None,
         is_segment=True,
         segment=seg,
+        day_plan=None,
     )
 
 

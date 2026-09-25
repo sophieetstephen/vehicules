@@ -88,6 +88,12 @@
               <strong>{{ current_vehicle.code }}</strong>
               {% if current_vehicle.label %} — {{ current_vehicle.label }}{% endif %}
             </span>
+          {% elif day_plan and day_plan|selectattr('current')|list %}
+            {# Réservation répartie : un véhicule par jour, détaillé plus bas. #}
+            {% set sans = day_plan|rejectattr('current')|list %}
+            <span class="detail-value">
+              Réparti jour par jour{% if sans %} · <span class="text-danger">{{ sans|length }} jour{{ 's' if sans|length > 1 }} sans véhicule</span>{% endif %}
+            </span>
           {% else %}
             <span class="detail-value text-muted"><i class="fa-solid fa-question-circle"></i> Non attribué</span>
           {% endif %}
@@ -131,11 +137,67 @@
       {% endif %}
     </div>
 
+    {% if day_plan %}
+    {# Aucun véhicule n'est libre toute la période (ou la réservation est
+       déjà répartie) : on attribue jour par jour, en une fois, et le
+       demandeur reçoit un seul récapitulatif. #}
+    <div class="vehicle-section day-plan">
+      <h2 class="section-title">
+        <i class="fa-solid fa-calendar-week"></i>
+        Attribuer jour par jour
+      </h2>
+      {% set jours_bloques = day_plan|selectattr('free', 'equalto', [])|list %}
+      <p class="text-muted small mb-3">
+        {% if reservation.status == 'pending' %}
+        Aucun véhicule n'est libre sur toute la période.
+        {% endif %}
+        Choisissez un véhicule pour chaque jour possible ; la proposition garde
+        le même véhicule le plus longtemps possible. Un jour laissé sur
+        « Aucun véhicule » reste sans véhicule : vous pourrez y revenir ici.
+      </p>
+      <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="day-plan-list">
+          {% for j in day_plan %}
+          <div class="day-plan-row{{ ' day-plan-blocked' if not j.free }}">
+            <label class="day-plan-day" for="day_{{ j.key }}">
+              {{ weekday_abbr(j.start) }} {{ j.date.strftime('%d/%m') }}
+              {% if j.label != 'Journée' %}<span class="text-muted small">· {{ j.label }}</span>{% endif %}
+            </label>
+            {% if j.free %}
+            <select class="form-select form-select-sm" name="day_{{ j.key }}" id="day_{{ j.key }}">
+              <option value="">Aucun véhicule</option>
+              {% for v in j.free %}
+              <option value="{{ v.id }}" {% if j.suggested and v.id == j.suggested.id %}selected{% endif %}>
+                {{ v.code }}{% if v.label %} – {{ v.label }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            {% else %}
+            <span class="day-plan-none"><i class="fa-solid fa-ban me-1"></i>Aucun véhicule libre</span>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        <button type="submit" name="action" value="assign_days" class="btn btn-primary btn-action mt-3">
+          <i class="fa-solid fa-check"></i>
+          Enregistrer et prévenir le demandeur
+        </button>
+        {% if jours_bloques %}
+        <div class="form-text mt-2">
+          Le récapitulatif indiquera au demandeur
+          {{ 'le jour' if jours_bloques|length == 1 else 'les jours' }} sans véhicule.
+        </div>
+        {% endif %}
+      </form>
+    </div>
+    {% endif %}
+
     <!-- Section changement de véhicule -->
     <div class="vehicle-section">
       <h2 class="section-title">
         <i class="fa-solid fa-car-side"></i>
-        Choisir un véhicule
+        {{ "Un seul véhicule pour toute la période" if day_plan else "Choisir un véhicule" }}
       </h2>
 
       <form method="post" class="vehicle-form">
@@ -230,6 +292,35 @@
 </div>
 
 <style>
+.day-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.day-plan-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.day-plan-day {
+  flex: 0 0 6.5rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.day-plan-row select {
+  flex: 1;
+  min-width: 0;
+}
+
+.day-plan-none {
+  flex: 1;
+  color: var(--color-danger, #dc3545);
+  font-size: 0.9rem;
+}
+
 /* ============================================
    GESTIONNAIRE DE RÉSERVATION - Styles
    ============================================ */
