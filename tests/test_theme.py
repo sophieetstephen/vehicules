@@ -44,3 +44,27 @@ def test_bootstrap_colours_follow_the_dark_palette():
                      "--bs-secondary-color", "--bs-heading-color", "--bs-border-color"):
         assert re.search(rf"{variable}\s*:", bloc), f"{variable} absente du mode sombre"
     assert "color-scheme: dark" in bloc, "calendriers et listes natifs restaient clairs"
+
+
+# --- menu « … » des utilisateurs sur téléphone ----------------------------------
+#
+# Signalé en test : sur téléphone, le menu « … » ne s'ouvrait que pour son
+# propre compte. La carte coupait ce qui dépassait (overflow: hidden) : un
+# menu d'un seul choix tenait dans la carte, celui des autres comptes (quatre
+# choix) restait invisible. Constaté dans un navigateur au format téléphone.
+
+def _regle(css, selecteur):
+    debut = css.index(selecteur + " {")
+    return css[debut:css.index("}", debut)]
+
+
+def test_user_card_does_not_clip_its_menu():
+    page = (TEMPLATES / "admin_users.html").read_text(encoding="utf-8")
+    assert "overflow" not in _regle(page, ".user-card-mobile")
+
+
+def test_phone_menus_are_positioned_on_the_screen():
+    """Comme ceux du tableau : rien autour ne peut les couper."""
+    page = (TEMPLATES / "admin_users.html").read_text(encoding="utf-8")
+    assert '.user-card-actions [data-bs-toggle="dropdown"]' in page
+    assert "strategy: 'fixed'" in page
