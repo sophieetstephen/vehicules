@@ -26,8 +26,11 @@
   </div>
   {# Le rôle se change ici, et seulement ici. Seul le superadministrateur le
      peut : un administrateur voyait la liste, mais son choix était ignoré
-     sans rien dire. Il voit désormais le rôle, sans pouvoir le modifier. #}
-  {% if current_user.role == 'superadmin' %}
+     sans rien dire. Il voit désormais le rôle, sans pouvoir le modifier.
+     Sur sa propre fiche, personne ne change son rôle : c'est l'affaire d'un
+     autre superadministrateur. #}
+  {% set sa_propre_fiche = current_user.id == target.id %}
+  {% if current_user.role == 'superadmin' and not sa_propre_fiche %}
   <div class="mb-3">
     {{ form.role.label(class="form-label") }}
     {{ form.role(class="form-select", **{"data-initial": target.role}) }}
@@ -37,7 +40,10 @@
   <div class="mb-3">
     <label class="form-label">Rôle</label>
     <input class="form-control" value="{{ target.role or 'user' }}" readonly>
-    <div class="form-text">Seul le superadministrateur change les rôles.</div>
+    <div class="form-text">
+      {% if sa_propre_fiche %}Votre rôle ne peut être changé que par un autre superadministrateur.
+      {% else %}Seul le superadministrateur change les rôles.{% endif %}
+    </div>
   </div>
   {% endif %}
   <button class="btn btn-primary" type="submit">Enregistrer</button>
