@@ -57,6 +57,9 @@ class Config:
     MAIL_DEFAULT_SENDER = os.environ.get(
         "MAIL_DEFAULT_SENDER", os.environ.get("MAIL_USERNAME", "no-reply@csp.local")
     )
+    # Adresse publique de l'application, citée dans les e-mails. Vide : on la
+    # déduit de la requête (le proxy transmet le nom de domaine et https).
+    APP_URL = os.environ.get("APP_URL", "").strip()
     SUPERADMIN_EMAILS = ["gestionvehiculestomer@gmail.com"]
     ADMIN_EMAILS = ["alexandre.stephen@free.fr"]
     SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "30"))

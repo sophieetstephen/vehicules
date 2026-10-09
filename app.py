@@ -1596,6 +1596,24 @@ def notify(subject, body, recipients, *, about=""):
     return envoye
 
 
+def public_url(endpoint=None):
+    """Adresse complète de l'application (ou d'une de ses pages) pour un mail.
+
+    APP_URL, si elle est réglée dans le .env ; sinon celle de la requête en
+    cours, que le proxy transmet avec le nom de domaine et https. None hors
+    requête et sans réglage : le mail part alors sans lien plutôt qu'avec un
+    lien faux.
+    """
+
+    base = (app.config.get("APP_URL") or "").strip()
+    if base:
+        base = base.rstrip("/") + "/"
+        return base + url_for(endpoint).lstrip("/") if endpoint else base
+    if not has_request_context():
+        return None
+    return url_for(endpoint, _external=True) if endpoint else request.url_root
+
+
 def _credentials_email_body(user, password, *, regenerated=False):
     intro = (
         "Votre mot de passe a été régénéré par un administrateur."
@@ -1607,9 +1625,27 @@ def _credentials_email_body(user, password, *, regenerated=False):
         f"{intro}\n\n"
         f"Identifiant : {user.username}\n"
         f"Mot de passe : {password}\n\n"
-        "Ce mot de passe ne peut pas être modifié depuis l'application. "
+        + _app_links()
+        + "Ce mot de passe ne peut pas être modifié depuis l'application. "
         "En cas d'oubli, adressez-vous à l'administrateur qui vous en "
         "fournira un nouveau.\n"
+    )
+
+
+def _app_links():
+    """Où se connecter, et comment installer l'application sur le téléphone.
+
+    Le mail donnait l'identifiant et le mot de passe sans dire où s'en
+    servir.
+    """
+
+    accueil = public_url()
+    if not accueil:
+        return ""
+    return (
+        f"Pour vous connecter : {accueil}\n"
+        "Pour installer l'application sur votre téléphone : "
+        f"{public_url('install_guide')}\n\n"
     )
 
 

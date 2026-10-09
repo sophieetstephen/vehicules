@@ -164,3 +164,65 @@ def test_deleted_account_session_is_refused(ctx):
     _connecte(boss).post(f"/admin/delete/{jean.id}")
     resp = jean_client.get("/request/new")
     assert resp.status_code == 302 and resp.headers["Location"].startswith("/login")
+
+
+# --- le mail dit où se connecter -------------------------------------------------
+#
+# Le mail des identifiants donnait identifiant et mot de passe sans dire où
+# s'en servir. La requête arrive par Caddy, comme sur le Raspberry : nom de
+# domaine dans Host, https dans X-Forwarded-Proto.
+
+CADDY = {"X-Forwarded-Proto": "https", "X-Forwarded-For": "203.0.113.7"}
+
+
+DOMAINE = "http://vehiculecspstomer.fr"
+
+
+def _par_caddy(user):
+    """Client connecté par le formulaire, sur le nom de domaine réel."""
+    c = app.test_client()
+    r = c.post("/login", base_url=DOMAINE, headers=CADDY,
+               data={"username": user.username, "password": MDP})
+    assert r.status_code == 302, "connexion de test échouée"
+    return c
+
+
+@pytest.fixture
+def boite(ctx, monkeypatch):
+    envoyes = []
+    monkeypatch.setattr(app_module, "send_mail_msmtp",
+                        lambda sujet, corps, dest, *a, **k: envoyes.append((sujet, corps)) or (True, "sent"))
+    monkeypatch.setitem(app.config, "APP_URL", "")
+    return envoyes
+
+
+def test_new_account_mail_gives_the_address(boite):
+    boss = _user("Super", "Admin", "boss@ex.fr", role=User.ROLE_SUPERADMIN)
+    _par_caddy(boss).post("/admin/users/new", base_url=DOMAINE, headers=CADDY, data={
+        "first_name": "Jean", "last_name": "Dupont", "email": "jean@sdis62.fr", "role": "user"})
+
+    sujet, corps = boite[-1]
+    assert sujet.startswith("Vos accès")
+    assert "Pour vous connecter : https://vehiculecspstomer.fr/\n" in corps
+    assert "https://vehiculecspstomer.fr/installer" in corps
+
+
+def test_regenerated_password_mail_gives_the_address_too(boite):
+    boss = _user("Super", "Admin", "boss@ex.fr", role=User.ROLE_SUPERADMIN)
+    jean = _user("Jean", "Dupont", "jean@sdis62.fr")
+    _par_caddy(boss).post(f"/admin/reset_password/{jean.id}", base_url=DOMAINE, headers=CADDY)
+
+    sujet, corps = boite[-1]
+    assert sujet.startswith("Nouveau mot de passe")
+    assert "Pour vous connecter : https://vehiculecspstomer.fr/" in corps
+
+
+def test_configured_address_wins(boite, monkeypatch):
+    """APP_URL dans le .env, si un jour l'adresse vue du proxy diffère."""
+    monkeypatch.setitem(app.config, "APP_URL", "https://exemple.fr")
+    boss = _user("Super", "Admin", "boss@ex.fr", role=User.ROLE_SUPERADMIN)
+    _par_caddy(boss).post("/admin/users/new", base_url=DOMAINE, headers=CADDY, data={
+        "first_name": "Jean", "last_name": "Dupont", "email": "jean@sdis62.fr", "role": "user"})
+    corps = boite[-1][1]
+    assert "Pour vous connecter : https://exemple.fr/\n" in corps
+    assert "https://exemple.fr/installer" in corps
