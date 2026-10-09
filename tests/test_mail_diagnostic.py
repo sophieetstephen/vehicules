@@ -447,3 +447,47 @@ def test_certificate_error_is_explained():
         "smtp error: [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
     assert "certificat" in explication
     assert "port" not in explication
+
+
+# --- liens cliquables ---------------------------------------------------------
+#
+# Envoyé en texte seul, le lien vers l'application n'était cliquable que si la
+# messagerie le détectait d'elle-même : constaté non cliquable à la réception.
+
+def _mail_construit(monkeypatch, corps):
+    import notify
+
+    envoyes = []
+
+    class FauxSMTP:
+        def __init__(self, *a, **k): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def starttls(self, *a, **k): pass
+        def login(self, *a, **k): pass
+        def close(self): pass
+        def send_message(self, msg): envoyes.append(msg)
+
+    monkeypatch.setattr(notify.smtplib, "SMTP", FauxSMTP)
+    monkeypatch.setattr(notify.smtplib, "SMTP_SSL", FauxSMTP)
+    ok, _ = notify.send_mail_msmtp("Sujet", corps, ["a@ex.fr"])
+    assert ok
+    return envoyes[0]
+
+
+def test_mail_carries_clickable_links(monkeypatch):
+    msg = _mail_construit(monkeypatch, "Pour vous connecter : https://vehiculecspstomer.fr/\n")
+    assert msg.get_content_type() == "multipart/alternative"
+    texte = msg.get_body(preferencelist=("plain",)).get_content()
+    page = msg.get_body(preferencelist=("html",)).get_content()
+    assert "https://vehiculecspstomer.fr/" in texte, "la version texte reste"
+    assert '<a href="https://vehiculecspstomer.fr/">https://vehiculecspstomer.fr/</a>' in page
+
+
+def test_html_version_escapes_the_text(monkeypatch):
+    """Un nom ou un motif saisi ne doit pas devenir du HTML."""
+    msg = _mail_construit(monkeypatch, "Motif : <b>essai</b> & co\nVoir https://a.fr/installer.")
+    page = msg.get_body(preferencelist=("html",)).get_content()
+    assert "&lt;b&gt;essai&lt;/b&gt; &amp; co" in page
+    assert '<a href="https://a.fr/installer">https://a.fr/installer</a>.' in page, \
+        "le point final ne fait pas partie du lien"
