@@ -142,12 +142,15 @@
 }
 
 /* ========== Carte utilisateur mobile ========== */
+/* Pas d'overflow: hidden ici : il coupait le menu « … » des cartes, qui
+   dépasse sous la carte. Seul le menu d'une ligne (un choix) tenait dedans ;
+   ceux à quatre choix restaient invisibles. Les coins arrondis sont portés
+   par l'en-tête. */
 .user-card-mobile {
   background: var(--color-background);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   margin-bottom: var(--spacing-md);
-  overflow: hidden;
 }
 
 .user-card-mobile.user-pending {
@@ -155,6 +158,7 @@
 }
 
 .user-card-header {
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   display: flex;
   align-items: center;
   gap: var(--spacing-md);
@@ -231,12 +235,14 @@
 </style>
 
 <script>
-// Le tableau peut défiler horizontalement (.table-responsive) ; sans cela le
-// menu des dernières lignes serait coupé par le bord du conteneur.
+// Menus positionnés par rapport à l'écran : ni le tableau (qui peut défiler
+// horizontalement) ni la carte du téléphone ne peuvent les couper. Seul le
+// tableau en profitait : sur téléphone, les menus des autres utilisateurs
+// s'ouvraient sans qu'on les voie.
 // Bootstrap est chargé en fin de page, d'où l'attente du DOM.
 document.addEventListener('DOMContentLoaded', function () {
   if (!window.bootstrap) return;
-  document.querySelectorAll('.user-actions [data-bs-toggle="dropdown"]').forEach(function (el) {
+  document.querySelectorAll('.user-actions [data-bs-toggle="dropdown"], .user-card-actions [data-bs-toggle="dropdown"]').forEach(function (el) {
     bootstrap.Dropdown.getOrCreateInstance(el, { popperConfig: { strategy: 'fixed' } });
   });
 });
