@@ -1,4 +1,6 @@
 from email.message import EmailMessage
+import html
+import re
 import smtplib
 import ssl
 from config import Config
@@ -29,6 +31,35 @@ def _smtp_connect(server, port, timeout):
     return smtplib.SMTP_SSL(server, port, timeout=timeout, context=contexte)
 
 
+_URL = re.compile(r"https?://[^\s<>\"]+")
+
+
+def text_to_html(body: str) -> str:
+    """Version mise en forme d'un mail texte, où les adresses sont des liens.
+
+    Envoyé en texte seul, un lien n'était cliquable que si la messagerie le
+    détectait d'elle-même : pas toujours. La version texte reste jointe pour
+    les messageries qui n'affichent que du texte.
+    """
+
+    def lien(m):
+        url = m.group(0)
+        # Une ponctuation collée à la fin de l'adresse n'en fait pas partie.
+        fin = ""
+        while url and url[-1] in ".,;:!?)":
+            fin = url[-1] + fin
+            url = url[:-1]
+        return f'<a href="{url}">{url}</a>{fin}'
+
+    corps = _URL.sub(lien, html.escape(body, quote=False))
+    corps = corps.replace("\n", "<br>\n")
+    return (
+        "<!doctype html>\n<html lang=\"fr\"><body style=\"font-family: Arial, "
+        "Helvetica, sans-serif; font-size: 15px; line-height: 1.5; color: #1e293b;\">\n"
+        f"{corps}\n</body></html>\n"
+    )
+
+
 def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile: str = "gmail"):
     """Send an email using Gmail's SMTP service.
 
@@ -53,6 +84,7 @@ def send_mail_msmtp(subject: str, body: str, to_addrs, sender: str = "", profile
     msg["To"] = ", ".join(to_list)
     msg["Subject"] = subject
     msg.set_content(body)
+    msg.add_alternative(text_to_html(body), subtype="html")
 
     server = Config.MAIL_SERVER or "smtp.gmail.com"
     port = Config.MAIL_PORT or (465 if not Config.MAIL_USE_TLS else 587)
