@@ -10,6 +10,8 @@ silencieusement en administrateur.
 
 import importlib
 
+import html as html_module
+
 import pytest
 
 from app import app, account_action_refusal
@@ -182,6 +184,34 @@ def test_admin_sees_the_role_but_cannot_change_it(equipe):
 
     _modifier(adjoint, equipe["jean"], User.ROLE_ADMIN)
     assert _relire(equipe["jean"]).role == User.ROLE_USER
+
+
+def test_superadmin_cannot_change_his_own_role(equipe):
+    """Avec un second superadministrateur, on pouvait se rétrograder soi-même
+    d'un mauvais choix dans la liste."""
+    _user("Second", User.ROLE_SUPERADMIN)
+    chef = _client(equipe["chef"])
+    page = chef.get(f"/admin/user/{equipe['chef'].id}/edit").data.decode()
+    assert 'id="role"' not in page
+    assert "Votre rôle ne peut être changé que par un autre superadministrateur." in html_module.unescape(page)
+
+    _modifier(chef, equipe["chef"], User.ROLE_USER)
+    assert _relire(equipe["chef"]).role == User.ROLE_SUPERADMIN
+
+
+def test_superadmin_can_still_edit_his_own_name(equipe):
+    """Le formulaire n'envoie plus de rôle : le reste s'enregistre."""
+    chef = _client(equipe["chef"])
+    chef.post(f"/admin/user/{equipe['chef'].id}/edit", data={
+        "first_name": "Stephen", "last_name": "X", "email": "chef@ex.fr"})
+    assert _relire(equipe["chef"]).first_name == "Stephen"
+    assert _relire(equipe["chef"]).role == User.ROLE_SUPERADMIN
+
+
+def test_another_superadmin_can_change_it(equipe):
+    second = _user("Second", User.ROLE_SUPERADMIN)
+    _modifier(_client(second), equipe["chef"], User.ROLE_ADMIN)
+    assert _relire(equipe["chef"]).role == User.ROLE_ADMIN
 
 
 def test_superadmin_sees_the_role_list(equipe):

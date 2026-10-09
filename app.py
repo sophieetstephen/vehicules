@@ -2083,6 +2083,11 @@ def account_action_refusal(actor, target, action, new_role=None):
                 "retirerait à tout le monde l'accès à l'administration.")
     if action == "delete" and target.role == User.ROLE_SUPERADMIN:
         return "Impossible de supprimer un superadministrateur."
+    if (action == "edit" and new_role and actor.id == target.id
+            and new_role != target.role):
+        # Se retirer ses propres droits d'un mauvais choix dans une liste :
+        # un changement de rôle est toujours fait par quelqu'un d'autre.
+        return "Votre rôle ne peut être changé que par un autre superadministrateur."
     if action == "edit" and new_role and new_role != User.ROLE_SUPERADMIN and dernier:
         return ("C'est le dernier superadministrateur actif : il ne peut pas "
                 "perdre ce rôle.")
