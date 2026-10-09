@@ -21,7 +21,8 @@ from models import db, User
 
 app_module = importlib.import_module("app")
 
-ACTIONS = ["Désactiver", "Régénérer le mot de passe", "Promouvoir", "Supprimer"]
+# Le rôle ne se change plus depuis ce menu, mais dans « Modifier ».
+ACTIONS = ["Désactiver", "Régénérer le mot de passe", "Supprimer"]
 
 
 @pytest.fixture
@@ -99,6 +100,8 @@ def test_hidden_actions_moved_to_the_menu(ctx):
     menu = _menu(html)
     for action in ACTIONS:
         assert action in menu, action
+    for ancien in ("Promouvoir", "Rétrograder"):
+        assert ancien not in menu, f"{ancien} : le rôle se change dans « Modifier »"
     # La suppression est isolée du reste : on ne la clique pas par mégarde.
     assert menu.index("dropdown-divider") < menu.index("Supprimer")
 
@@ -152,7 +155,6 @@ def test_menu_actions_still_reach_their_route(ctx):
     html = c.get("/admin/users").data.decode()
     for route in (f"/admin/deactivate/{cible.id}",
                   f"/admin/reset_password/{cible.id}",
-                  f"/admin/promote/{cible.id}",
                   f"/admin/delete/{cible.id}"):
         assert route in html, route
 

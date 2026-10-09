@@ -2034,8 +2034,10 @@ def admin_mail_test():
 # tout accès. Masquer les boutons ne suffit pas, une requête se fabrique à la
 # main : la règle vit ici, et toutes les routes la consultent.
 
-ACCOUNT_ACTIONS = ("edit", "activate", "deactivate", "promote", "demote",
-                   "reset_password", "delete")
+# Le rôle se change uniquement dans « Modifier » (action « edit » avec
+# new_role) : les boutons « Promouvoir » / « Rétrograder » du menu en
+# faisaient un second chemin, avec ses propres règles.
+ACCOUNT_ACTIONS = ("edit", "activate", "deactivate", "reset_password", "delete")
 
 
 def _is_last_active_superadmin(target):
@@ -2081,12 +2083,6 @@ def account_action_refusal(actor, target, action, new_role=None):
                 "retirerait à tout le monde l'accès à l'administration.")
     if action == "delete" and target.role == User.ROLE_SUPERADMIN:
         return "Impossible de supprimer un superadministrateur."
-    if action == "promote" and target.role != User.ROLE_USER:
-        # « Promouvoir » fait passer à administrateur : appliqué à un
-        # superadministrateur, il le rétrogradait sans le dire.
-        return "Seul un utilisateur peut être promu administrateur."
-    if action == "demote" and target.role != User.ROLE_ADMIN:
-        return "Seul un administrateur peut être rétrogradé."
     if action == "edit" and new_role and new_role != User.ROLE_SUPERADMIN and dernier:
         return ("C'est le dernier superadministrateur actif : il ne peut pas "
                 "perdre ce rôle.")
@@ -2149,32 +2145,6 @@ def admin_user_edit(user_id):
         user=u,
         current_user=u,
     )
-
-
-@app.route("/admin/promote/<int:user_id>", methods=["POST"])
-@role_required("superadmin")
-def admin_promote(user_id):
-    target = db.get_or_404(User, user_id)
-    refus = _refuse_account_action(current_user(), target, "promote")
-    if refus:
-        return refus
-    target.role = User.ROLE_ADMIN
-    db.session.commit()
-    flash("Utilisateur promu administrateur", "success")
-    return redirect(url_for("admin_users"))
-
-
-@app.route("/admin/demote/<int:user_id>", methods=["POST"])
-@role_required("superadmin")
-def admin_demote(user_id):
-    target = db.get_or_404(User, user_id)
-    refus = _refuse_account_action(current_user(), target, "demote")
-    if refus:
-        return refus
-    target.role = User.ROLE_USER
-    db.session.commit()
-    flash("Utilisateur rétrogradé", "info")
-    return redirect(url_for("admin_users"))
 
 
 @app.route("/admin/activate/<int:user_id>", methods=["POST"])

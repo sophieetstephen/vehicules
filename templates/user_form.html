@@ -2,7 +2,7 @@
 {% block title %}Administration – Modifier utilisateur{% endblock %}
 {% block content %}
 <h2>Modifier utilisateur #{{ target.id }}</h2>
-<form method="post">
+<form method="post" id="userForm">
   {{ form.hidden_tag() }}
   <div class="mb-3">
     <label class="form-label">Identifiant de connexion</label>
@@ -24,11 +24,37 @@
     {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), type="email") }}
     {% for e in form.email.errors %}<div class="invalid-feedback">{{ e }}</div>{% endfor %}
   </div>
+  {# Le rôle se change ici, et seulement ici. Seul le superadministrateur le
+     peut : un administrateur voyait la liste, mais son choix était ignoré
+     sans rien dire. Il voit désormais le rôle, sans pouvoir le modifier. #}
+  {% if current_user.role == 'superadmin' %}
   <div class="mb-3">
     {{ form.role.label(class="form-label") }}
-    {{ form.role(class="form-select") }}
+    {{ form.role(class="form-select", **{"data-initial": target.role}) }}
+    <div class="form-text">user : réserve des véhicules · admin : gère les réservations, les véhicules et les utilisateurs · superadmin : tout, y compris les rôles.</div>
   </div>
+  {% else %}
+  <div class="mb-3">
+    <label class="form-label">Rôle</label>
+    <input class="form-control" value="{{ target.role or 'user' }}" readonly>
+    <div class="form-text">Seul le superadministrateur change les rôles.</div>
+  </div>
+  {% endif %}
   <button class="btn btn-primary" type="submit">Enregistrer</button>
   <a class="btn btn-outline-secondary" href="{{ url_for('admin_users') }}">Annuler</a>
 </form>
+
+<script>
+// Un changement de rôle se confirme : il donne ou retire l'administration.
+(function () {
+  const role = document.querySelector('#userForm select[name="role"]');
+  if (!role) return;
+  document.getElementById('userForm').addEventListener('submit', function (e) {
+    if (role.value !== role.dataset.initial &&
+        !confirm('Changer le rôle de « ' + role.dataset.initial + ' » en « ' + role.value + ' » ?')) {
+      e.preventDefault();
+    }
+  });
+})();
+</script>
 {% endblock %}

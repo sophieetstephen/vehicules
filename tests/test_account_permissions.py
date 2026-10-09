@@ -141,39 +141,63 @@ def test_inactive_superadmin_does_not_count(equipe):
     assert _relire(equipe["chef"]).status == "active"
 
 
-# --- promouvoir et rétrograder -----------------------------------------------
+# --- le rôle se change dans « Modifier », et seulement là -----------------------
+#
+# Il se changeait à deux endroits : la liste de « Modifier » et les boutons
+# « Promouvoir » / « Rétrograder » du menu « … ». Un seul chemin reste.
 
-def test_promote_no_longer_demotes_a_superadmin(equipe):
-    """Trouvé en corrigeant : « Promouvoir » passait le rôle à administrateur,
-    même depuis superadministrateur."""
-    second = _user("Second", User.ROLE_SUPERADMIN)
-    _client(equipe["chef"]).post(f"/admin/promote/{second.id}")
-    assert _relire(second).role == User.ROLE_SUPERADMIN
-
-
-def test_demote_no_longer_drops_a_superadmin_to_user(equipe):
-    second = _user("Second", User.ROLE_SUPERADMIN)
-    _client(equipe["chef"]).post(f"/admin/demote/{second.id}")
-    assert _relire(second).role == User.ROLE_SUPERADMIN
+def _modifier(client, cible, role):
+    return client.post(f"/admin/user/{cible.id}/edit", data={
+        "first_name": cible.first_name, "last_name": cible.last_name,
+        "email": cible.email, "role": role}, follow_redirects=True)
 
 
-def test_promote_and_demote_still_work_where_they_make_sense(equipe):
+def test_superadmin_changes_a_role_from_the_edit_form(equipe):
     chef = _client(equipe["chef"])
-    chef.post(f"/admin/promote/{equipe['jean'].id}")
+    _modifier(chef, equipe["jean"], User.ROLE_ADMIN)
     assert _relire(equipe["jean"]).role == User.ROLE_ADMIN
-    chef.post(f"/admin/demote/{equipe['jean'].id}")
+    _modifier(chef, equipe["jean"], User.ROLE_USER)
     assert _relire(equipe["jean"]).role == User.ROLE_USER
+
+
+def test_promote_and_demote_routes_are_gone(equipe):
+    chef = _client(equipe["chef"])
+    for route in ("promote", "demote"):
+        assert chef.post(f"/admin/{route}/{equipe['jean'].id}").status_code == 404
+    assert _relire(equipe["jean"]).role == User.ROLE_USER
+
+
+def test_last_superadmin_keeps_the_role_from_the_edit_form(equipe):
+    _modifier(_client(equipe["chef"]), equipe["chef"], User.ROLE_ADMIN)
+    assert _relire(equipe["chef"]).role == User.ROLE_SUPERADMIN
+
+
+def test_admin_sees_the_role_but_cannot_change_it(equipe):
+    """Un administrateur voyait la liste des rôles ; son choix était ignoré
+    sans rien dire."""
+    adjoint = _client(equipe["adjoint"])
+    page = adjoint.get(f"/admin/user/{equipe['jean'].id}/edit").data.decode()
+    assert 'id="role"' not in page, "pas de liste des rôles"
+    assert "Seul le superadministrateur change les rôles." in page
+
+    _modifier(adjoint, equipe["jean"], User.ROLE_ADMIN)
+    assert _relire(equipe["jean"]).role == User.ROLE_USER
+
+
+def test_superadmin_sees_the_role_list(equipe):
+    page = _client(equipe["chef"]).get(f"/admin/user/{equipe['jean'].id}/edit").data.decode()
+    assert 'id="role"' in page
 
 
 # --- la règle, directement ---------------------------------------------------
 
-@pytest.mark.parametrize("action", ["edit", "activate", "deactivate", "promote",
-                                    "demote", "reset_password", "delete"])
+@pytest.mark.parametrize("action", ["edit", "activate", "deactivate",
+                                    "reset_password", "delete"])
 def test_admin_is_refused_everything_on_the_superadmin(equipe, action):
     assert account_action_refusal(equipe["adjoint"], equipe["chef"], action)
 
 
-@pytest.mark.parametrize("action", ["promote", "demote", "reset_password", "delete"])
+@pytest.mark.parametrize("action", ["reset_password", "delete"])
 def test_admin_is_refused_superadmin_only_actions_even_on_users(equipe, action):
     assert account_action_refusal(equipe["adjoint"], equipe["jean"], action)
 
